@@ -1,0 +1,127 @@
+# Ralph GUI
+
+Ralph is an Epic-driven local orchestration loop for software delivery.
+
+It takes a current epic, plans a backlog of tasks from that epic plus the project requirements, executes tasks in a Dev -> QA loop, and persists all runtime state in `ralph/task-status.json`.
+
+### Reset
+
+Remove `ralph/task-status.json` to start a clean loop, otherwise it will try to continue from where it left off.
+
+## Core Concepts
+
+RUN THIS IN A SANDBOX. The loop will call `copilot` in "yolo" mode to allow it to run without user intervention. 
+
+- `requirements.md`:
+  The authoritative product requirements document for the overall project. If this is defined elsewhere, just reference those documents in requirements.md. 
+  Ralph treats this as the source of truth for the project and must fit it's work within those bounds.
+- `ralph/epic.md`:
+  The current epic Ralph should execute right now.
+  The planner uses this to prioritize and sequence tasks.
+- `ralph/task-status.json`:
+  Task state, next task content, feedback, counters, and blocked metadata.
+
+## Loop Phases
+
+Ralph uses one planning prompt plus Dev and QA prompts:
+
+1. Planning:
+   - Reads requirements + epic + codebase state
+   - Produces refreshed backlog tasks
+   - Orders tasks in backlog by optimal completion order
+2. Dev:
+   - Implements the selected task
+3. QA:
+   - Verifies the implementation and returns either verified feedback or actionable fixes
+
+Planning populates and refreshes backlog. Modifying the epic requirements, the agents.md, requirements.md or anything else that would be brought into context will be considered in the next planning loop, which might cause the backlog items to change.
+
+## Prerequisites
+
+- Node.js 20+
+- npm 10+
+- Git
+- GitHub Copilot CLI authenticated and available as `copilot`
+
+## Quick start
+
+```bash
+./start.sh
+```
+Navigate to: `http://localhost:3001` and modify the epic, settings, and repo root. Hit run and monitor from there.
+
+
+## Local Development
+
+```bash
+npm install
+npm run dev
+```
+
+- Backend: `http://localhost:3001`
+- Frontend: Vite dev server
+
+## "Headless Loop" (No UI Required)
+
+Use `start.sh` with a repo and optional settings overrides. The UI is still there, but with this you don't *need* to use it. 
+
+```bash
+./start.sh \
+  --repo /absolute/path/to/target-repo \
+  --start \
+  --plan-model claude-sonnet-4.6 \
+  --dev-model gpt-5-mini \
+  --qa-model gpt-5-mini \
+  --dev-reasoning-effort xhigh \
+  --qa-reasoning-effort high \
+  --max-llm-calls 300 \
+  --plan-frequency 1 \
+  --min-backlog-size 3 \
+  --auto-commit false \
+  --exit-when-complete
+```
+
+Behavior:
+
+- installs dependencies if needed
+- builds the UI assets
+- starts server
+- starts loop only when `--start` is passed
+- `--start` requires `--repo`, and `ralph/epic.md` must be filled out (not default placeholder)
+- optionally exits server when epic completes via `--exit-when-complete`
+
+Use `./start.sh --help` for options.
+
+## Settings Defaults
+
+Default loop settings are:
+
+- `maxLLMCalls: 100`
+- `planModel: claude-sonnet-4.6`
+- `devModel: gpt-5-mini`
+- `qaModel: gpt-5-mini`
+- `devReasoningEffort: xhigh`
+- `qaReasoningEffort: high`
+- `autoCommit: false`
+- `planFrequency: 1`
+- `minBacklogSize: 3`
+
+Run `copilot --help` to see updated models. 
+
+## Required Requirements File
+
+Ralph refuses to start unless one exists:
+
+- `requirements.md`
+- `REQUIREMENTS.md`
+- `Requirements.md`
+- `docs/requirements.md`
+- `docs/REQUIREMENTS.md`
+
+## Useful Scripts
+
+- `npm run dev`
+- `npm run build`
+- `npm run server`
+- `npm run typecheck`
+- `npm run test:ci`

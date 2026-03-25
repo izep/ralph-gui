@@ -1,0 +1,36 @@
+{
+  "name": "ralph-kanban",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "vite build --config config/vite.config.ts && tsx src/server/index.ts --auto-start",
+    "dev": "concurrently -n server,client -c blue,green \"tsx watch src/server/index.ts\" \"vite --config config/vite.config.ts\"",
+    "build": "tsc -b config/tsconfig.json && vite build --config config/vite.config.ts",
+    "server": "tsx src/server/index.ts",
+    "test": "vitest --config config/vitest.config.ts",
+    "test:ci": "vitest run --config config/vitest.config.ts",
+    "typecheck": "tsc -b config/tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/express": "^4.17.21",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/ws": "^8.5.13",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "jsdom": "^29.0.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vitest": "^4.1.0"
+  }
+}
