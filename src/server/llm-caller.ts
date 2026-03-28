@@ -114,9 +114,14 @@ export class LLMCaller {
   private isRunning: () => boolean;
   private currentProcess: ChildProcess | null = null;
   private killTimer: NodeJS.Timeout | null = null;
+  private cachedCommand: string | null = null;
 
   constructor(isRunning: () => boolean) {
     this.isRunning = isRunning;
+  }
+
+  clearCommandCache(): void {
+    this.cachedCommand = null;
   }
 
   call(
@@ -132,7 +137,10 @@ export class LLMCaller {
           return;
         }
 
-        const command = await resolveCopilotCommand();
+        if (!this.cachedCommand) {
+          this.cachedCommand = await resolveCopilotCommand();
+        }
+        const command = this.cachedCommand;
         if (!this.isRunning()) {
           reject(new Error("Loop was stopped"));
           return;
@@ -204,11 +212,14 @@ export class LLMCaller {
   stop(): void {
     if (this.currentProcess) {
       const proc = this.currentProcess;
+      this.currentProcess = null;
       proc.kill("SIGTERM");
       this.clearKillTimer();
       this.killTimer = setTimeout(() => {
-        if (this.currentProcess === proc) {
+        try {
           proc.kill("SIGKILL");
+        } catch {
+          // process may have already exited
         }
       }, 5000);
       this.killTimer.unref?.();

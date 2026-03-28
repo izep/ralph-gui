@@ -401,7 +401,15 @@ async function shutdownServer(reason: string): Promise<void> {
       await activeLoop.shutdown();
     }
 
-    await Promise.allSettled([closeWebSocketServer(), closeHttpServer()]);
+    const results = await Promise.allSettled([closeWebSocketServer(), closeHttpServer()]);
+
+    const failed = results.filter((r) => r.status === "rejected");
+    if (failed.length > 0) {
+      for (const r of failed) {
+        console.error("Shutdown step failed:", (r as PromiseRejectedResult).reason);
+      }
+      process.exit(1);
+    }
     process.exit(0);
   } catch (err) {
     console.error(`Shutdown failed: ${String(err)}`);
