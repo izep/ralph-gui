@@ -318,6 +318,67 @@ describe("RalphLoop.restart", () => {
     loop.stop();
     await new Promise((r) => setTimeout(r, 200));
   });
+
+  it("waits for the previous run to settle before starting again", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeRalphFile("epic.md", "# Epic\n\nRestart should wait for cleanup.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+
+    let runCount = 0;
+    let releaseFirstRun!: () => void;
+    const firstRunSettled = new Promise<void>((resolve) => {
+      releaseFirstRun = resolve;
+    });
+
+    (loop as any).runLoop = () => {
+      runCount += 1;
+      if (runCount === 1) {
+        return firstRunSettled;
+      }
+
+      return Promise.resolve();
+    };
+
+    expect((await loop.start()).ok).toBe(true);
+
+    const restartPromise = loop.restart();
+    await new Promise((r) => setTimeout(r, 25));
+    expect(runCount).toBe(1);
+
+    releaseFirstRun();
+    const result = await restartPromise;
+
+    expect(result.ok).toBe(true);
+    expect(runCount).toBe(2);
+  });
+});
+
+describe("RalphLoop stop lifecycle", () => {
+  it("does not report a stopped run as an error when cleanup rejects", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeRalphFile("epic.md", "# Epic\n\nStop should not surface cleanup errors.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+
+    let rejectRun!: (err: Error) => void;
+    const runPromise = new Promise<void>((_resolve, reject) => {
+      rejectRun = reject;
+    });
+
+    (loop as any).runLoop = () => runPromise;
+
+    expect((await loop.start()).ok).toBe(true);
+    expect(loop.stop().ok).toBe(true);
+
+    rejectRun(new Error("forced stop failure"));
+    await new Promise((r) => setTimeout(r, 25));
+
+    expect(cb.statuses).toContainEqual({ status: "stopped", error: null });
+    expect(cb.statuses).not.toContainEqual({ status: "error", error: "forced stop failure" });
+  });
 });
 
 // ---------------------------------------------------------------------------

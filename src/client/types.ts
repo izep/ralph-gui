@@ -77,7 +77,8 @@ export type ServerMessage =
   | { type: "tasks"; data: TaskStatusData }
   | { type: "log"; data: string }
   | { type: "loopStatus"; data: LoopStatus }
-  | { type: "settings"; data: Settings };
+  | { type: "settings"; data: Settings }
+  | { type: "readiness"; data: Readiness };
 
 export function groupTasks(tasks: Task[]): Record<TaskStatusValue, Task[]> {
   const groups: Record<TaskStatusValue, Task[]> = {

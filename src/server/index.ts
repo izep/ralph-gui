@@ -46,6 +46,7 @@ let loopStatus: "idle" | "running" | "error" | "stopped" = "idle";
 let loopError: string | null = null;
 let logBuffer: string[] = [];
 const MAX_LOG_LINES = 1000;
+let requestShutdown: ((reason: string) => Promise<void>) | null = null;
 
 async function applyCliSettingsOverrides(): Promise<void> {
   if (!loop) return;
@@ -73,20 +74,27 @@ function addLog(line: string) {
   broadcast(JSON.stringify({ type: "log", data: line }));
 }
 
-function makeCallbacks() {
+function makeCallbacks(isActive: () => boolean, getActiveLoop: () => RalphLoop | null) {
   return {
-    onLog: addLog,
+    onLog: (line: string) => {
+      if (!isActive()) return;
+      addLog(line);
+    },
     onLoopStatus: (status: string, error: string | null) => {
+      if (!isActive()) return;
       loopStatus = status as typeof loopStatus;
       loopError = error;
       broadcast(JSON.stringify({ type: "loopStatus", data: { status: loopStatus, error: loopError } }));
 
-      if (exitWhenComplete && loopStatus === "idle" && loop?.didCompleteEpic) {
+      if (exitWhenComplete && loopStatus === "idle" && getActiveLoop()?.didCompleteEpic) {
         addLog("[system] Epic complete, exiting server (--exit-when-complete).");
-        setTimeout(() => process.exit(0), 100);
+        setTimeout(() => {
+          void requestShutdown?.("epic-complete");
+        }, 100);
       }
     },
     onTasksUpdated: (data: object) => {
+      if (!isActive()) return;
       broadcast(JSON.stringify({ type: "tasks", data }));
     },
   };
@@ -120,12 +128,17 @@ function requireRepoConfigured(res: express.Response): RalphLoop | null {
 }
 
 async function setRepo(repoPath: string): Promise<{ ok: boolean; error?: string }> {
-  // Stop existing loop if running
-  if (loop?.isRunning) loop.stop();
+  const previousLoop = loop;
+  if (previousLoop) {
+    loop = null;
+    await previousLoop.shutdown();
+  }
 
   try {
-    loop = new RalphLoop(repoPath, makeCallbacks());
-    await loop.bootstrap();
+    let nextLoop: RalphLoop | null = null;
+    nextLoop = new RalphLoop(repoPath, makeCallbacks(() => loop === nextLoop, () => nextLoop));
+    await nextLoop.bootstrap();
+    loop = nextLoop;
     logBuffer = [];
     loopStatus = "idle";
     loopError = null;
@@ -284,6 +297,8 @@ app.put("/api/epic", async (req, res) => {
   try {
     await activeLoop.writeRalphFile("epic.md", req.body.content);
     res.json({ ok: true });
+    const readiness = await buildReadiness();
+    broadcast(JSON.stringify({ type: "readiness", data: readiness }));
     // Auto-refresh backlog when epic changes (fire-and-forget, only when loop is not running)
     if (!activeLoop.isRunning) {
       activeLoop.refreshBacklog().catch(() => {});
@@ -342,6 +357,68 @@ function broadcast(message: string) {
 wss.on("connection", async (ws) => {
   ws.send(JSON.stringify({ type: "init", data: await getInitData() }));
 });
+
+function closeWebSocketServer(): Promise<void> {
+  for (const client of wss.clients) {
+    client.close(1001, "Server shutting down");
+  }
+
+  return new Promise((resolve) => {
+    wss.close(() => resolve());
+  });
+}
+
+function closeHttpServer(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    server.close((err) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+
+      resolve();
+    });
+  });
+}
+
+async function shutdownServer(reason: string): Promise<void> {
+  if (shutdownServer.inProgress) {
+    return;
+  }
+
+  shutdownServer.inProgress = true;
+  const forceExitTimer = setTimeout(() => {
+    console.error("Graceful shutdown timed out; forcing exit.");
+    process.exit(1);
+  }, 10000);
+  forceExitTimer.unref?.();
+
+  try {
+    console.log(`Shutting down Ralph Control Panel (${reason})...`);
+    const activeLoop = loop;
+    loop = null;
+    if (activeLoop) {
+      await activeLoop.shutdown();
+    }
+
+    await Promise.allSettled([closeWebSocketServer(), closeHttpServer()]);
+    process.exit(0);
+  } catch (err) {
+    console.error(`Shutdown failed: ${String(err)}`);
+    process.exit(1);
+  } finally {
+    clearTimeout(forceExitTimer);
+  }
+}
+
+shutdownServer.inProgress = false;
+requestShutdown = shutdownServer;
+
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.on(signal, () => {
+    void shutdownServer(signal);
+  });
+}
 
 // SPA fallback
 app.get("*", (_req, res) => {

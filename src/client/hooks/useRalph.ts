@@ -87,6 +87,9 @@ export function useRalph() {
             case "settings":
               setSettings(msg.data);
               break;
+            case "readiness":
+              setReadiness(msg.data);
+              break;
           }
         } catch {
           // invalid message
