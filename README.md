@@ -43,6 +43,8 @@ Planning populates and refreshes backlog. Modifying the epic requirements, the a
 - Git
 - GitHub Copilot CLI authenticated and available as `copilot`
 
+If your CLI is installed in a non-standard location, set `COPILOT_BIN` to the full executable path. This is mainly useful on Windows when the command is exposed as `copilot.cmd` or `copilot.bat` instead of a bare `copilot` binary.
+
 ## Quick start
 
 ```bash

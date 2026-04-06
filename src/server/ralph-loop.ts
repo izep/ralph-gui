@@ -33,6 +33,9 @@ export class RalphLoop {
   readonly repoRoot: string;
   readonly ralphDir: string;
   private running = false;
+  private activeRunPromise: Promise<void> | null = null;
+  private runGeneration = 0;
+  private stopRequestedRunId: number | null = null;
   private cb: LoopCallbacks;
   private taskManager: TaskManager;
   private fileManager: RalphFileManager;
@@ -89,6 +92,8 @@ export class RalphLoop {
   async start(): Promise<{ ok: boolean; error?: string }> {
     if (this.running) return { ok: false, error: "Loop is already running" };
 
+    await this.waitForIdle();
+
     const epicConfigured = await this.isEpicConfigured();
     if (!epicConfigured) {
       return {
@@ -105,22 +110,27 @@ export class RalphLoop {
       };
     }
 
+    const runId = ++this.runGeneration;
     this.running = true;
     this.completedEpic = false;
+    this.stopRequestedRunId = null;
     this.cb.onLoopStatus("running", null);
     this.cb.onLog(`[system] Ralph loop started (requirements: ${reqFile})`);
 
     // Run in background — don't await
-    this.runLoop()
+    const runPromise = this.runLoop();
+    this.activeRunPromise = runPromise;
+    runPromise
       .then(() => {
-        this.running = false;
-        this.cb.onLoopStatus("idle", null);
-        this.cb.onLog("[system] Ralph loop finished");
+        this.finishRun(runId);
       })
       .catch((err: Error) => {
-        this.running = false;
-        this.cb.onLoopStatus("error", err.message);
-        this.cb.onLog(`[system] Loop error: ${err.message}`);
+        this.finishRun(runId, err);
+      })
+      .finally(() => {
+        if (this.activeRunPromise === runPromise) {
+          this.activeRunPromise = null;
+        }
       });
 
     return { ok: true };
@@ -128,6 +138,7 @@ export class RalphLoop {
 
   stop(): { ok: boolean; error?: string } {
     if (!this.running) return { ok: false, error: "Loop is not running" };
+    this.stopRequestedRunId = this.runGeneration;
     this.running = false;
     this.llmCaller.stop();
     this.cb.onLoopStatus("stopped", null);
@@ -137,7 +148,15 @@ export class RalphLoop {
 
   async restart(): Promise<{ ok: boolean; error?: string }> {
     if (this.running) this.stop();
+    await this.waitForIdle();
     return this.start();
+  }
+
+  async shutdown(): Promise<void> {
+    if (this.running) {
+      this.stop();
+    }
+    await this.waitForIdle();
   }
 
   // --- Backlog Refresh ---
@@ -555,6 +574,40 @@ export class RalphLoop {
       return normalized.length > 0 && normalized !== DEFAULT_EPIC_NORMALIZED;
     } catch {
       return false;
+    }
+  }
+
+  private finishRun(runId: number, err?: Error): void {
+    const wasStopped = this.stopRequestedRunId === runId;
+    if (runId !== this.runGeneration) {
+      return;
+    }
+
+    this.running = false;
+
+    if (wasStopped) {
+      return;
+    }
+
+    if (err) {
+      this.cb.onLoopStatus("error", err.message);
+      this.cb.onLog(`[system] Loop error: ${err.message}`);
+      return;
+    }
+
+    this.cb.onLoopStatus("idle", null);
+    this.cb.onLog("[system] Ralph loop finished");
+  }
+
+  private async waitForIdle(): Promise<void> {
+    if (!this.activeRunPromise) {
+      return;
+    }
+
+    try {
+      await this.activeRunPromise;
+    } catch {
+      // start/restart should be able to continue after a failed or cancelled run
     }
   }
 }
