@@ -14,12 +14,24 @@ RUN THIS IN A SANDBOX. The loop will call `copilot` in "yolo" mode to allow it t
 
 - `requirements.md`:
   The authoritative product requirements document for the overall project. If this is defined elsewhere, just reference those documents in requirements.md. 
-  Ralph treats this as the source of truth for the project and must fit it's work within those bounds.
+  Ralph treats this as the source of truth for the project and must fit its work within those bounds.
 - `ralph/epic.md`:
   The current epic Ralph should execute right now.
   The planner uses this to prioritize and sequence tasks.
 - `ralph/task-status.json`:
   Task state, next task content, feedback, counters, and blocked metadata.
+
+```mermaid
+flowchart TB
+  Req[requirements.md]
+  Epic[ralph/epic.md]
+  Loop[Ralph loop engine]
+  Status[ralph/task-status.json]
+  Req --> Loop
+  Epic --> Loop
+  Loop --> Status
+  Status --> Loop
+```
 
 ## Loop Phases
 
@@ -33,6 +45,17 @@ Ralph uses one planning prompt plus Dev and QA prompts:
    - Implements the selected task
 3. QA:
    - Verifies the implementation and returns either verified feedback or actionable fixes
+
+```mermaid
+flowchart TD
+  PlanPhase[Planning]
+  DevPhase[Dev]
+  QAPhase[QA]
+  PlanPhase --> DevPhase
+  DevPhase --> QAPhase
+  QAPhase -->|"verified task or replan"| PlanPhase
+  QAPhase -->|"implement fixes"| DevPhase
+```
 
 Planning populates and refreshes backlog. Modifying the epic requirements, the agents.md, requirements.md or anything else that would be brought into context will be considered in the next planning loop, which might cause the backlog items to change.
 
@@ -60,6 +83,17 @@ npm run dev
 
 - Backend: `http://localhost:3001`
 - Frontend: Vite dev server
+
+```mermaid
+flowchart TB
+  Browser[Browser Kanban UI]
+  Server[Ralph GUI Node server]
+  TargetRepo[target repo on disk]
+  Copilot[Copilot CLI]
+  Browser --> Server
+  Server --> TargetRepo
+  Server --> Copilot
+```
 
 ## "Headless Loop" (No UI Required)
 
@@ -118,6 +152,26 @@ Ralph refuses to start unless one exists:
 - `docs/requirements.md`
 - `docs/REQUIREMENTS.md`
 
+## Experiments
+
+Sample **target repos** live under `experiments/<slug>/` (requirements file + `ralph/epic.md`). The loop implements the product **inside** that folder. From ralph-gui root, `./start.sh exp <slug>` starts Kanban with `--repo` set to that directory (same as an absolute `--repo` path).
+
+```mermaid
+flowchart LR
+  Dev[Developer]
+  Launcher["start.sh exp or npm run exp"]
+  Kanban[Ralph GUI on port 3001]
+  ExpTarget["experiments/slug"]
+  Dev --> Launcher
+  Launcher --> Kanban
+  Kanban -->|"--repo absolute path"| ExpTarget
+```
+
+- List slugs: `./start.sh exp` with no second argument, or `npm run exp` alone.
+- Optional args pass through: `npm run exp -- todo --start`.
+- Experiments may include a `material/` folder for screenshots and other static reference files (see [`experiments/todo/README.md`](experiments/todo/README.md)).
+- More detail: [`experiments/README.md`](experiments/README.md). Checklist for authors: [`.cursor/skills/ralph-gui-experiment/SKILL.md`](.cursor/skills/ralph-gui-experiment/SKILL.md).
+
 ## Useful Scripts
 
 - `npm run dev`
@@ -125,3 +179,4 @@ Ralph refuses to start unless one exists:
 - `npm run server`
 - `npm run typecheck`
 - `npm run test:ci`
+- `npm run exp -- <slug>` (Kanban with `--repo` set to `experiments/<slug>`)
