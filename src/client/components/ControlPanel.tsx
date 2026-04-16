@@ -135,6 +135,20 @@ export function ControlPanel({
         <fieldset className="cp-fieldset" disabled={repoLocked}>
 
         <label className="cp-field">
+          <span>Agent Backend</span>
+          <select
+            value={localSettings.agentBackend}
+            onChange={(e) =>
+              setLocalSettings({ ...localSettings, agentBackend: e.target.value })
+            }
+          >
+            <option value="copilot">GitHub Copilot CLI</option>
+            <option value="cursor-agent">Cursor Agent</option>
+            <option value="claude">Claude Code (claude CLI)</option>
+          </select>
+        </label>
+
+        <label className="cp-field">
           <span>Max LLM Calls</span>
           <input
             type="number"

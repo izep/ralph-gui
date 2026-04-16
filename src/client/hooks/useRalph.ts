@@ -31,6 +31,7 @@ const DEFAULT_SETTINGS: Settings = {
   autoCommit: false,
   planFrequency: 1,
   minBacklogSize: 3,
+  agentBackend: "copilot",
 };
 
 const WS_RECONNECT_DELAY = 3000;

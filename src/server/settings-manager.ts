@@ -12,6 +12,8 @@ export interface Settings {
   autoCommit: boolean;
   planFrequency: number;
   minBacklogSize: number;
+  // Supported values: "copilot" | "cursor-agent" | "claude"
+  agentBackend: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -24,6 +26,7 @@ export const DEFAULT_SETTINGS: Settings = {
   autoCommit: false,
   planFrequency: 1,
   minBacklogSize: 3,
+  agentBackend: "copilot",
 };
 
 export class SettingsManager {
