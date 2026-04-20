@@ -48,8 +48,9 @@ Planning populates and refreshes backlog. Modifying the epic requirements, the a
 | Copilot (default) | `copilot` | `COPILOT_BIN` |
 | Cursor Agent | `cursor-agent` | `CURSOR_AGENT_BIN` |
 | Claude Code | `claude` | `CLAUDE_BIN` |
+| Google Gemini CLI | `gemini` | `GEMINI_BIN` |
 
-Plan, dev, and QA **model names are backend-specific**: what works for Copilot may not apply to Claude Code or Cursor Agent—see each vendor’s CLI documentation.
+Plan, dev, and QA **model names are backend-specific**: what works for Copilot may not apply to Claude Code, Cursor Agent, or Gemini CLI—see each vendor’s CLI documentation.
 
 If a CLI is not on `PATH`, set the matching `*_BIN` variable to the full executable path (especially on Windows when the command is `copilot.cmd`, `cursor-agent.cmd`, etc.).
 
@@ -118,7 +119,7 @@ Default loop settings are:
 - `minBacklogSize: 3`
 - `agentBackend: copilot`
 
-Use your selected CLI’s help output for supported models (for example `copilot --help`, `claude --help`, or `cursor-agent --help`).
+Use your selected CLI’s help output for supported models (for example `copilot --help`, `claude --help`, `cursor-agent --help`, or `gemini --help`).
 
 ## Required Requirements File
 

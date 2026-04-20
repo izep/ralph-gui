@@ -18,6 +18,7 @@ export function ControlPanel({
   onSavePrompt,
   onSetRepo,
   onRefreshBacklog,
+  onOpenMarkdownInHost,
   isRunning,
   onClose,
 }: {
@@ -31,6 +32,7 @@ export function ControlPanel({
   onSavePrompt: (name: string, content: string) => Promise<void>;
   onSetRepo: (path: string) => Promise<{ ok: boolean; error?: string }>;
   onRefreshBacklog: () => Promise<{ ok: boolean; error?: string }>;
+  onOpenMarkdownInHost: (relativePath: string) => Promise<{ ok: boolean; error?: string }>;
   isRunning: boolean;
   onClose: () => void;
 }) {
@@ -44,6 +46,7 @@ export function ControlPanel({
   const [localPrompt, setLocalPrompt] = useState("");
   const [promptSaved, setPromptSaved] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [openHostBusy, setOpenHostBusy] = useState<string | null>(null);
   const repoLocked = !readiness.repoConfigured;
 
   const canClose = readiness.repoConfigured && readiness.requirementsFound;
@@ -81,6 +84,16 @@ export function ControlPanel({
     if (!result.ok) setRepoError(result.error ?? "Failed to set repository");
   }
 
+  async function handleOpenMarkdownInHost(relativePath: string) {
+    setOpenHostBusy(relativePath);
+    try {
+      const result = await onOpenMarkdownInHost(relativePath);
+      if (!result.ok) window.alert(result.error ?? "Could not open file");
+    } finally {
+      setOpenHostBusy(null);
+    }
+  }
+
   return (
     <aside className="control-panel">
       <div className="control-panel__header">
@@ -110,7 +123,20 @@ export function ControlPanel({
         {readiness.repoConfigured && (
           <div className="cp-status">
             {readiness.requirementsFound ? (
-              <span className="cp-status--ok">Requirements found: {readiness.requirementsFile}</span>
+              <div className="cp-status-row">
+                <span className="cp-status--ok">Requirements found: {readiness.requirementsFile}</span>
+                {readiness.requirementsFile && (
+                  <button
+                    type="button"
+                    className="cp-open-host"
+                    disabled={openHostBusy !== null}
+                    title="Opens this file in the default Windows application (e.g. Typora) when the server runs in WSL"
+                    onClick={() => void handleOpenMarkdownInHost(readiness.requirementsFile!)}
+                  >
+                    {openHostBusy === readiness.requirementsFile ? "Opening…" : "Open in Windows"}
+                  </button>
+                )}
+              </div>
             ) : (
               <span className="cp-status--warn">No requirements.md found in repo root. Add one to start the loop.</span>
             )}
@@ -145,6 +171,7 @@ export function ControlPanel({
             <option value="copilot">GitHub Copilot CLI</option>
             <option value="cursor-agent">Cursor Agent</option>
             <option value="claude">Claude Code (claude CLI)</option>
+            <option value="gemini">Google Gemini CLI</option>
           </select>
         </label>
 
@@ -279,6 +306,17 @@ export function ControlPanel({
         <p className="cp-hint">
           Define the current epic Ralph should execute. The planning phase breaks this epic into tasks using requirements.md as the source of truth.
         </p>
+        <p className="cp-open-host-row">
+          <button
+            type="button"
+            className="cp-open-host"
+            disabled={openHostBusy !== null}
+            title="Opens ralph/epic.md in the default Windows application when the server runs in WSL"
+            onClick={() => void handleOpenMarkdownInHost("ralph/epic.md")}
+          >
+            {openHostBusy === "ralph/epic.md" ? "Opening…" : "Open epic (ralph/epic.md) in Windows"}
+          </button>
+        </p>
         <textarea
           className="cp-textarea"
           rows={8}
@@ -321,6 +359,19 @@ export function ControlPanel({
             </button>
           ))}
         </div>
+        <p className="cp-open-host-row">
+          <button
+            type="button"
+            className="cp-open-host"
+            disabled={openHostBusy !== null}
+            title="Opens the active prompt file in the default Windows application when the server runs in WSL"
+            onClick={() => void handleOpenMarkdownInHost(`ralph/${activePrompt}`)}
+          >
+            {openHostBusy === `ralph/${activePrompt}`
+              ? "Opening…"
+              : `Open ${PROMPT_NAMES.find((p) => p.key === activePrompt)?.label ?? "prompt"} in Windows`}
+          </button>
+        </p>
         <textarea
           className="cp-textarea cp-textarea--mono"
           rows={12}

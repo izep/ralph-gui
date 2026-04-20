@@ -1,10 +1,10 @@
-// LLM CLI invocation supporting copilot, cursor-agent, and claude backends
+// LLM CLI invocation supporting copilot, cursor-agent, claude, and gemini backends
 import { spawn, type ChildProcess } from "child_process";
 import { constants } from "fs";
 import { access } from "fs/promises";
 import path from "path";
 
-export type AgentBackendId = "copilot" | "cursor-agent" | "claude";
+export type AgentBackendId = "copilot" | "cursor-agent" | "claude" | "gemini";
 
 export interface LLMCallOpts {
   agentBackend?: string;
@@ -18,6 +18,7 @@ export function normalizeAgentBackend(value: string | undefined): AgentBackendId
   const v = value?.trim().toLowerCase();
   if (v === "cursor-agent") return "cursor-agent";
   if (v === "claude") return "claude";
+  if (v === "gemini") return "gemini";
   return "copilot";
 }
 
@@ -168,6 +169,25 @@ export async function resolveClaudeCommand(
   );
 }
 
+export async function resolveGeminiCommand(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+): Promise<string> {
+  const configuredCommand = env.GEMINI_BIN?.trim();
+  const candidates = configuredCommand
+    ? [configuredCommand]
+    : platform === "win32"
+      ? ["gemini", "gemini.cmd", "gemini.bat", "gemini.exe"]
+      : ["gemini"];
+
+  return resolveFirstExecutable(
+    candidates,
+    env,
+    platform,
+    "Gemini CLI not found in PATH. Install Google Gemini CLI so `gemini` is available, or set GEMINI_BIN to the executable path.",
+  );
+}
+
 export function shouldUseShellForCommand(
   command: string,
   platform: NodeJS.Platform = process.platform,
@@ -186,6 +206,8 @@ function backendCliLabel(backend: AgentBackendId): string {
       return "cursor-agent";
     case "claude":
       return "claude";
+    case "gemini":
+      return "gemini";
     default:
       return "copilot";
   }
@@ -201,6 +223,8 @@ async function resolveCommandForBackend(
       return resolveCursorAgentCommand(env, platform);
     case "claude":
       return resolveClaudeCommand(env, platform);
+    case "gemini":
+      return resolveGeminiCommand(env, platform);
     default:
       return resolveCopilotCommand(env, platform);
   }
@@ -286,6 +310,19 @@ export class LLMCaller {
             if (opts.reasoningEffort) {
               args.push("--effort", opts.reasoningEffort);
             }
+            writeStdin = null;
+            break;
+          }
+          case "gemini": {
+            args = [
+              "-p",
+              normalizePromptForArgv(prompt),
+              "-m",
+              model,
+              "--yolo",
+              "--output-format",
+              "text",
+            ];
             writeStdin = null;
             break;
           }

@@ -8,6 +8,7 @@ import {
   resolveClaudeCommand,
   resolveCopilotCommand,
   resolveCursorAgentCommand,
+  resolveGeminiCommand,
   shouldUseShellForCommand,
 } from "./llm-caller.js";
 
@@ -124,6 +125,34 @@ describe("resolveClaudeCommand", () => {
   });
 });
 
+describe("resolveGeminiCommand", () => {
+  it("prefers GEMINI_BIN when explicitly configured", async () => {
+    const executable = path.join(tmpDir, process.platform === "win32" ? "gemini.cmd" : "gemini");
+    await writeFile(executable, "echo test", "utf-8");
+    if (process.platform !== "win32") {
+      await chmod(executable, 0o755);
+    }
+
+    const resolved = await resolveGeminiCommand({ GEMINI_BIN: executable }, process.platform);
+    expect(resolved).toBe(executable);
+  });
+
+  it("resolves gemini from PATH on Unix-like platforms", async () => {
+    const executable = path.join(tmpDir, "gemini");
+    await writeFile(executable, "#!/bin/sh\nexit 0\n", "utf-8");
+    await chmod(executable, 0o755);
+
+    const resolved = await resolveGeminiCommand({ PATH: tmpDir }, "linux");
+    expect(resolved).toBe(executable);
+  });
+
+  it("throws a helpful error when the CLI cannot be found", async () => {
+    await expect(resolveGeminiCommand({ PATH: tmpDir }, "linux")).rejects.toThrow(
+      "Gemini CLI not found in PATH",
+    );
+  });
+});
+
 describe("normalizeAgentBackend", () => {
   it("defaults unknown values to copilot", () => {
     expect(normalizeAgentBackend(undefined)).toBe("copilot");
@@ -136,6 +165,8 @@ describe("normalizeAgentBackend", () => {
     expect(normalizeAgentBackend("CURSOR-AGENT")).toBe("cursor-agent");
     expect(normalizeAgentBackend("claude")).toBe("claude");
     expect(normalizeAgentBackend("Claude")).toBe("claude");
+    expect(normalizeAgentBackend("gemini")).toBe("gemini");
+    expect(normalizeAgentBackend("Gemini")).toBe("gemini");
   });
 });
 

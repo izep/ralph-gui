@@ -55,7 +55,7 @@ async function applyCliSettingsOverrides(): Promise<void> {
   const agentBackendArg = getArg("--agent-backend");
   const agentBackendOverride =
     agentBackendArg &&
-    ["copilot", "cursor-agent", "claude"].includes(agentBackendArg.toLowerCase())
+    ["copilot", "cursor-agent", "claude", "gemini"].includes(agentBackendArg.toLowerCase())
       ? agentBackendArg.toLowerCase()
       : undefined;
 
@@ -267,7 +267,6 @@ app.put("/api/repo", async (req, res) => {
   }
   res.json(await setRepo(repoPath));
 });
-
 // Readiness
 app.get("/api/readiness", async (_req, res) => {
   res.json(await buildReadiness());
