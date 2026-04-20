@@ -1,11 +1,32 @@
-// Copilot CLI invocation with model and reasoning parameters
+// LLM CLI invocation supporting copilot, cursor-agent, and claude backends
 import { spawn, type ChildProcess } from "child_process";
 import { constants } from "fs";
 import { access } from "fs/promises";
 import path from "path";
 
-export interface CopilotOpts {
+export type AgentBackendId = "copilot" | "cursor-agent" | "claude";
+
+export interface LLMCallOpts {
+  agentBackend?: string;
   reasoningEffort?: string;
+}
+
+/** @deprecated Use LLMCallOpts instead */
+export type CopilotOpts = LLMCallOpts;
+
+export function normalizeAgentBackend(value: string | undefined): AgentBackendId {
+  const v = value?.trim().toLowerCase();
+  if (v === "cursor-agent") return "cursor-agent";
+  if (v === "claude") return "claude";
+  return "copilot";
+}
+
+/** Avoid argv parsing treating the prompt as a flag when it starts with "-". */
+export function normalizePromptForArgv(prompt: string): string {
+  if (prompt.startsWith("-")) {
+    return `\n${prompt}`;
+  }
+  return prompt;
 }
 
 function getWindowsExecutableExtensions(pathext?: string): string[] {
@@ -75,6 +96,21 @@ async function resolveCommandPath(
   return null;
 }
 
+async function resolveFirstExecutable(
+  candidates: string[],
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform,
+  notFoundMessage: string,
+): Promise<string> {
+  for (const candidate of candidates) {
+    const resolved = await resolveCommandPath(candidate.trim(), env, platform);
+    if (resolved) {
+      return resolved;
+    }
+  }
+  throw new Error(notFoundMessage);
+}
+
 export async function resolveCopilotCommand(
   env: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
@@ -86,15 +122,49 @@ export async function resolveCopilotCommand(
       ? ["copilot", "copilot.cmd", "copilot.bat", "copilot.exe"]
       : ["copilot"];
 
-  for (const candidate of candidates) {
-    const resolved = await resolveCommandPath(candidate, env, platform);
-    if (resolved) {
-      return resolved;
-    }
-  }
-
-  throw new Error(
+  return resolveFirstExecutable(
+    candidates,
+    env,
+    platform,
     "Copilot CLI not found in PATH. Install GitHub Copilot CLI so `copilot` is available, or set COPILOT_BIN to the executable path.",
+  );
+}
+
+export async function resolveCursorAgentCommand(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+): Promise<string> {
+  const configuredCommand = env.CURSOR_AGENT_BIN?.trim();
+  const candidates = configuredCommand
+    ? [configuredCommand]
+    : platform === "win32"
+      ? ["cursor-agent", "cursor-agent.cmd", "cursor-agent.bat", "cursor-agent.exe"]
+      : ["cursor-agent"];
+
+  return resolveFirstExecutable(
+    candidates,
+    env,
+    platform,
+    "cursor-agent not found in PATH. Install the Cursor CLI so `cursor-agent` is available, or set CURSOR_AGENT_BIN to the executable path.",
+  );
+}
+
+export async function resolveClaudeCommand(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+): Promise<string> {
+  const configuredCommand = env.CLAUDE_BIN?.trim();
+  const candidates = configuredCommand
+    ? [configuredCommand]
+    : platform === "win32"
+      ? ["claude", "claude.cmd", "claude.bat", "claude.exe"]
+      : ["claude"];
+
+  return resolveFirstExecutable(
+    candidates,
+    env,
+    platform,
+    "Claude Code CLI not found in PATH. Install Claude Code so `claude` is available, or set CLAUDE_BIN to the executable path.",
   );
 }
 
@@ -110,18 +180,45 @@ export function shouldUseShellForCommand(
   return extension === ".cmd" || extension === ".bat";
 }
 
+function backendCliLabel(backend: AgentBackendId): string {
+  switch (backend) {
+    case "cursor-agent":
+      return "cursor-agent";
+    case "claude":
+      return "claude";
+    default:
+      return "copilot";
+  }
+}
+
+async function resolveCommandForBackend(
+  backend: AgentBackendId,
+  env: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform,
+): Promise<string> {
+  switch (backend) {
+    case "cursor-agent":
+      return resolveCursorAgentCommand(env, platform);
+    case "claude":
+      return resolveClaudeCommand(env, platform);
+    default:
+      return resolveCopilotCommand(env, platform);
+  }
+}
+
 export class LLMCaller {
   private isRunning: () => boolean;
   private currentProcess: ChildProcess | null = null;
   private killTimer: NodeJS.Timeout | null = null;
-  private cachedCommand: string | null = null;
+  /** Resolved executable path per backend id */
+  private cachedCommands = new Map<AgentBackendId, string>();
 
   constructor(isRunning: () => boolean) {
     this.isRunning = isRunning;
   }
 
   clearCommandCache(): void {
-    this.cachedCommand = null;
+    this.cachedCommands.clear();
   }
 
   call(
@@ -137,25 +234,61 @@ export class LLMCaller {
           return;
         }
 
-        if (!this.cachedCommand) {
-          this.cachedCommand = await resolveCopilotCommand();
+        const backend = normalizeAgentBackend(opts.agentBackend);
+        let cached = this.cachedCommands.get(backend);
+        if (!cached) {
+          cached = await resolveCommandForBackend(backend, process.env, process.platform);
+          this.cachedCommands.set(backend, cached);
         }
-        const command = this.cachedCommand;
+        const command = cached;
+
         if (!this.isRunning()) {
           reject(new Error("Loop was stopped"));
           return;
         }
 
-        const args = [
-          "--model",
-          model,
-          "--autopilot",
-          "-s",
-          "--yolo",
-          "--no-color",
-        ];
-        if (opts.reasoningEffort) {
-          args.push("--reasoning-effort", opts.reasoningEffort);
+        const cli = backendCliLabel(backend);
+        let args: string[];
+        let writeStdin: string | null;
+
+        switch (backend) {
+          case "copilot": {
+            args = ["--model", model, "--autopilot", "-s", "--yolo", "--no-color"];
+            if (opts.reasoningEffort) {
+              args.push("--reasoning-effort", opts.reasoningEffort);
+            }
+            writeStdin = prompt;
+            break;
+          }
+          case "cursor-agent": {
+            args = [
+              "-p",
+              normalizePromptForArgv(prompt),
+              "--model",
+              model,
+              "--output-format",
+              "text",
+            ];
+            writeStdin = null;
+            break;
+          }
+          case "claude": {
+            args = [
+              "-p",
+              normalizePromptForArgv(prompt),
+              "--model",
+              model,
+              "--permission-mode",
+              "bypassPermissions",
+              "--output-format",
+              "text",
+            ];
+            if (opts.reasoningEffort) {
+              args.push("--effort", opts.reasoningEffort);
+            }
+            writeStdin = null;
+            break;
+          }
         }
 
         const proc = spawn(command, args, {
@@ -175,7 +308,9 @@ export class LLMCaller {
           stderr += data.toString();
         });
 
-        proc.stdin.write(prompt);
+        if (writeStdin !== null) {
+          proc.stdin.write(writeStdin);
+        }
         proc.stdin.end();
 
         proc.on("close", (code) => {
@@ -188,7 +323,7 @@ export class LLMCaller {
           } else if (code !== 0) {
             reject(
               new Error(
-                `copilot exited with code ${code}${stderr ? ": " + stderr.slice(0, 300) : ""}`
+                `${cli} exited with code ${code}${stderr ? ": " + stderr.slice(0, 300) : ""}`
               )
             );
           } else {
@@ -201,10 +336,11 @@ export class LLMCaller {
             this.currentProcess = null;
           }
           this.clearKillTimer();
-          reject(new Error(`Failed to run copilot: ${err.message}`));
+          reject(new Error(`Failed to run ${cli}: ${err.message}`));
         });
       })().catch((err: Error) => {
-        reject(new Error(`Failed to run copilot: ${err.message}`));
+        const backend = normalizeAgentBackend(opts.agentBackend);
+        reject(new Error(`Failed to run ${backendCliLabel(backend)}: ${err.message}`));
       });
     });
   }

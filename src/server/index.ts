@@ -52,6 +52,13 @@ async function applyCliSettingsOverrides(): Promise<void> {
   if (!loop) return;
   const current = await loop.readSettings();
 
+  const agentBackendArg = getArg("--agent-backend");
+  const agentBackendOverride =
+    agentBackendArg &&
+    ["copilot", "cursor-agent", "claude"].includes(agentBackendArg.toLowerCase())
+      ? agentBackendArg.toLowerCase()
+      : undefined;
+
   const next: Settings = {
     ...current,
     ...(getArg("--plan-model") ? { planModel: getArg("--plan-model")! } : {}),
@@ -63,6 +70,7 @@ async function applyCliSettingsOverrides(): Promise<void> {
     ...(getNumberArg("--plan-frequency") !== undefined ? { planFrequency: getNumberArg("--plan-frequency")! } : {}),
     ...(getNumberArg("--min-backlog-size") !== undefined ? { minBacklogSize: getNumberArg("--min-backlog-size")! } : {}),
     ...(getBooleanArg("--auto-commit") !== undefined ? { autoCommit: getBooleanArg("--auto-commit")! } : {}),
+    ...(agentBackendOverride ? { agentBackend: agentBackendOverride } : {}),
   };
 
   await loop.writeSettings(next);

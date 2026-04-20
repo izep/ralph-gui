@@ -10,7 +10,7 @@ Remove `ralph/task-status.json` to start a clean loop, otherwise it will try to 
 
 ## Core Concepts
 
-RUN THIS IN A SANDBOX. The loop will call `copilot` in "yolo" mode to allow it to run without user intervention. 
+RUN THIS IN A SANDBOX. With the **GitHub Copilot** backend (default), the loop calls `copilot` in "yolo" mode so it can run without user intervention. Other agent backends use their own non-interactive flags (see below).
 
 - `requirements.md`:
   The authoritative product requirements document for the overall project. If this is defined elsewhere, just reference those documents in requirements.md. 
@@ -41,9 +41,17 @@ Planning populates and refreshes backlog. Modifying the epic requirements, the a
 - Node.js 20+
 - npm 10+
 - Git
-- GitHub Copilot CLI authenticated and available as `copilot`
+- **One** installed and authenticated CLI for the agent backend selected in Settings (`ralph/settings.json`), or via `--agent-backend`:
 
-If your CLI is installed in a non-standard location, set `COPILOT_BIN` to the full executable path. This is mainly useful on Windows when the command is exposed as `copilot.cmd` or `copilot.bat` instead of a bare `copilot` binary.
+| Backend | Executable | Override env var |
+| --- | --- | --- |
+| Copilot (default) | `copilot` | `COPILOT_BIN` |
+| Cursor Agent | `cursor-agent` | `CURSOR_AGENT_BIN` |
+| Claude Code | `claude` | `CLAUDE_BIN` |
+
+Plan, dev, and QA **model names are backend-specific**: what works for Copilot may not apply to Claude Code or Cursor Agent—see each vendor’s CLI documentation.
+
+If a CLI is not on `PATH`, set the matching `*_BIN` variable to the full executable path (especially on Windows when the command is `copilot.cmd`, `cursor-agent.cmd`, etc.).
 
 ## Quick start
 
@@ -71,6 +79,7 @@ Use `start.sh` with a repo and optional settings overrides. The UI is still ther
 ./start.sh \
   --repo /absolute/path/to/target-repo \
   --start \
+  --agent-backend copilot \
   --plan-model claude-sonnet-4.6 \
   --dev-model gpt-5-mini \
   --qa-model gpt-5-mini \
@@ -107,8 +116,9 @@ Default loop settings are:
 - `autoCommit: false`
 - `planFrequency: 1`
 - `minBacklogSize: 3`
+- `agentBackend: copilot`
 
-Run `copilot --help` to see updated models. 
+Use your selected CLI’s help output for supported models (for example `copilot --help`, `claude --help`, or `cursor-agent --help`).
 
 ## Required Requirements File
 
