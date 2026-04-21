@@ -62,6 +62,8 @@ export interface Settings {
   autoCommit: boolean;
   planFrequency: number;
   minBacklogSize: number;
+  // Supported values: "copilot" | "cursor-agent" | "claude" | "gemini"
+  agentBackend: string;
 }
 
 export interface Readiness {

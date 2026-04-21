@@ -194,7 +194,7 @@ export class RalphLoop {
         `${planPrompt}\n${refreshInstruction}`,
         settings.planModel,
         this.repoRoot,
-        {}
+        { agentBackend: settings.agentBackend }
       );
 
       if (output.includes("<status>complete</status>")) {
@@ -320,7 +320,7 @@ export class RalphLoop {
           planPrompt,
           settings.planModel,
           this.repoRoot,
-          {}
+          { agentBackend: settings.agentBackend }
         );
       } catch (err) {
         throw new Error(`Plan phase failed: ${err}`);
@@ -428,6 +428,7 @@ export class RalphLoop {
           s.devModel,
           this.repoRoot,
           {
+            agentBackend: s.agentBackend,
             reasoningEffort: s.devReasoningEffort,
           }
         );
@@ -493,6 +494,7 @@ export class RalphLoop {
           s.qaModel,
           this.repoRoot,
           {
+            agentBackend: s.agentBackend,
             reasoningEffort: s.qaReasoningEffort,
           }
         );
