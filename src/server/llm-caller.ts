@@ -22,6 +22,13 @@ export function normalizeAgentBackend(value: string | undefined): AgentBackendId
   return "copilot";
 }
 
+/** Set to `null` to honor UI / ralph settings. Temporary: force Gemini for local CLI testing. */
+const TEST_OVERRIDE_AGENT_BACKEND: AgentBackendId | null = null; // "gemini"; // To test specific agent cli
+
+function effectiveAgentBackend(opts: CopilotOpts): AgentBackendId {
+  return TEST_OVERRIDE_AGENT_BACKEND ?? normalizeAgentBackend(opts.agentBackend);
+}
+
 /** Avoid argv parsing treating the prompt as a flag when it starts with "-". */
 export function normalizePromptForArgv(prompt: string): string {
   if (prompt.startsWith("-")) {
@@ -258,7 +265,7 @@ export class LLMCaller {
           return;
         }
 
-        const backend = normalizeAgentBackend(opts.agentBackend);
+        const backend = effectiveAgentBackend(opts);
         let cached = this.cachedCommands.get(backend);
         if (!cached) {
           cached = await resolveCommandForBackend(backend, process.env, process.platform);
@@ -376,7 +383,7 @@ export class LLMCaller {
           reject(new Error(`Failed to run ${cli}: ${err.message}`));
         });
       })().catch((err: Error) => {
-        const backend = normalizeAgentBackend(opts.agentBackend);
+        const backend = effectiveAgentBackend(opts);
         reject(new Error(`Failed to run ${backendCliLabel(backend)}: ${err.message}`));
       });
     });
