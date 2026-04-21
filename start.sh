@@ -4,6 +4,9 @@ set -euo pipefail
 # Ralph launcher
 # Builds the UI and starts the API server.
 #
+# Experiment under this repo (Kanban + --repo experiments/<slug>):
+#   ./start.sh exp <slug>
+#
 # Example (headless run until epic complete):
 # ./start.sh \
 #   --repo /absolute/path/to/target-repo \
@@ -20,9 +23,30 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
+list_experiment_slugs() {
+  local count=0
+  for d in experiments/*/; do
+    [ -d "$d" ] || continue
+    local base="${d%/}"
+    base="${base##*/}"
+    if [ -f "${d}requirements.md" ] || [ -f "${d}REQUIREMENTS.md" ] || [ -f "${d}Requirements.md" ] \
+      || [ -f "${d}docs/requirements.md" ] || [ -f "${d}docs/REQUIREMENTS.md" ]; then
+      echo "  $base"
+      count=$((count + 1))
+    fi
+  done
+  if [ "$count" -eq 0 ]; then
+    echo "  (none)"
+  fi
+}
+
 if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
   cat <<'EOF'
 Usage: ./start.sh [server-options]
+       ./start.sh exp <slug> [server-options]
+
+  exp <slug>    Start Ralph Kanban with --repo set to experiments/<slug> (absolute path).
+                Then open http://localhost:3001 and run the loop from the UI (or pass --start).
 
 Common options:
   --repo <path>                  Target repository (required with --start)
@@ -42,6 +66,24 @@ Settings overrides (persisted to ralph/settings.json):
   --auto-commit <true|false>
 EOF
   exit 0
+fi
+
+if [ "${1:-}" = "exp" ]; then
+  if [ -z "${2:-}" ]; then
+    echo "Usage: ./start.sh exp <slug> [server-options...]"
+    echo ""
+    echo "Experiments (directories under experiments/ with a requirements file):"
+    list_experiment_slugs
+    exit 1
+  fi
+  slug="$2"
+  shift 2
+  repo="$(pwd)/experiments/${slug}"
+  if [ ! -d "$repo" ]; then
+    echo "error: no directory experiments/${slug}"
+    exit 1
+  fi
+  set -- --repo "$repo" "$@"
 fi
 
 if [ ! -d "node_modules" ]; then

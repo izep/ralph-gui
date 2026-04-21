@@ -10,7 +10,8 @@
     "server": "tsx src/server/index.ts",
     "test": "vitest --config config/vitest.config.ts",
     "test:ci": "vitest run --config config/vitest.config.ts",
-    "typecheck": "tsc -b config/tsconfig.json --noEmit"
+    "typecheck": "tsc -b config/tsconfig.json --noEmit",
+    "exp": "node scripts/run-experiment.mjs"
   },
   "dependencies": {
     "express": "^4.21.0",
