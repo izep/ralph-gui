@@ -10,7 +10,7 @@ Remove `ralph/task-status.json` to start a clean loop, otherwise it will try to 
 
 ## Core Concepts
 
-RUN THIS IN A SANDBOX. With the **GitHub Copilot** backend (default), the loop calls `copilot` in "yolo" mode so it can run without user intervention. Other agent backends use their own non-interactive flags (see below).
+RUN THIS IN A SANDBOX. With the **GitHub Copilot** backend (default), the loop calls `copilot` in "yolo" mode. Other backends are also launched with backend-specific non-interactive/permissive flags so the loop can proceed unattended: Cursor Agent is run with `--output-format text`, Claude is run with `--permission-mode bypassPermissions --output-format text`, and Gemini is run with `--yolo --output-format text`. These modes can reduce or bypass interactive safety prompts, so backend selection has real safety implications and should only be used in isolated environments.
 
 - `requirements.md`:
   The authoritative product requirements document for the overall project. If this is defined elsewhere, just reference those documents in requirements.md. 

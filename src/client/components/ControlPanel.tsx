@@ -1,11 +1,19 @@
 import { useState, useEffect } from "react";
-import type { Settings, Readiness } from "../types";
+import type { Settings, Readiness, AgentBackendId } from "../types";
 
 const PROMPT_NAMES = [
   { key: "plan-prompt.md", label: "Plan" },
   { key: "dev-prompt.md", label: "Dev" },
   { key: "qa-prompt.md", label: "QA" },
 ];
+
+function normalizeAgentBackend(value: string | undefined): AgentBackendId {
+  const v = value?.trim().toLowerCase();
+  if (v === "cursor-agent") return "cursor-agent";
+  if (v === "claude") return "claude";
+  if (v === "gemini") return "gemini";
+  return "copilot";
+}
 
 export function ControlPanel({
   settings,
@@ -49,7 +57,10 @@ export function ControlPanel({
   const canClose = readiness.repoConfigured && readiness.requirementsFound;
 
   // Sync from server when props change
-  useEffect(() => setLocalSettings(settings), [settings]);
+  useEffect(
+    () => setLocalSettings({ ...settings, agentBackend: normalizeAgentBackend(settings.agentBackend) }),
+    [settings],
+  );
   useEffect(() => setLocalEpic(epic), [epic]);
   useEffect(() => setLocalRepo(repoRoot), [repoRoot]);
   useEffect(() => setLocalPrompt(prompts[activePrompt] ?? ""), [prompts, activePrompt]);
@@ -139,7 +150,7 @@ export function ControlPanel({
           <select
             value={localSettings.agentBackend}
             onChange={(e) =>
-              setLocalSettings({ ...localSettings, agentBackend: e.target.value })
+              setLocalSettings({ ...localSettings, agentBackend: normalizeAgentBackend(e.target.value) })
             }
           >
             <option value="copilot">GitHub Copilot CLI</option>
