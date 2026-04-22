@@ -239,6 +239,7 @@ function assertPromptFitsArgv(prompt: string, backend: AgentBackendId): void {
   );
 }
 
+
 async function resolveCommandForBackend(
   backend: AgentBackendId,
   env: NodeJS.ProcessEnv,
