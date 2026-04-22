@@ -512,10 +512,34 @@ body {
   opacity: 1;
 }
 
+/* Settings panel wrapper (resizable) */
+.settings-panel-wrapper {
+  position: relative;
+  min-width: 280px;
+  max-width: 85vw;
+  display: flex;
+  flex-direction: column;
+}
+
+.cp-resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 10;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.cp-resize-handle:hover {
+  background: rgba(59, 130, 246, 0.45);
+}
+
 /* Control Panel sidebar */
 .control-panel {
-  width: 340px;
-  min-width: 340px;
+  width: 100%;
   background: var(--surface);
   border-left: 1px solid var(--border);
   display: flex;

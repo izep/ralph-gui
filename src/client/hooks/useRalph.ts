@@ -32,6 +32,9 @@ const DEFAULT_SETTINGS: Settings = {
   planFrequency: 1,
   minBacklogSize: 3,
   agentBackend: "copilot",
+  epicFile: "ralph/epic.md",
+  requirementsFile: "",
+  pauseAfterPlan: false,
 };
 
 const WS_RECONNECT_DELAY = 3000;
@@ -90,6 +93,9 @@ export function useRalph() {
               break;
             case "readiness":
               setReadiness(msg.data);
+              break;
+            case "epic":
+              setEpic(msg.data);
               break;
           }
         } catch {

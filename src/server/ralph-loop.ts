@@ -1,16 +1,15 @@
 import path from "path";
+import { readFile, writeFile, mkdir } from "fs/promises";
 import {
   PLAN_PROMPT,
   DEV_PROMPT,
   QA_PROMPT,
+  MEMORY_MD,
   DEFAULT_EPIC,
 } from "./templates.js";
 import { TaskManager, type StatusData } from "./task-manager.js";
 import { LLMCaller } from "./llm-caller.js";
 import {
-  parseTaskId,
-  parseTaskTitle,
-  parseTaskDescription,
   parseRemainingTasks,
   parseBlockedInfo,
   parseJsonTaskList,
@@ -66,6 +65,7 @@ export class RalphLoop {
       PLAN_PROMPT,
       DEV_PROMPT,
       QA_PROMPT,
+      MEMORY_MD,
       DEFAULT_EPIC,
       JSON.stringify(DEFAULT_SETTINGS, null, 2)
     );
@@ -84,7 +84,36 @@ export class RalphLoop {
   // --- Requirements check ---
 
   async checkRequirements(): Promise<string | null> {
+    const settings = await this.settingsManager.read();
+    if (settings.requirementsFile) {
+      try {
+        await readFile(path.join(this.repoRoot, settings.requirementsFile), "utf-8");
+        return settings.requirementsFile;
+      } catch {
+        return null;
+      }
+    }
     return this.gitManager.checkRequirements();
+  }
+
+  // --- Epic ---
+
+  async readEpic(): Promise<string> {
+    const settings = await this.settingsManager.read();
+    const epicFile = settings.epicFile || "ralph/epic.md";
+    try {
+      return await readFile(path.join(this.repoRoot, epicFile), "utf-8");
+    } catch {
+      return "";
+    }
+  }
+
+  async writeEpic(content: string): Promise<void> {
+    const settings = await this.settingsManager.read();
+    const epicFile = settings.epicFile || "ralph/epic.md";
+    const epicPath = path.join(this.repoRoot, epicFile);
+    await mkdir(path.dirname(epicPath), { recursive: true });
+    await writeFile(epicPath, content, "utf-8");
   }
 
   // --- Start / Stop ---
@@ -98,7 +127,7 @@ export class RalphLoop {
     if (!epicConfigured) {
       return {
         ok: false,
-        error: "Epic is not configured. Update ralph/epic.md with your current epic before starting.",
+        error: "Epic is not configured. Fill out the epic file before starting the loop.",
       };
     }
 
@@ -181,17 +210,16 @@ export class RalphLoop {
     try {
       await this.bootstrap();
       const settings = await this.settingsManager.read();
-      const planPrompt = await this.fileManager.read("plan-prompt.md");
+      const planPrompt = await this.buildPrompt("plan-prompt.md", settings);
       const refreshInstruction = [
-        "",
         "## Backlog Refresh Mode",
         "Refresh the task list only.",
         "Do not include <task-id>.",
         "Do not include implementation-ready task prose.",
       ].join("\n");
-
+      const fullPlanPrompt = planPrompt + "---\n" + refreshInstruction;
       const output = await this.llmCaller.call(
-        `${planPrompt}\n${refreshInstruction}`,
+        fullPlanPrompt,
         settings.planModel,
         this.repoRoot,
         { agentBackend: settings.agentBackend }
@@ -228,6 +256,15 @@ export class RalphLoop {
     }
   }
 
+  // --- Timing helper ---
+
+  private elapsed(startMs: number): string {
+    const ms = Date.now() - startMs;
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+    return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
+  }
+
   // --- Main Loop ---
 
   private async runLoop(): Promise<void> {
@@ -257,6 +294,28 @@ export class RalphLoop {
 
     let tasksSincePlan = 0;
 
+    // Smart resume: if a task was interrupted mid-dev or mid-QA, resume it
+    const resumeTask = existingStatus.tasks.find(
+      (t) => t.status === "inProgress" || t.status === "inQa"
+    );
+    if (resumeTask && this.running) {
+      const isQa = resumeTask.status === "inQa";
+      this.cb.onLog(
+        `[system] Resuming ${isQa ? "QA" : "dev"} for task #${resumeTask.id}: ${resumeTask.title}`
+      );
+      const taskContent = `## Task: ${resumeTask.title}\n\n${resumeTask.description}`;
+      await this.taskManager.setNextTaskContent(resumeTask.id, taskContent);
+      const resumeResult = await this.runDevQALoop(
+        resumeTask.id,
+        resumeTask.title,
+        taskContent,
+        totalLLMCalls,
+        isQa,
+      );
+      totalLLMCalls = resumeResult.totalLLMCalls;
+      tasksSincePlan = 1;
+    }
+
     while (this.running) {
       // Re-read settings each iteration to pick up control panel changes
       const settings = await this.settingsManager.read();
@@ -271,7 +330,7 @@ export class RalphLoop {
       const currentStatus = await this.taskManager.readStatus();
       const backlogCount = currentStatus.tasks.filter((t) => t.status === "backlog").length;
       const shouldPlan =
-        iteration === 0 ||
+        (iteration === 0 && backlogCount === 0) ||
         tasksSincePlan >= settings.planFrequency ||
         backlogCount < settings.minBacklogSize;
 
@@ -313,8 +372,9 @@ export class RalphLoop {
       tasksSincePlan = 0;
 
       // --- Plan phase ---
-      const planPrompt = await this.fileManager.read("plan-prompt.md");
+      const planPrompt = await this.buildPrompt("plan-prompt.md", settings);
       let nextTaskContent: string;
+      const planStart = Date.now();
       try {
         nextTaskContent = await this.llmCaller.call(
           planPrompt,
@@ -326,6 +386,7 @@ export class RalphLoop {
         throw new Error(`Plan phase failed: ${err}`);
       }
       totalLLMCalls++;
+      this.cb.onLog(`[system] Planning iteration #${iteration} finished in ${this.elapsed(planStart)}`);
 
       // Check if all tasks are done
       if (nextTaskContent.includes("<status>complete</status>")) {
@@ -362,34 +423,38 @@ export class RalphLoop {
         this.cb.onLog(`[system] Synced ${remainingTasks.length} tasks from plan output`);
       }
 
-      // Plan agent updates task-status.json and signals which task to work on next
-      const taskId = parseTaskId(nextTaskContent);
-      if (taskId === null) {
-        this.cb.onLog("[system] Warning: plan output missing <task-id> signal — falling back to title/description parse.");
+      // Re-read task-status.json and always pick the first backlog task.
+      const statusData = await this.taskManager.readStatus();
+      const taskEntry = statusData.tasks.find((t) => t.status === "backlog");
+
+      if (!taskEntry) {
+        this.cb.onLog("[system] Warning: no backlog task found after planning — skipping dev loop.");
+        continue;
       }
 
-      // Re-read task-status.json — plan agent may have updated it
-      const statusData = await this.taskManager.readStatus();
-      const taskEntry = taskId !== null ? statusData.tasks.find((t) => t.id === taskId) : undefined;
-      const effectiveTaskId = taskId ?? (statusData.tasks.reduce((m, t) => Math.max(m, t.id), 0) + 1);
-      const title = taskEntry?.title ?? parseTaskTitle(nextTaskContent, effectiveTaskId);
+      const effectiveTaskId = taskEntry.id;
+      const title = taskEntry.title;
+      const effectiveTaskContent = `## Task: ${taskEntry.title}\n\n${taskEntry.description}`;
 
-      // Mark in-progress — preserve title/description if plan agent already wrote them
       await this.taskManager.setTaskStatus(
         effectiveTaskId,
         "inProgress",
         totalLLMCalls,
         settings.maxLLMCalls,
-        taskEntry ? "" : title,
-        taskEntry ? "" : parseTaskDescription(nextTaskContent)
       );
-      await this.taskManager.setNextTaskContent(effectiveTaskId, nextTaskContent);
+      await this.taskManager.setNextTaskContent(effectiveTaskId, effectiveTaskContent);
+
+      // Pause after first planning phase if configured
+      if (iteration === 1 && settings.pauseAfterPlan) {
+        this.cb.onLog("[system] Paused after planning. Review the backlog and click Start to resume.");
+        break;
+      }
 
       // --- Dev + QA loop ---
       const devResult = await this.runDevQALoop(
         effectiveTaskId,
         title,
-        nextTaskContent,
+        effectiveTaskContent,
         totalLLMCalls,
       );
       totalLLMCalls = devResult.totalLLMCalls;
@@ -402,9 +467,19 @@ export class RalphLoop {
     title: string,
     nextTaskContent: string,
     totalLLMCalls: number,
+    startAtQa = false,
   ): Promise<{ totalLLMCalls: number }> {
     let feedback = "";
-    await this.taskManager.setFeedbackContent(effectiveTaskId, "");
+    if (startAtQa) {
+      // Resuming interrupted QA — preserve any existing feedback so the QA
+      // loop can continue from where it left off rather than starting fresh.
+      const existingStatus = await this.taskManager.readStatus();
+      if (existingStatus.feedback.taskId === effectiveTaskId) {
+        feedback = existingStatus.feedback.content;
+      }
+    } else {
+      await this.taskManager.setFeedbackContent(effectiveTaskId, "");
+    }
     let devIteration = 1;
 
     while (this.running && !feedback.includes("<status>verified</status>")) {
@@ -412,67 +487,69 @@ export class RalphLoop {
       if (totalLLMCalls >= s.maxLLMCalls) break;
 
       this.cb.onLog(
-        `Dev iteration #${devIteration} for task #${effectiveTaskId}`
+        `[system] Dev iteration #${devIteration} for task #${effectiveTaskId}: ${title}`
       );
 
-      // Dev phase
-      const devPrompt = await this.fileManager.read("dev-prompt.md");
-      const fullDevPrompt = [devPrompt, nextTaskContent, feedback]
-        .filter(Boolean)
-        .join("\n\n");
+      if (!startAtQa) {
+        // Dev phase
+        const devPrompt = await this.buildPrompt("dev-prompt.md", s, { task: nextTaskContent, feedback });
+        this.cb.onLog(`[dev] Running dev agent...`);
+        const devStart = Date.now();
+        let devOutput: string;
+        try {
+          devOutput = await this.llmCaller.call(
+            devPrompt,
+            s.devModel,
+            this.repoRoot,
+            {
+              agentBackend: s.agentBackend,
+              reasoningEffort: s.devReasoningEffort,
+            }
+          );
+        } catch (err) {
+          throw new Error(`Dev phase failed: ${err}`);
+        }
+        totalLLMCalls++;
+        this.cb.onLog(`[dev] Dev agent finished in ${this.elapsed(devStart)}`);
 
-      let devOutput: string;
-      try {
-        devOutput = await this.llmCaller.call(
-          fullDevPrompt,
-          s.devModel,
-          this.repoRoot,
-          {
-            agentBackend: s.agentBackend,
-            reasoningEffort: s.devReasoningEffort,
-          }
-        );
-      } catch (err) {
-        throw new Error(`Dev phase failed: ${err}`);
+        // Log a summary (first 200 chars)
+        const summary = devOutput.slice(0, 200).replace(/\n/g, " ");
+        this.cb.onLog(`[dev] ${summary}${devOutput.length > 200 ? "..." : ""}`);
+
+        if (devOutput.includes("<status>blocked</status>")) {
+          const blockedInfo = parseBlockedInfo(devOutput);
+          const capturedAt = new Date().toISOString();
+          await this.taskManager.setTaskStatus(
+            effectiveTaskId,
+            "blocked",
+            totalLLMCalls,
+            s.maxLLMCalls,
+            "",
+            "",
+            devIteration,
+            {
+              summary: blockedInfo.summary,
+              impact: blockedInfo.impact,
+              nextStep: blockedInfo.nextStep,
+              needs: blockedInfo.needs,
+              capturedAt,
+            }
+          );
+          this.cb.onLog(
+            `Task #${effectiveTaskId} BLOCKED in iteration #${devIteration}`
+          );
+          break;
+        }
+
+        // Respect limits between dev and QA calls.
+        if (totalLLMCalls >= s.maxLLMCalls) {
+          this.cb.onLog(
+            `[system] Max LLM calls reached (${totalLLMCalls}/${s.maxLLMCalls})`
+          );
+          break;
+        }
       }
-      totalLLMCalls++;
-
-      // Log a summary (first 200 chars)
-      const summary = devOutput.slice(0, 200).replace(/\n/g, " ");
-      this.cb.onLog(`[dev] ${summary}${devOutput.length > 200 ? "..." : ""}`);
-
-      if (devOutput.includes("<status>blocked</status>")) {
-        const blockedInfo = parseBlockedInfo(devOutput);
-        const capturedAt = new Date().toISOString();
-        await this.taskManager.setTaskStatus(
-          effectiveTaskId,
-          "blocked",
-          totalLLMCalls,
-          s.maxLLMCalls,
-          "",
-          "",
-          devIteration,
-          {
-            summary: blockedInfo.summary,
-            impact: blockedInfo.impact,
-            nextStep: blockedInfo.nextStep,
-            needs: blockedInfo.needs,
-            capturedAt,
-          }
-        );
-        this.cb.onLog(
-          `Task #${effectiveTaskId} BLOCKED in iteration #${devIteration}`
-        );
-        break;
-      }
-
-      // Respect limits between dev and QA calls.
-      if (totalLLMCalls >= s.maxLLMCalls) {
-        this.cb.onLog(
-          `[system] Max LLM calls reached (${totalLLMCalls}/${s.maxLLMCalls})`
-        );
-        break;
-      }
+      startAtQa = false;
 
       // QA phase
       await this.taskManager.setTaskStatus(
@@ -485,12 +562,12 @@ export class RalphLoop {
         devIteration
       );
 
-      const qaPrompt = await this.fileManager.read("qa-prompt.md");
-      const fullQAPrompt = [qaPrompt, nextTaskContent].join("\n\n");
-
+      const qaPrompt = await this.buildPrompt("qa-prompt.md", s, { task: nextTaskContent });
+      this.cb.onLog(`[qa] Running QA agent...`);
+      const qaStart = Date.now();
       try {
         feedback = await this.llmCaller.call(
-          fullQAPrompt,
+          qaPrompt,
           s.qaModel,
           this.repoRoot,
           {
@@ -502,6 +579,7 @@ export class RalphLoop {
         throw new Error(`QA phase failed: ${err}`);
       }
       totalLLMCalls++;
+      this.cb.onLog(`[qa] QA agent finished in ${this.elapsed(qaStart)}`);
       await this.taskManager.setFeedbackContent(effectiveTaskId, feedback);
 
       if (feedback.includes("<status>verified</status>")) {
@@ -571,12 +649,45 @@ export class RalphLoop {
 
   async isEpicConfigured(): Promise<boolean> {
     try {
-      const epic = await this.fileManager.read("epic.md");
+      const epic = await this.readEpic();
       const normalized = epic.replace(/\r\n/g, "\n").trim();
       return normalized.length > 0 && normalized !== DEFAULT_EPIC_NORMALIZED;
     } catch {
       return false;
     }
+  }
+
+  private async buildPrompt(
+    templateName: string,
+    _settings: Settings,
+    options?: { task?: string; feedback?: string }
+  ): Promise<string> {
+    const SEP = "\n---\n";
+    const parts: string[] = [];
+
+    // Requirements
+    const reqFile = await this.checkRequirements();
+    if (reqFile) {
+      try {
+        const reqContent = await readFile(path.join(this.repoRoot, reqFile), "utf-8");
+        parts.push("Project Overview:\n" + reqContent);
+      } catch { /* not readable — skip */ }
+    }
+
+    // Epic
+    const epicContent = await this.readEpic();
+    if (epicContent) parts.push("Current Epic:\n" + epicContent);
+
+    // Task
+    if (options?.task) parts.push("Current Task:\n" + options.task);
+
+    // QA feedback
+    if (options?.feedback) parts.push("QA Feedback:\n" + options.feedback);
+
+    // Prompt template (already has its own heading)
+    parts.push(await this.fileManager.read(templateName));
+
+    return parts.join(SEP);
   }
 
   private finishRun(runId: number, err?: Error): void {

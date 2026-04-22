@@ -65,6 +65,9 @@ export interface Settings {
   planFrequency: number;
   minBacklogSize: number;
   agentBackend: AgentBackendId;
+  epicFile: string;
+  requirementsFile: string;
+  pauseAfterPlan: boolean;
 }
 
 export interface Readiness {
@@ -81,7 +84,8 @@ export type ServerMessage =
   | { type: "log"; data: string }
   | { type: "loopStatus"; data: LoopStatus }
   | { type: "settings"; data: Settings }
-  | { type: "readiness"; data: Readiness };
+  | { type: "readiness"; data: Readiness }
+  | { type: "epic"; data: string };
 
 export function groupTasks(tasks: Task[]): Record<TaskStatusValue, Task[]> {
   const groups: Record<TaskStatusValue, Task[]> = {
