@@ -1,4 +1,5 @@
 import path from "path";
+import { readFile, writeFile, mkdir } from "fs/promises";
 import {
   PLAN_PROMPT,
   DEV_PROMPT,
@@ -86,7 +87,36 @@ export class RalphLoop {
   // --- Requirements check ---
 
   async checkRequirements(): Promise<string | null> {
+    const settings = await this.settingsManager.read();
+    if (settings.requirementsFile) {
+      try {
+        await readFile(path.join(this.repoRoot, settings.requirementsFile), "utf-8");
+        return settings.requirementsFile;
+      } catch {
+        return null;
+      }
+    }
     return this.gitManager.checkRequirements();
+  }
+
+  // --- Epic ---
+
+  async readEpic(): Promise<string> {
+    const settings = await this.settingsManager.read();
+    const epicFile = settings.epicFile || "ralph/epic.md";
+    try {
+      return await readFile(path.join(this.repoRoot, epicFile), "utf-8");
+    } catch {
+      return "";
+    }
+  }
+
+  async writeEpic(content: string): Promise<void> {
+    const settings = await this.settingsManager.read();
+    const epicFile = settings.epicFile || "ralph/epic.md";
+    const epicPath = path.join(this.repoRoot, epicFile);
+    await mkdir(path.dirname(epicPath), { recursive: true });
+    await writeFile(epicPath, content, "utf-8");
   }
 
   // --- Start / Stop ---
@@ -183,7 +213,6 @@ export class RalphLoop {
     try {
       await this.bootstrap();
       const settings = await this.settingsManager.read();
-      const planPrompt = await this.fileManager.read("plan-prompt.md");
       const refreshInstruction = [
         "",
         "## Backlog Refresh Mode",
@@ -192,8 +221,9 @@ export class RalphLoop {
         "Do not include implementation-ready task prose.",
       ].join("\n");
 
+      const planPrompt = await this.buildPrompt("plan-prompt.md", settings, refreshInstruction);
       const output = await this.llmCaller.call(
-        `${planPrompt}\n${refreshInstruction}`,
+        planPrompt,
         settings.planModel,
         this.repoRoot,
         { agentBackend: settings.agentBackend }
@@ -315,7 +345,7 @@ export class RalphLoop {
       tasksSincePlan = 0;
 
       // --- Plan phase ---
-      const planPrompt = await this.fileManager.read("plan-prompt.md");
+      const planPrompt = await this.buildPrompt("plan-prompt.md", settings);
       let nextTaskContent: string;
       try {
         nextTaskContent = await this.llmCaller.call(
@@ -418,15 +448,12 @@ export class RalphLoop {
       );
 
       // Dev phase
-      const devPrompt = await this.fileManager.read("dev-prompt.md");
-      const fullDevPrompt = [devPrompt, nextTaskContent, feedback]
-        .filter(Boolean)
-        .join("\n\n");
+      const devPrompt = await this.buildPrompt("dev-prompt.md", s, nextTaskContent, feedback);
 
       let devOutput: string;
       try {
         devOutput = await this.llmCaller.call(
-          fullDevPrompt,
+          devPrompt,
           s.devModel,
           this.repoRoot,
           {
@@ -487,12 +514,11 @@ export class RalphLoop {
         devIteration
       );
 
-      const qaPrompt = await this.fileManager.read("qa-prompt.md");
-      const fullQAPrompt = [qaPrompt, nextTaskContent].join("\n\n");
+      const qaPrompt = await this.buildPrompt("qa-prompt.md", s, nextTaskContent);
 
       try {
         feedback = await this.llmCaller.call(
-          fullQAPrompt,
+          qaPrompt,
           s.qaModel,
           this.repoRoot,
           {
@@ -573,12 +599,39 @@ export class RalphLoop {
 
   async isEpicConfigured(): Promise<boolean> {
     try {
-      const epic = await this.fileManager.read("epic.md");
+      const epic = await this.readEpic();
       const normalized = epic.replace(/\r\n/g, "\n").trim();
       return normalized.length > 0 && normalized !== DEFAULT_EPIC_NORMALIZED;
     } catch {
       return false;
     }
+  }
+
+  private async buildPrompt(templateName: string, settings: Settings, ...extra: string[]): Promise<string> {
+    const SEP = "--------------\n";
+    const parts: string[] = [];
+
+    // Inject requirements content
+    const reqFile = settings.requirementsFile || await this.gitManager.checkRequirements();
+    if (reqFile) {
+      try {
+        parts.push(await readFile(path.join(this.repoRoot, reqFile), "utf-8"));
+      } catch { /* not readable — skip */ }
+    }
+
+    // Inject epic content
+    const epicContent = await this.readEpic();
+    if (epicContent) parts.push(epicContent);
+
+    // Prompt template
+    parts.push(await this.fileManager.read(templateName));
+
+    // Any additional sections (task description, feedback, etc.)
+    for (const e of extra) {
+      if (e) parts.push(e);
+    }
+
+    return parts.join(SEP);
   }
 
   private finishRun(runId: number, err?: Error): void {

@@ -7,9 +7,6 @@ Review the current project state, update the task list, and select the next task
 Read before planning:
 - `ralph/memory.md` — accumulated project learnings and conventions; apply them
 - `ralph/task-status.json` — current task inventory and completion state
-- `requirements.md` — authoritative product requirements and acceptance criteria
-- `ralph/epic.md` — current epic scope and priorities
-- `README.md` — project overview
 
 Survey the codebase to understand what is currently implemented.
 
@@ -33,7 +30,7 @@ Select the first `"backlog"` task. Write a full, implementation-ready descriptio
 - Clear implementation guidance
 - Testing steps and acceptance criteria
 
-Constraints: no implementation code in the description; traceable to `requirements.md` and `ralph/epic.md`; do NOT modify completed or blocked tasks (new related work gets a new ID).
+Constraints: no implementation code in the description; traceable to `requirements.md` and the current epic; do NOT modify completed or blocked tasks (new related work gets a new ID).
 
 ## Output Format
 

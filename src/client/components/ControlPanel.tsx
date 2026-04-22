@@ -120,20 +120,37 @@ export function ControlPanel({
         </button>
         {readiness.repoConfigured && (
           <div className="cp-status">
-            {readiness.requirementsFound ? (
-              <span className="cp-status--ok">Requirements found: {readiness.requirementsFile}</span>
-            ) : (
-              <span className="cp-status--warn">No requirements.md found in repo root. Add one to start the loop.</span>
-            )}
-            <p className="cp-hint">
-              requirements.md is the authoritative product requirements document. Ralph uses it to plan and validate task completion.
-            </p>
             {readiness.gitBranch && (
               <div className="cp-branch">
                 Branch: <code>{readiness.gitBranch}</code>
               </div>
             )}
           </div>
+        )}
+
+        <label className="cp-field">
+          <span>Requirements File</span>
+          <input
+            type="text"
+            value={localSettings.requirementsFile}
+            onChange={(e) => setLocalSettings({ ...localSettings, requirementsFile: e.target.value })}
+            placeholder={readiness.requirementsFile ?? "Auto-discovered"}
+            disabled={repoLocked}
+          />
+        </label>
+        <p className="cp-hint">
+          Path to your requirements document, relative to the repo root. Leave blank to auto-discover (looks for <code>requirements.md</code> in common locations).
+          Ralph injects this file's content into every prompt as authoritative product requirements.
+        </p>
+        {readiness.repoConfigured && (
+          readiness.requirementsFound ? (
+            <span className="cp-status--ok">✓ Requirements: {readiness.requirementsFile}</span>
+          ) : (
+            <span className="cp-status--warn">
+              ⚠ Requirements file not found
+              {localSettings.requirementsFile ? `: ${localSettings.requirementsFile}` : " (auto-discovery failed)"}
+            </span>
+          )
         )}
       </section>
 
@@ -288,8 +305,18 @@ export function ControlPanel({
           <p className="cp-hint">The loop cannot start until this epic is filled out.</p>
         )}
         <fieldset className="cp-fieldset" disabled={repoLocked}>
+        <label className="cp-field">
+          <span>Epic File</span>
+          <input
+            type="text"
+            value={localSettings.epicFile}
+            onChange={(e) => setLocalSettings({ ...localSettings, epicFile: e.target.value })}
+            placeholder="ralph/epic.md"
+          />
+        </label>
         <p className="cp-hint">
-          Define the current epic Ralph should execute. The planning phase breaks this epic into tasks using requirements.md as the source of truth.
+          Path to the epic file, relative to the repo root. This is your living product document describing the current feature or goal.
+          Ralph reads it to plan tasks and injects its content into every prompt. You own this file — edit it freely between sessions.
         </p>
         <textarea
           className="cp-textarea"

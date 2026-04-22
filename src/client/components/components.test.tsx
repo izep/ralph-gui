@@ -230,6 +230,8 @@ const defaultSettings: Settings = {
   planFrequency: 1,
   minBacklogSize: 3,
   agentBackend: "copilot",
+  epicFile: "ralph/epic.md",
+  requirementsFile: "",
 };
 
 const readyState: Readiness = {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useRalph } from "./hooks/useRalph";
 import { KanbanColumn } from "./components/KanbanColumn";
 import { ControlPanel } from "./components/ControlPanel";
@@ -19,6 +19,25 @@ export default function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [errorDismissed, setErrorDismissed] = useState(false);
+  const [panelWidth, setPanelWidth] = useState(400);
+  const panelWidthRef = useRef(400);
+  panelWidthRef.current = panelWidth;
+
+  const startResize = useCallback((e: React.MouseEvent) => {
+    const startX = e.clientX;
+    const startW = panelWidthRef.current;
+    const onMove = (ev: MouseEvent) => {
+      const newWidth = Math.min(Math.max(startW + (startX - ev.clientX), 280), Math.round(window.innerWidth * 0.85));
+      setPanelWidth(newWidth);
+    };
+    const onUp = () => {
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    e.preventDefault();
+  }, []);
 
   const groups = groupTasks(ralph.tasks.tasks);
   const pct =
@@ -129,7 +148,9 @@ export default function App() {
           {!ralph.readiness.repoConfigured
             ? "Set a repository path in Settings to get started."
             : !ralph.readiness.requirementsFound
-              ? "No requirements.md found. Add one to the repo root to enable the loop."
+              ? ralph.settings.requirementsFile
+                ? `Requirements file not found: ${ralph.settings.requirementsFile}. Create it or update the path in Settings.`
+                : "No requirements file found. Add requirements.md to the repo root, or set a custom path in Settings."
               : "Fill out the current epic in Settings before starting the loop."}
         </div>
       )}
@@ -154,20 +175,23 @@ export default function App() {
         </main>
 
         {settingsVisible && (
-          <ControlPanel
-            settings={ralph.settings}
-            epic={ralph.epic}
-            prompts={ralph.prompts}
-            repoRoot={ralph.repoRoot}
-            readiness={ralph.readiness}
-            onSaveSettings={ralph.saveSettings}
-            onSaveEpic={ralph.saveEpic}
-            onSavePrompt={ralph.savePrompt}
-            onSetRepo={ralph.setRepo}
-            onRefreshBacklog={ralph.refreshBacklog}
-            isRunning={isRunning}
-            onClose={() => setShowSettings(false)}
-          />
+          <div className="settings-panel-wrapper" style={{ width: panelWidth }}>
+            <div className="cp-resize-handle" onMouseDown={startResize} />
+            <ControlPanel
+              settings={ralph.settings}
+              epic={ralph.epic}
+              prompts={ralph.prompts}
+              repoRoot={ralph.repoRoot}
+              readiness={ralph.readiness}
+              onSaveSettings={ralph.saveSettings}
+              onSaveEpic={ralph.saveEpic}
+              onSavePrompt={ralph.savePrompt}
+              onSetRepo={ralph.setRepo}
+              onRefreshBacklog={ralph.refreshBacklog}
+              isRunning={isRunning}
+              onClose={() => setShowSettings(false)}
+            />
+          </div>
         )}
       </div>
 

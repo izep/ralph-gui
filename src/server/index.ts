@@ -185,7 +185,7 @@ async function getInitData() {
   let epic = "";
   try {
     if (loop) {
-      epic = await loop.readRalphFile("epic.md");
+      epic = await loop.readEpic();
     }
   } catch {
     /* */
@@ -280,6 +280,14 @@ app.put("/api/settings", async (req, res) => {
   try {
     await activeLoop.writeSettings(req.body);
     broadcast(JSON.stringify({ type: "settings", data: req.body }));
+    // Re-broadcast readiness (requirementsFile may have changed)
+    const readiness = await buildReadiness();
+    broadcast(JSON.stringify({ type: "readiness", data: readiness }));
+    // Re-broadcast epic (epicFile may have changed)
+    try {
+      const epic = await activeLoop.readEpic();
+      broadcast(JSON.stringify({ type: "epic", data: epic }));
+    } catch { /* */ }
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err) });
@@ -290,7 +298,7 @@ app.put("/api/settings", async (req, res) => {
 app.get("/api/epic", async (_req, res) => {
   if (!loop) return res.json({ content: "" });
   try {
-    const content = await loop.readRalphFile("epic.md");
+    const content = await loop.readEpic();
     res.json({ content });
   } catch {
     res.json({ content: "" });
@@ -300,7 +308,7 @@ app.put("/api/epic", async (req, res) => {
   const activeLoop = requireRepoConfigured(res);
   if (!activeLoop) return;
   try {
-    await activeLoop.writeRalphFile("epic.md", req.body.content);
+    await activeLoop.writeEpic(req.body.content);
     res.json({ ok: true });
     const readiness = await buildReadiness();
     broadcast(JSON.stringify({ type: "readiness", data: readiness }));

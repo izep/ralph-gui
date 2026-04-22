@@ -15,6 +15,10 @@ export interface Settings {
   minBacklogSize: number;
   // Supported values: "copilot" | "cursor-agent" | "claude" | "gemini"
   agentBackend: AgentBackendId;
+  // Relative path to the epic file from the repo root (default: "ralph/epic.md")
+  epicFile: string;
+  // Relative path to the requirements file; empty string means auto-discover
+  requirementsFile: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -28,6 +32,8 @@ export const DEFAULT_SETTINGS: Settings = {
   planFrequency: 1,
   minBacklogSize: 3,
   agentBackend: "copilot",
+  epicFile: "ralph/epic.md",
+  requirementsFile: "",
 };
 
 export class SettingsManager {
