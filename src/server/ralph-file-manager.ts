@@ -14,6 +14,7 @@ export class RalphFileManager {
     plan: string,
     dev: string,
     qa: string,
+    memory: string,
     epic: string,
     defaultSettings: string
   ): Promise<void> {
@@ -21,6 +22,7 @@ export class RalphFileManager {
     await this.writeIfMissing("plan-prompt.md", plan);
     await this.writeIfMissing("dev-prompt.md", dev);
     await this.writeIfMissing("qa-prompt.md", qa);
+    await this.writeIfMissing("memory.md", memory);
     await this.writeIfMissing("epic.md", epic);
     await this.migrateGoalsToEpic();
     await this.writeIfMissing("settings.json", defaultSettings);

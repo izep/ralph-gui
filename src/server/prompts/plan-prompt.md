@@ -1,90 +1,76 @@
-# Task
+# Plan
 
-Review the current project state, produce an updated task list as JSON output, and return the next task to implement.
+Review the current project state, update the task list, and select the next task to implement.
 
-## Step 1: Gather Context
+## Context
 
-- Read `ralph/task-status.json` to understand the current task inventory and what has already been completed.
-- Read `requirements.md` first. Treat it as the authoritative source of product requirements and acceptance expectations.
-- Read `README.md` and `ralph/epic.md` for implementation context and epic priority.
-- Survey the codebase to understand what is already implemented and working.
+Read before planning:
+- `ralph/memory.md` — accumulated project learnings and conventions; apply them
+- `ralph/task-status.json` — current task inventory and completion state
+- `requirements.md` — authoritative product requirements and acceptance criteria
+- `ralph/epic.md` — current epic scope and priorities
+- `README.md` — project overview
 
-## Step 2: Output the Updated Task List as JSON
+Survey the codebase to understand what is currently implemented.
 
-Produce a JSON array of ALL tasks still needed to complete the project. Emit it as the FIRST block in your response, inside a fenced `json` code block.
+## Instructions
 
-Rules for building the task list:
-- Include ALL remaining tasks: features, integrations, tests, documentation, and quality work required by the epic and requirements.
-- Do NOT include tasks that are already `"done"` or `"blocked"`.
-- Preserve existing `id` values when the same work is still needed.
-- Assign new IDs for genuinely new tasks: start from (highest existing ID + 1) and increment for each.
-- Order tasks by optimal implementation sequence, resolving dependencies first.
-- Set `status` to `"backlog"` for every entry.
-- Do NOT write any files. The loop engine is the sole writer of task-status.json.
+### Update the task list
 
-Each task object must have exactly these four keys:
-- `id`: integer
-- `title`: short descriptive string (3-8 words)
-- `description`: 1-2 sentence summary of the task
-- `status`: `"backlog"`
+Produce a JSON array of all tasks still needed to complete the epic. Rules:
+- Include ALL remaining work: features, integrations, tests, documentation.
+- Exclude `"done"` and `"blocked"` tasks.
+- Preserve existing `id` values for unchanged tasks.
+- Assign new IDs starting from (max existing ID + 1).
+- Order by optimal implementation sequence (dependencies first).
+- Every entry: `{ "id": integer, "title": "3-8 words", "description": "1-2 sentences", "status": "backlog" }`.
+- Do NOT write any files; the loop engine owns `task-status.json`.
 
-## Step 3: Select and Describe the Next Task
+### Select and describe the next task
 
-Select the first `"backlog"` task from the updated list as the current task.
-
-Write a full, implementation-ready description that includes:
-- What needs to be done and why it matters
+Select the first `"backlog"` task. Write a full, implementation-ready description including:
+- What needs to be done and why
 - Clear implementation guidance
-- Testing steps
-- Acceptance criteria
+- Testing steps and acceptance criteria
 
-## Requirements
-
-- Do not include implementation code in the task description.
-- Be specific enough that a senior engineer can complete the task without further clarification.
-- Follow the project's existing patterns, conventions, and quality standards.
-- Ensure each planned task is traceable to `requirements.md` and supports delivering the current epic in `ralph/epic.md`.
-- DO NOT modify completed or blocked tasks in any way. If additional work is needed related to a completed task, create a new task with a new ID.
-- Do NOT write any files. The loop engine is the sole writer of task-status.json.
-- Return markdown only.
-- Use only characters available on a US English 101-key keyboard.
+Constraints: no implementation code in the description; traceable to `requirements.md` and `ralph/epic.md`; do NOT modify completed or blocked tasks (new related work gets a new ID).
 
 ## Output Format
 
-Your response must follow this exact structure:
+Respond with exactly this structure:
 
-1. A fenced JSON block (the first thing in your response) with the full updated task list:
+1. JSON block (first in response):
 
 ```json
 [
-  { "id": 6, "title": "Short task title", "description": "One to two sentence description.", "status": "backlog" },
-  { "id": 7, "title": "Another task title", "description": "Brief description.", "status": "backlog" }
+  { "id": 6, "title": "Short task title", "description": "1-2 sentence description.", "status": "backlog" }
 ]
 ```
 
-2. The full implementation-ready task description prose (see Step 3).
+2. Full implementation-ready task description.
 
-3. A markdown section that mirrors the JSON task list titles in order (for backward compatibility):
+3. Remaining tasks section:
 
 ```markdown
 ## Remaining Planned Tasks
-- Task 1 title
-- Task 2 title
-- Task 3 title
+- Task title
+- Task title
 ```
 
-4. The task ID signal at the very end:
+4. Task ID signal (last in response):
 
 ```
 <task-id>N</task-id>
 ```
 
-Where `N` is the integer `id` of the task to implement next, and the remaining tasks list includes all `"backlog"` tasks in priority order.
-
-## Completion Rule
-
-If there are no remaining `"backlog"` tasks (the project is complete), output exactly:
+If all tasks are complete, output only:
 
 ```
 <status>complete</status>
 ```
+
+Use markdown only. Use only US English keyboard characters.
+
+## Memory
+
+After planning, append any new non-obvious discoveries to `ralph/memory.md`. Record only what is genuinely useful across future iterations: codebase conventions, build/test commands, patterns, constraints. Do not duplicate entries already present.

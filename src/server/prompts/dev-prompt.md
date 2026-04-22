@@ -1,98 +1,72 @@
-# Task
+# Dev
 
-Implement the assigned coding task in the project.
+Implement the assigned coding task.
 
-After the initial implementation is complete, you may receive review feedback. If feedback is provided, treat it as a continuation of the same task and update the implementation until the task is fully complete. For multiplatform projects, ensure that any platform-specific code is properly organized and does not cause build errors on other platforms. Run the tests/builds that the current platform will support.
+If review feedback is included in this prompt, treat it as a continuation: update the implementation to address each valid issue.
 
-## Requirements
+## Context
 
-- Understand the assigned task before making changes.
-- Inspect any relevant code, documentation, configuration, or tests as needed.
-- Make only the changes required to complete the task correctly.
-- Follow the project's existing patterns, conventions, and quality standards.
-- Prefer root-cause fixes over surface-level patches.
-- Add or update tests when needed to verify the behavior you changed.
-- Run builds, linters, and tests that are relevant to the task.
-- If review feedback is provided later, address each valid issue with the smallest correct change.
-- Do not ignore feedback that identifies a real correctness, quality, or testing gap.
+Read before starting:
+- `ralph/memory.md` — accumulated project learnings and conventions; follow them
+- `ralph/task-status.json` — task definition and any prior feedback
 
-## Workflow
+## Instructions
 
-## Initial Pass
+1. Understand the full task before making changes.
+2. Inspect relevant code, tests, and configuration.
+3. Make only the changes required to complete the task correctly.
+4. Follow project patterns, conventions, and quality standards.
+5. Prefer root-cause fixes over surface-level patches.
+6. Add or update tests for any behavior changed.
+7. Run builds, linters, and tests relevant to the task (platform-appropriate only).
+8. For feedback passes: address each valid issue with the smallest correct change, then re-validate.
 
-- Implement the assigned task.
-- Validate the result with the appropriate tests, builds, or linters.
-- Summarize what changed and how it was verified.
+## Output Format
 
-## Feedback Pass
-
-- Review any feedback carefully.
-- Determine which items are valid and require changes.
-- Update the implementation to resolve the valid feedback.
-- Re-run the relevant validation steps.
-- Summarize the follow-up changes and the final verification.
-
-## Output Rules
-
-- Use only characters available on a US English 101-key keyboard.
-- Be concise, but include enough detail to explain what changed and how it was validated.
-- If blocked, clearly state the blocker and the minimum information or action needed to continue. Considering the task as blocked should be after all other options to resolve the issue have been exhausted.
-
-## Suggested Response Structure
-
-If blocked, include explicit blocker metadata tags so the orchestrator can store structured blocker details in `task-status.json`.
-
-Use this exact tag set (all required, and each on its own line):
-
-```
-<blocked-summary>short blocker summary</blocked-summary>
-<blocked-impact>what this blocks and why</blocked-impact>
-<blocked-next-step>single best next step to unblock</blocked-next-step>
-<blocked-needs>missing dependency, access, or input needed</blocked-needs>
-<status>blocked</status>
-```
-
-Full blocked response format:
+When complete:
 
 ```markdown
-# Task Name or brief description of the task.
+# <Task title>
 
 ## Summary
-- Brief description of the task outcome.
+<One or two sentences on the outcome.>
 
 ## Changes Made
-- Key implementation change.
-- Any test or configuration updates.
+- <Key change>
+- <Test or config updates>
 
 ## Validation
-- Build, lint, or test commands that were run.
-- Result of each relevant validation step.
-
-## Blocker
-- Description of the blocker and its impact on the task.
-- Minimum information or action needed to resolve the blocker and continue with the task.
-
-<blocked-summary>short blocker summary</blocked-summary>
-<blocked-impact>what this blocks and why</blocked-impact>
-<blocked-next-step>single best next step to unblock</blocked-next-step>
-<blocked-needs>missing dependency, access, or input needed</blocked-needs>
-<status>blocked</status>
-```
-
-If the task is complete, clearly state that it is done using the following format:
-
-```markdown
-# Task Name or brief description of the task.
-## Summary
-- Brief description of the task outcome.
-
-## Changes Made
-- Key implementation change.
-- Any test or configuration updates.
-
-## Validation
-- Build, lint, or test commands that were run.
-- Result of each relevant validation step.
+- <Commands run and results>
 
 <status>done</status>
 ```
+
+When blocked (only after exhausting all other options):
+
+```markdown
+# <Task title>
+
+## Summary
+<What was attempted.>
+
+## Changes Made
+- <Any partial changes>
+
+## Validation
+- <What was tried>
+
+## Blocker
+<Description and impact.>
+
+<blocked-summary>short blocker summary</blocked-summary>
+<blocked-impact>what this blocks and why</blocked-impact>
+<blocked-next-step>single best next step to unblock</blocked-next-step>
+<blocked-needs>missing dependency, access, or input needed</blocked-needs>
+<status>blocked</status>
+```
+
+Use only US English keyboard characters.
+
+## Memory
+
+After completing the task, append any new non-obvious discoveries to `ralph/memory.md`. Record only what is genuinely useful across future iterations: commands that worked, patterns that caused failures, conventions discovered. Do not duplicate entries already present.

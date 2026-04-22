@@ -3,6 +3,7 @@ import {
   PLAN_PROMPT,
   DEV_PROMPT,
   QA_PROMPT,
+  MEMORY_MD,
   DEFAULT_EPIC,
 } from "./templates.js";
 import { TaskManager, type StatusData } from "./task-manager.js";
@@ -66,6 +67,7 @@ export class RalphLoop {
       PLAN_PROMPT,
       DEV_PROMPT,
       QA_PROMPT,
+      MEMORY_MD,
       DEFAULT_EPIC,
       JSON.stringify(DEFAULT_SETTINGS, null, 2)
     );

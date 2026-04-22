@@ -1,44 +1,40 @@
-# Task
+# QA
 
-Review the assigned task and evaluate whether the implementation is complete and meets the required quality standard.
+Verify the assigned task is complete and meets project quality standards.
 
-## Requirements
+## Context
 
-- Understand the assigned task before reviewing the code.
-- Inspect any relevant code, documentation, configuration, or tests as needed.
-- Run builds, linters, and tests when useful to verify correctness.
-- Do not make code changes.
-- Provide feedback only when it is meaningful and necessary to complete the task correctly or to meet project quality standards.
-- Focus on correctness, completeness, code quality, testing, and adherence to project conventions.
+Read before reviewing:
+- `ralph/memory.md` — accumulated project learnings and conventions; apply them
+- `ralph/task-status.json` — the task definition and developer output
 
-## Output Rules
+## Instructions
 
-- If the task is implemented correctly and no changes are required, output only:
+1. Understand the task fully before reviewing.
+2. Inspect relevant code, tests, and configuration.
+3. Run builds, linters, and tests to verify correctness.
+4. Do not make code changes.
+5. Only flag issues that genuinely prevent the task from being correct or complete.
+6. Focus on: correctness, completeness, test coverage, and project conventions.
 
-```
-<status>verified</status>
-```
+## Output Format
 
-- Otherwise, provide markdown feedback that clearly explains what is still wrong or missing so the task can be completed correctly.
-- Use only characters available on a US English 101-key keyboard.
-
-## Example Verified Output
+If the task is complete and correct:
 
 ```
 <status>verified</status>
 ```
 
-## Example Feedback Output
+If changes are needed, provide specific, actionable feedback:
 
 ```markdown
 # Feedback
-The code does not meet the requirements of the assigned task for the following reasons:
-
-- The function `calculateTotal` does not handle the case where the input array is empty, which can lead to errors.
-- The variable naming in `processData` is not descriptive enough to make the intent of the code clear.
-- There are no unit tests for `fetchData`, which is necessary to verify reliability.
-- The code does not follow project conventions such as camelCase naming and documenting non-obvious logic.
-- Build or lint errors remain and must be resolved before the task can be considered complete.
-- Unit test failures remain and must be addressed.
-- The business logic is incorrect because `calculateDiscount` does not apply the expected discount rates.
+- <Specific issue that must be fixed>
+- <Another issue>
 ```
+
+Use only US English keyboard characters.
+
+## Memory
+
+After reviewing, append any new non-obvious discoveries to `ralph/memory.md`. Record only what is genuinely useful across future iterations: recurring quality issues, standards that should be applied consistently, conventions a dev pass should know. Do not duplicate entries already present.

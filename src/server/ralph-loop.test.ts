@@ -53,6 +53,7 @@ describe("RalphLoop.bootstrap", () => {
       "plan-prompt.md",
       "dev-prompt.md",
       "qa-prompt.md",
+      "memory.md",
       "epic.md",
       "settings.json",
     ];

@@ -13,6 +13,7 @@ function readPrompt(name: string): string {
 export const PLAN_PROMPT = readPrompt("plan-prompt.md");
 export const DEV_PROMPT = readPrompt("dev-prompt.md");
 export const QA_PROMPT = readPrompt("qa-prompt.md");
+export const MEMORY_MD = readPrompt("memory-template.md");
 
 export const DEFAULT_EPIC = `# Current Epic
 
