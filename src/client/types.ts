@@ -67,6 +67,7 @@ export interface Settings {
   agentBackend: AgentBackendId;
   epicFile: string;
   requirementsFile: string;
+  pauseAfterPlan: boolean;
 }
 
 export interface Readiness {

@@ -232,6 +232,7 @@ const defaultSettings: Settings = {
   agentBackend: "copilot",
   epicFile: "ralph/epic.md",
   requirementsFile: "",
+  pauseAfterPlan: false,
 };
 
 const readyState: Readiness = {

@@ -289,6 +289,19 @@ export function ControlPanel({
           />
           <span>Auto-commit after each verified task</span>
         </label>
+        <label className="cp-field cp-field--row">
+          <input
+            type="checkbox"
+            checked={localSettings.pauseAfterPlan}
+            onChange={(e) =>
+              setLocalSettings({ ...localSettings, pauseAfterPlan: e.target.checked })
+            }
+          />
+          <span>Pause after first planning phase</span>
+        </label>
+        <p className="cp-hint">
+          Stops the loop after the initial backlog is generated so you can review tasks before development begins.
+        </p>
 
         <button className="cp-btn" onClick={handleSaveSettings}>
           {settingsSaved ? "Saved!" : "Save Settings"}

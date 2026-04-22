@@ -288,6 +288,28 @@ export class RalphLoop {
 
     let tasksSincePlan = 0;
 
+    // Smart resume: if a task was interrupted mid-dev or mid-QA, resume it
+    const resumeTask = existingStatus.tasks.find(
+      (t) => t.status === "inProgress" || t.status === "inQa"
+    );
+    if (resumeTask && this.running) {
+      const isQa = resumeTask.status === "inQa";
+      this.cb.onLog(
+        `[system] Resuming ${isQa ? "QA" : "dev"} for task #${resumeTask.id}: ${resumeTask.title}`
+      );
+      const taskContent = `## Task: ${resumeTask.title}\n\n${resumeTask.description}`;
+      await this.taskManager.setNextTaskContent(resumeTask.id, taskContent);
+      const resumeResult = await this.runDevQALoop(
+        resumeTask.id,
+        resumeTask.title,
+        taskContent,
+        totalLLMCalls,
+        isQa,
+      );
+      totalLLMCalls = resumeResult.totalLLMCalls;
+      tasksSincePlan = 1;
+    }
+
     while (this.running) {
       // Re-read settings each iteration to pick up control panel changes
       const settings = await this.settingsManager.read();
@@ -302,7 +324,7 @@ export class RalphLoop {
       const currentStatus = await this.taskManager.readStatus();
       const backlogCount = currentStatus.tasks.filter((t) => t.status === "backlog").length;
       const shouldPlan =
-        iteration === 0 ||
+        (iteration === 0 && backlogCount === 0) ||
         tasksSincePlan >= settings.planFrequency ||
         backlogCount < settings.minBacklogSize;
 
@@ -416,6 +438,12 @@ export class RalphLoop {
       );
       await this.taskManager.setNextTaskContent(effectiveTaskId, nextTaskContent);
 
+      // Pause after first planning phase if configured
+      if (iteration === 1 && settings.pauseAfterPlan) {
+        this.cb.onLog("[system] Paused after planning. Review the backlog and click Start to resume.");
+        break;
+      }
+
       // --- Dev + QA loop ---
       const devResult = await this.runDevQALoop(
         effectiveTaskId,
@@ -433,6 +461,7 @@ export class RalphLoop {
     title: string,
     nextTaskContent: string,
     totalLLMCalls: number,
+    startAtQa = false,
   ): Promise<{ totalLLMCalls: number }> {
     let feedback = "";
     await this.taskManager.setFeedbackContent(effectiveTaskId, "");
@@ -446,8 +475,9 @@ export class RalphLoop {
         `Dev iteration #${devIteration} for task #${effectiveTaskId}`
       );
 
-      // Dev phase
-      const devPrompt = await this.buildPrompt("dev-prompt.md", s, { task: nextTaskContent, feedback });
+      if (!startAtQa) {
+        // Dev phase
+        const devPrompt = await this.buildPrompt("dev-prompt.md", s, { task: nextTaskContent, feedback });
 
       let devOutput: string;
       try {
@@ -501,6 +531,8 @@ export class RalphLoop {
         );
         break;
       }
+      } // end if (!startAtQa)
+      startAtQa = false;
 
       // QA phase
       await this.taskManager.setTaskStatus(
@@ -611,7 +643,7 @@ export class RalphLoop {
     settings: Settings,
     options?: { task?: string; feedback?: string }
   ): Promise<string> {
-    const SEP = "---\n";
+    const SEP = "\n---\n";
     const parts: string[] = [];
 
     // Requirements
@@ -630,11 +662,11 @@ export class RalphLoop {
     // Task
     if (options?.task) parts.push("Current Task:\n" + options.task);
 
-    // Prompt template (already has its own heading)
-    parts.push(await this.fileManager.read(templateName));
-
     // QA feedback
     if (options?.feedback) parts.push("QA Feedback:\n" + options.feedback);
+
+    // Prompt template (already has its own heading)
+    parts.push(await this.fileManager.read(templateName));
 
     return parts.join(SEP);
   }

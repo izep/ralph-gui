@@ -19,6 +19,7 @@ export interface Settings {
   epicFile: string;
   // Relative path to the requirements file; empty string means auto-discover
   requirementsFile: string;
+  pauseAfterPlan: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -34,6 +35,7 @@ export const DEFAULT_SETTINGS: Settings = {
   agentBackend: "copilot",
   epicFile: "ralph/epic.md",
   requirementsFile: "",
+  pauseAfterPlan: false,
 };
 
 export class SettingsManager {

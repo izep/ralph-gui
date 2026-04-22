@@ -4,9 +4,7 @@ Review the current project state, update the task list, and select the next task
 
 ## Context
 
-Read before planning:
-- `ralph/memory.md` — accumulated project learnings and conventions; apply them
-- `ralph/task-status.json` — current task inventory and completion state
+Read `ralph/memory.md` before starting — accumulated project learnings and conventions; apply them
 
 Survey the codebase to understand what is currently implemented.
 
