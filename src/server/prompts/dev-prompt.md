@@ -6,9 +6,7 @@ If review feedback is included in this prompt, treat it as a continuation: updat
 
 ## Context
 
-Read before starting:
-- `ralph/memory.md` — accumulated project learnings and conventions; follow them
-- `ralph/task-status.json` — task definition and any prior feedback
+Read `ralph/memory.md` before starting  — accumulated project learnings and conventions; apply them
 
 ## Instructions
 

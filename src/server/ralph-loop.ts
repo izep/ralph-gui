@@ -213,17 +213,16 @@ export class RalphLoop {
     try {
       await this.bootstrap();
       const settings = await this.settingsManager.read();
+      const planPrompt = await this.buildPrompt("plan-prompt.md", settings);
       const refreshInstruction = [
-        "",
         "## Backlog Refresh Mode",
         "Refresh the task list only.",
         "Do not include <task-id>.",
         "Do not include implementation-ready task prose.",
       ].join("\n");
-
-      const planPrompt = await this.buildPrompt("plan-prompt.md", settings, refreshInstruction);
+      const fullPlanPrompt = planPrompt + "---\n" + refreshInstruction;
       const output = await this.llmCaller.call(
-        planPrompt,
+        fullPlanPrompt,
         settings.planModel,
         this.repoRoot,
         { agentBackend: settings.agentBackend }
@@ -448,7 +447,7 @@ export class RalphLoop {
       );
 
       // Dev phase
-      const devPrompt = await this.buildPrompt("dev-prompt.md", s, nextTaskContent, feedback);
+      const devPrompt = await this.buildPrompt("dev-prompt.md", s, { task: nextTaskContent, feedback });
 
       let devOutput: string;
       try {
@@ -514,7 +513,7 @@ export class RalphLoop {
         devIteration
       );
 
-      const qaPrompt = await this.buildPrompt("qa-prompt.md", s, nextTaskContent);
+      const qaPrompt = await this.buildPrompt("qa-prompt.md", s, { task: nextTaskContent });
 
       try {
         feedback = await this.llmCaller.call(
@@ -607,29 +606,35 @@ export class RalphLoop {
     }
   }
 
-  private async buildPrompt(templateName: string, settings: Settings, ...extra: string[]): Promise<string> {
-    const SEP = "--------------\n";
+  private async buildPrompt(
+    templateName: string,
+    settings: Settings,
+    options?: { task?: string; feedback?: string }
+  ): Promise<string> {
+    const SEP = "---\n";
     const parts: string[] = [];
 
-    // Inject requirements content
+    // Requirements
     const reqFile = settings.requirementsFile || await this.gitManager.checkRequirements();
     if (reqFile) {
       try {
-        parts.push(await readFile(path.join(this.repoRoot, reqFile), "utf-8"));
+        const reqContent = await readFile(path.join(this.repoRoot, reqFile), "utf-8");
+        parts.push("Project Overview:\n" + reqContent);
       } catch { /* not readable — skip */ }
     }
 
-    // Inject epic content
+    // Epic
     const epicContent = await this.readEpic();
-    if (epicContent) parts.push(epicContent);
+    if (epicContent) parts.push("Current Epic:\n" + epicContent);
 
-    // Prompt template
+    // Task
+    if (options?.task) parts.push("Current Task:\n" + options.task);
+
+    // Prompt template (already has its own heading)
     parts.push(await this.fileManager.read(templateName));
 
-    // Any additional sections (task description, feedback, etc.)
-    for (const e of extra) {
-      if (e) parts.push(e);
-    }
+    // QA feedback
+    if (options?.feedback) parts.push("QA Feedback:\n" + options.feedback);
 
     return parts.join(SEP);
   }

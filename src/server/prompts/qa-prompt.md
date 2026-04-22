@@ -4,9 +4,7 @@ Verify the assigned task is complete and meets project quality standards.
 
 ## Context
 
-Read before reviewing:
-- `ralph/memory.md` — accumulated project learnings and conventions; apply them
-- `ralph/task-status.json` — the task definition and developer output
+Read `ralph/memory.md` before reviewing — accumulated project learnings and conventions; apply them
 
 ## Instructions
 

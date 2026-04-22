@@ -17,47 +17,32 @@ Survey the codebase to understand what is currently implemented.
 Produce a JSON array of all tasks still needed to complete the epic. Rules:
 - Include ALL remaining work: features, integrations, tests, documentation.
 - Exclude `"done"` and `"blocked"` tasks.
-- Preserve existing `id` values for unchanged tasks.
+- Preserve existing `id` values for tasks that represent the same intent.
+- Only change tasks when the tasks when the state of the project warrents it, no unnessacary changes.
+- Do change, delete, add and reorder tasks as needed to represent the optimal implimentation path for the epic from the current state.
 - Assign new IDs starting from (max existing ID + 1).
 - Order by optimal implementation sequence (dependencies first).
-- Every entry: `{ "id": integer, "title": "3-8 words", "description": "1-2 sentences", "status": "backlog" }`.
-- Do NOT write any files; the loop engine owns `task-status.json`.
-
-### Select and describe the next task
-
-Select the first `"backlog"` task. Write a full, implementation-ready description including:
+- Every entry: 
+```json
+{ "id": integer, "title": "3-8 words", "description": "a full, implementation-ready description including:
 - What needs to be done and why
 - Clear implementation guidance
-- Testing steps and acceptance criteria
+- Testing steps and acceptance criteria", "status": "backlog" }
+```
+- Do NOT write any files; the loop engine owns `task-status.json`.
 
-Constraints: no implementation code in the description; traceable to `requirements.md` and the current epic; do NOT modify completed or blocked tasks (new related work gets a new ID).
 
 ## Output Format
 
 Respond with exactly this structure:
 
-1. JSON block (first in response):
+JSON block:
 
 ```json
 [
-  { "id": 6, "title": "Short task title", "description": "1-2 sentence description.", "status": "backlog" }
+  { "id": 6, "title": "Short task title", "description": "full task description.", "status": "backlog" },
+  { "id": 7, "title": "Another Short title", "description": "next full task description.", "status": "backlog" }
 ]
-```
-
-2. Full implementation-ready task description.
-
-3. Remaining tasks section:
-
-```markdown
-## Remaining Planned Tasks
-- Task title
-- Task title
-```
-
-4. Task ID signal (last in response):
-
-```
-<task-id>N</task-id>
 ```
 
 If all tasks are complete, output only:
