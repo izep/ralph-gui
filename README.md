@@ -75,6 +75,15 @@ Planning populates and refreshes backlog. Modifying the epic requirements, the a
 
 Plan, dev, and QA **model names are backend-specific**: what works for Copilot may not apply to Claude Code, Cursor Agent, or Gemini CLI—see each vendor’s CLI documentation.
 
+Reasoning effort support is backend-specific:
+
+| Backend | Dev/QA reasoning effort setting support |
+| --- | --- |
+| Copilot | Supported (`--reasoning-effort`) |
+| Claude Code | Supported (`--effort`) |
+| Cursor Agent | Not supported (setting is ignored) |
+| Google Gemini CLI | Not supported (setting is ignored) |
+
 If a CLI is not on `PATH`, set the matching `*_BIN` variable to the full executable path (especially on Windows when the command is `copilot.cmd`, `cursor-agent.cmd`, etc.).
 
 ## Quick start

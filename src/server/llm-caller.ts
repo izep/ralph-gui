@@ -23,6 +23,10 @@ export function normalizeAgentBackend(value: string | undefined): AgentBackendId
   return "copilot";
 }
 
+export function backendSupportsReasoningEffort(backend: AgentBackendId): boolean {
+  return backend === "copilot" || backend === "claude";
+}
+
 function getAgentBackendOverrideFromEnv(): AgentBackendId | null {
   const override = process.env.RALPH_AGENT_BACKEND_OVERRIDE?.trim();
   if (!override) {
@@ -302,14 +306,15 @@ export class LLMCaller {
         }
 
         const cli = backendCliLabel(backend);
+        const reasoningEffort = backendSupportsReasoningEffort(backend) ? opts.reasoningEffort : undefined;
         let args: string[];
         let writeStdin: string | null;
 
         switch (backend) {
           case "copilot": {
             args = ["--model", model, "--autopilot", "-s", "--yolo", "--no-color"];
-            if (opts.reasoningEffort) {
-              args.push("--reasoning-effort", opts.reasoningEffort);
+            if (reasoningEffort) {
+              args.push("--reasoning-effort", reasoningEffort);
             }
             writeStdin = prompt;
             break;
@@ -339,8 +344,8 @@ export class LLMCaller {
               "--output-format",
               "text",
             ];
-            if (opts.reasoningEffort) {
-              args.push("--effort", opts.reasoningEffort);
+            if (reasoningEffort) {
+              args.push("--effort", reasoningEffort);
             }
             writeStdin = null;
             break;

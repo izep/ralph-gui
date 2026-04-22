@@ -11,6 +11,7 @@ vi.mock("child_process", () => ({
 }));
 
 import {
+  backendSupportsReasoningEffort,
   LLMCaller,
   normalizeAgentBackend,
   normalizePromptForArgv,
@@ -215,6 +216,18 @@ describe("normalizePromptForArgv", () => {
   });
 });
 
+describe("backendSupportsReasoningEffort", () => {
+  it("returns true for backends that accept reasoning effort flags", () => {
+    expect(backendSupportsReasoningEffort("copilot")).toBe(true);
+    expect(backendSupportsReasoningEffort("claude")).toBe(true);
+  });
+
+  it("returns false for backends without reasoning effort support", () => {
+    expect(backendSupportsReasoningEffort("cursor-agent")).toBe(false);
+    expect(backendSupportsReasoningEffort("gemini")).toBe(false);
+  });
+});
+
 describe("LLMCaller.call", () => {
   it("uses stdin for copilot and includes reasoning effort", async () => {
     process.env.COPILOT_BIN = await makeExecutable("copilot");
@@ -293,12 +306,13 @@ describe("LLMCaller.call", () => {
     await expect(resultPromise).resolves.toBe("ok");
   });
 
-  it("uses bypass permission mode for claude and does not write stdin", async () => {
+  it("uses bypass permission mode and effort flag for claude", async () => {
     process.env.CLAUDE_BIN = await makeExecutable("claude");
     const caller = new LLMCaller(() => true);
 
     const resultPromise = caller.call("claude prompt", "claude-sonnet-4.6", tmpDir, {
       agentBackend: "claude",
+      reasoningEffort: "high",
     });
 
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
@@ -311,8 +325,51 @@ describe("LLMCaller.call", () => {
       "--model", "claude-sonnet-4.6",
       "--permission-mode", "bypassPermissions",
       "--output-format", "text",
+      "--effort", "high",
     ]);
     expect(proc.stdin.write).not.toHaveBeenCalled();
+
+    proc.stdout.emit("data", Buffer.from("ok"));
+    proc.emit("close", 0);
+    await expect(resultPromise).resolves.toBe("ok");
+  });
+
+  it("ignores reasoning effort for cursor-agent", async () => {
+    process.env.CURSOR_AGENT_BIN = await makeExecutable("cursor-agent");
+    const caller = new LLMCaller(() => true);
+
+    const resultPromise = caller.call("cursor prompt", "gpt-5-mini", tmpDir, {
+      agentBackend: "cursor-agent",
+      reasoningEffort: "xhigh",
+    });
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
+    const [, args] = spawnMock.mock.calls[0] as [string, string[]];
+    const proc = spawnMock.mock.results[0].value as MockChildProcess;
+
+    expect(args).not.toContain("--reasoning-effort");
+    expect(args).not.toContain("--effort");
+
+    proc.stdout.emit("data", Buffer.from("ok"));
+    proc.emit("close", 0);
+    await expect(resultPromise).resolves.toBe("ok");
+  });
+
+  it("ignores reasoning effort for gemini", async () => {
+    process.env.GEMINI_BIN = await makeExecutable("gemini");
+    const caller = new LLMCaller(() => true);
+
+    const resultPromise = caller.call("gemini prompt", "gemini-2.5-pro", tmpDir, {
+      agentBackend: "gemini",
+      reasoningEffort: "xhigh",
+    });
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
+    const [, args] = spawnMock.mock.calls[0] as [string, string[]];
+    const proc = spawnMock.mock.results[0].value as MockChildProcess;
+
+    expect(args).not.toContain("--reasoning-effort");
+    expect(args).not.toContain("--effort");
 
     proc.stdout.emit("data", Buffer.from("ok"));
     proc.emit("close", 0);
