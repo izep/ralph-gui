@@ -228,6 +228,9 @@ function backendCliLabel(backend: AgentBackendId): string {
 }
 
 const ARG_PROMPT_MAX_CHARS = 16_000;
+const CURSOR_AGENT_NON_INTERACTIVE_FLAGS = ["--yolo"] as const;
+const CLAUDE_NON_INTERACTIVE_FLAGS = ["--permission-mode", "bypassPermissions"] as const;
+const GEMINI_NON_INTERACTIVE_FLAGS = ["--yolo"] as const;
 
 function assertPromptFitsArgv(prompt: string, backend: AgentBackendId): void {
   if (prompt.length <= ARG_PROMPT_MAX_CHARS) {
@@ -318,6 +321,7 @@ export class LLMCaller {
               normalizePromptForArgv(prompt),
               "--model",
               model,
+              ...CURSOR_AGENT_NON_INTERACTIVE_FLAGS,
               "--output-format",
               "text",
             ];
@@ -331,8 +335,7 @@ export class LLMCaller {
               normalizePromptForArgv(prompt),
               "--model",
               model,
-              "--permission-mode",
-              "bypassPermissions",
+              ...CLAUDE_NON_INTERACTIVE_FLAGS,
               "--output-format",
               "text",
             ];
@@ -349,7 +352,7 @@ export class LLMCaller {
               normalizePromptForArgv(prompt),
               "-m",
               model,
-              "--yolo",
+              ...GEMINI_NON_INTERACTIVE_FLAGS,
               "--output-format",
               "text",
             ];

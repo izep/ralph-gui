@@ -258,6 +258,7 @@ describe("LLMCaller.call", () => {
     expect(args).toEqual([
       "-p", "cursor prompt",
       "--model", "gpt-5-mini",
+      "--yolo",
       "--output-format", "text",
     ]);
     expect(proc.stdin.write).not.toHaveBeenCalled();
@@ -286,6 +287,32 @@ describe("LLMCaller.call", () => {
       "-m", "gemini-2.5-pro",
       "--yolo", "--output-format", "text",
     ]);
+
+    proc.stdout.emit("data", Buffer.from("ok"));
+    proc.emit("close", 0);
+    await expect(resultPromise).resolves.toBe("ok");
+  });
+
+  it("uses bypass permission mode for claude and does not write stdin", async () => {
+    process.env.CLAUDE_BIN = await makeExecutable("claude");
+    const caller = new LLMCaller(() => true);
+
+    const resultPromise = caller.call("claude prompt", "claude-sonnet-4.6", tmpDir, {
+      agentBackend: "claude",
+    });
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
+    const [command, args] = spawnMock.mock.calls[0] as [string, string[]];
+    const proc = spawnMock.mock.results[0].value as MockChildProcess;
+
+    expect(command).toBe(process.env.CLAUDE_BIN);
+    expect(args).toEqual([
+      "-p", "claude prompt",
+      "--model", "claude-sonnet-4.6",
+      "--permission-mode", "bypassPermissions",
+      "--output-format", "text",
+    ]);
+    expect(proc.stdin.write).not.toHaveBeenCalled();
 
     proc.stdout.emit("data", Buffer.from("ok"));
     proc.emit("close", 0);
