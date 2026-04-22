@@ -23,6 +23,10 @@ export function normalizeAgentBackend(value: string | undefined): AgentBackendId
   return "copilot";
 }
 
+export function backendSupportsReasoningEffort(backend: AgentBackendId): boolean {
+  return backend === "copilot" || backend === "claude";
+}
+
 function getAgentBackendOverrideFromEnv(): AgentBackendId | null {
   const override = process.env.RALPH_AGENT_BACKEND_OVERRIDE?.trim();
   if (!override) {
@@ -228,6 +232,9 @@ function backendCliLabel(backend: AgentBackendId): string {
 }
 
 const ARG_PROMPT_MAX_CHARS = 16_000;
+const CURSOR_AGENT_NON_INTERACTIVE_FLAGS = ["--yolo"] as const;
+const CLAUDE_NON_INTERACTIVE_FLAGS = ["--permission-mode", "bypassPermissions"] as const;
+const GEMINI_NON_INTERACTIVE_FLAGS = ["--yolo"] as const;
 
 function assertPromptFitsArgv(prompt: string, backend: AgentBackendId): void {
   if (prompt.length <= ARG_PROMPT_MAX_CHARS) {
@@ -299,14 +306,15 @@ export class LLMCaller {
         }
 
         const cli = backendCliLabel(backend);
+        const reasoningEffort = backendSupportsReasoningEffort(backend) ? opts.reasoningEffort : undefined;
         let args: string[];
         let writeStdin: string | null;
 
         switch (backend) {
           case "copilot": {
             args = ["--model", model, "--autopilot", "-s", "--yolo", "--no-color"];
-            if (opts.reasoningEffort) {
-              args.push("--reasoning-effort", opts.reasoningEffort);
+            if (reasoningEffort) {
+              args.push("--reasoning-effort", reasoningEffort);
             }
             writeStdin = prompt;
             break;
@@ -318,6 +326,7 @@ export class LLMCaller {
               normalizePromptForArgv(prompt),
               "--model",
               model,
+              ...CURSOR_AGENT_NON_INTERACTIVE_FLAGS,
               "--output-format",
               "text",
             ];
@@ -331,13 +340,12 @@ export class LLMCaller {
               normalizePromptForArgv(prompt),
               "--model",
               model,
-              "--permission-mode",
-              "bypassPermissions",
+              ...CLAUDE_NON_INTERACTIVE_FLAGS,
               "--output-format",
               "text",
             ];
-            if (opts.reasoningEffort) {
-              args.push("--effort", opts.reasoningEffort);
+            if (reasoningEffort) {
+              args.push("--effort", reasoningEffort);
             }
             writeStdin = null;
             break;
@@ -349,7 +357,7 @@ export class LLMCaller {
               normalizePromptForArgv(prompt),
               "-m",
               model,
-              "--yolo",
+              ...GEMINI_NON_INTERACTIVE_FLAGS,
               "--output-format",
               "text",
             ];
