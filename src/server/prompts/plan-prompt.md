@@ -16,7 +16,7 @@ Produce a JSON array of all tasks still needed to complete the epic. Rules:
 - Include ALL remaining work: features, integrations, tests, documentation.
 - Exclude `"done"` and `"blocked"` tasks.
 - Preserve existing `id` values for tasks that represent the same intent.
-- Only change tasks when the tasks when the state of the project warrents it, no unnessacary changes.
+- Only change tasks when the state of the project warrants it, no unnecessary changes.
 - Do change, delete, add and reorder tasks as needed to represent the optimal implimentation path for the epic from the current state.
 - Assign new IDs starting from (max existing ID + 1).
 - Order by optimal implementation sequence (dependencies first).

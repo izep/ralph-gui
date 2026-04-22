@@ -10,9 +10,6 @@ import {
 import { TaskManager, type StatusData } from "./task-manager.js";
 import { LLMCaller } from "./llm-caller.js";
 import {
-  parseTaskId,
-  parseTaskTitle,
-  parseTaskDescription,
   parseRemainingTasks,
   parseBlockedInfo,
   parseJsonTaskList,
@@ -259,6 +256,15 @@ export class RalphLoop {
     }
   }
 
+  // --- Timing helper ---
+
+  private elapsed(startMs: number): string {
+    const ms = Date.now() - startMs;
+    if (ms < 1000) return `${ms}ms`;
+    if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
+    return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
+  }
+
   // --- Main Loop ---
 
   private async runLoop(): Promise<void> {
@@ -368,6 +374,7 @@ export class RalphLoop {
       // --- Plan phase ---
       const planPrompt = await this.buildPrompt("plan-prompt.md", settings);
       let nextTaskContent: string;
+      const planStart = Date.now();
       try {
         nextTaskContent = await this.llmCaller.call(
           planPrompt,
@@ -379,6 +386,7 @@ export class RalphLoop {
         throw new Error(`Plan phase failed: ${err}`);
       }
       totalLLMCalls++;
+      this.cb.onLog(`[system] Planning iteration #${iteration} finished in ${this.elapsed(planStart)}`);
 
       // Check if all tasks are done
       if (nextTaskContent.includes("<status>complete</status>")) {
@@ -415,28 +423,26 @@ export class RalphLoop {
         this.cb.onLog(`[system] Synced ${remainingTasks.length} tasks from plan output`);
       }
 
-      // Plan agent updates task-status.json and signals which task to work on next
-      const taskId = parseTaskId(nextTaskContent);
-      if (taskId === null) {
-        this.cb.onLog("[system] Warning: plan output missing <task-id> signal — falling back to title/description parse.");
+      // Re-read task-status.json and always pick the first backlog task.
+      const statusData = await this.taskManager.readStatus();
+      const taskEntry = statusData.tasks.find((t) => t.status === "backlog");
+
+      if (!taskEntry) {
+        this.cb.onLog("[system] Warning: no backlog task found after planning — skipping dev loop.");
+        continue;
       }
 
-      // Re-read task-status.json — plan agent may have updated it
-      const statusData = await this.taskManager.readStatus();
-      const taskEntry = taskId !== null ? statusData.tasks.find((t) => t.id === taskId) : undefined;
-      const effectiveTaskId = taskId ?? (statusData.tasks.reduce((m, t) => Math.max(m, t.id), 0) + 1);
-      const title = taskEntry?.title ?? parseTaskTitle(nextTaskContent, effectiveTaskId);
+      const effectiveTaskId = taskEntry.id;
+      const title = taskEntry.title;
+      const effectiveTaskContent = `## Task: ${taskEntry.title}\n\n${taskEntry.description}`;
 
-      // Mark in-progress — preserve title/description if plan agent already wrote them
       await this.taskManager.setTaskStatus(
         effectiveTaskId,
         "inProgress",
         totalLLMCalls,
         settings.maxLLMCalls,
-        taskEntry ? "" : title,
-        taskEntry ? "" : parseTaskDescription(nextTaskContent)
       );
-      await this.taskManager.setNextTaskContent(effectiveTaskId, nextTaskContent);
+      await this.taskManager.setNextTaskContent(effectiveTaskId, effectiveTaskContent);
 
       // Pause after first planning phase if configured
       if (iteration === 1 && settings.pauseAfterPlan) {
@@ -448,7 +454,7 @@ export class RalphLoop {
       const devResult = await this.runDevQALoop(
         effectiveTaskId,
         title,
-        nextTaskContent,
+        effectiveTaskContent,
         totalLLMCalls,
       );
       totalLLMCalls = devResult.totalLLMCalls;
@@ -464,7 +470,16 @@ export class RalphLoop {
     startAtQa = false,
   ): Promise<{ totalLLMCalls: number }> {
     let feedback = "";
-    await this.taskManager.setFeedbackContent(effectiveTaskId, "");
+    if (startAtQa) {
+      // Resuming interrupted QA — preserve any existing feedback so the QA
+      // loop can continue from where it left off rather than starting fresh.
+      const existingStatus = await this.taskManager.readStatus();
+      if (existingStatus.feedback.taskId === effectiveTaskId) {
+        feedback = existingStatus.feedback.content;
+      }
+    } else {
+      await this.taskManager.setFeedbackContent(effectiveTaskId, "");
+    }
     let devIteration = 1;
 
     while (this.running && !feedback.includes("<status>verified</status>")) {
@@ -472,13 +487,14 @@ export class RalphLoop {
       if (totalLLMCalls >= s.maxLLMCalls) break;
 
       this.cb.onLog(
-        `Dev iteration #${devIteration} for task #${effectiveTaskId}`
+        `[system] Dev iteration #${devIteration} for task #${effectiveTaskId}: ${title}`
       );
 
       if (!startAtQa) {
         // Dev phase
         const devPrompt = await this.buildPrompt("dev-prompt.md", s, { task: nextTaskContent, feedback });
-
+        this.cb.onLog(`[dev] Running dev agent...`);
+        const devStart = Date.now();
         let devOutput: string;
         try {
           devOutput = await this.llmCaller.call(
@@ -494,6 +510,7 @@ export class RalphLoop {
           throw new Error(`Dev phase failed: ${err}`);
         }
         totalLLMCalls++;
+        this.cb.onLog(`[dev] Dev agent finished in ${this.elapsed(devStart)}`);
 
         // Log a summary (first 200 chars)
         const summary = devOutput.slice(0, 200).replace(/\n/g, " ");
@@ -546,7 +563,8 @@ export class RalphLoop {
       );
 
       const qaPrompt = await this.buildPrompt("qa-prompt.md", s, { task: nextTaskContent });
-
+      this.cb.onLog(`[qa] Running QA agent...`);
+      const qaStart = Date.now();
       try {
         feedback = await this.llmCaller.call(
           qaPrompt,
@@ -561,6 +579,7 @@ export class RalphLoop {
         throw new Error(`QA phase failed: ${err}`);
       }
       totalLLMCalls++;
+      this.cb.onLog(`[qa] QA agent finished in ${this.elapsed(qaStart)}`);
       await this.taskManager.setFeedbackContent(effectiveTaskId, feedback);
 
       if (feedback.includes("<status>verified</status>")) {
@@ -640,14 +659,14 @@ export class RalphLoop {
 
   private async buildPrompt(
     templateName: string,
-    settings: Settings,
+    _settings: Settings,
     options?: { task?: string; feedback?: string }
   ): Promise<string> {
     const SEP = "\n---\n";
     const parts: string[] = [];
 
     // Requirements
-    const reqFile = settings.requirementsFile || await this.gitManager.checkRequirements();
+    const reqFile = await this.checkRequirements();
     if (reqFile) {
       try {
         const reqContent = await readFile(path.join(this.repoRoot, reqFile), "utf-8");
