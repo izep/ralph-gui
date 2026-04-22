@@ -662,11 +662,11 @@ export class RalphLoop {
     // Task
     if (options?.task) parts.push("Current Task:\n" + options.task);
 
-    // Prompt template (already has its own heading)
-    parts.push(await this.fileManager.read(templateName));
-
     // QA feedback
     if (options?.feedback) parts.push("QA Feedback:\n" + options.feedback);
+
+    // Prompt template (already has its own heading)
+    parts.push(await this.fileManager.read(templateName));
 
     return parts.join(SEP);
   }
