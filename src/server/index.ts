@@ -5,35 +5,9 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { RalphLoop } from "./ralph-loop.js";
 import { DEFAULT_SETTINGS } from "./templates.js";
-import type { Settings } from "./settings-manager.js";
-import { normalizeAgentBackend } from "./llm-caller.js";
+import { getArg, hasFlag, applyCliSettingsOverrides } from "./cli-args.js";
 
 // --- CLI args ---
-const args = process.argv.slice(2);
-function getArg(name: string): string | undefined {
-  const i = args.indexOf(name);
-  return i >= 0 && i + 1 < args.length ? args[i + 1] : undefined;
-}
-
-function hasFlag(name: string): boolean {
-  return args.includes(name);
-}
-
-function getBooleanArg(name: string): boolean | undefined {
-  const value = getArg(name);
-  if (value === undefined) return undefined;
-  if (["1", "true", "yes", "on"].includes(value.toLowerCase())) return true;
-  if (["0", "false", "no", "off"].includes(value.toLowerCase())) return false;
-  return undefined;
-}
-
-function getNumberArg(name: string): number | undefined {
-  const value = getArg(name);
-  if (value === undefined) return undefined;
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const cliRepo = getArg("--repo");
 const cliStart = hasFlag("--start");
@@ -48,30 +22,6 @@ let loopError: string | null = null;
 let logBuffer: string[] = [];
 const MAX_LOG_LINES = 1000;
 let requestShutdown: ((reason: string) => Promise<void>) | null = null;
-
-async function applyCliSettingsOverrides(): Promise<void> {
-  if (!loop) return;
-  const current = await loop.readSettings();
-
-  const agentBackendArg = getArg("--agent-backend");
-  const agentBackendOverride = agentBackendArg ? normalizeAgentBackend(agentBackendArg) : undefined;
-
-  const next: Settings = {
-    ...current,
-    ...(getArg("--plan-model") ? { planModel: getArg("--plan-model")! } : {}),
-    ...(getArg("--dev-model") ? { devModel: getArg("--dev-model")! } : {}),
-    ...(getArg("--qa-model") ? { qaModel: getArg("--qa-model")! } : {}),
-    ...(getArg("--dev-reasoning-effort") ? { devReasoningEffort: getArg("--dev-reasoning-effort")! } : {}),
-    ...(getArg("--qa-reasoning-effort") ? { qaReasoningEffort: getArg("--qa-reasoning-effort")! } : {}),
-    ...(getNumberArg("--max-llm-calls") !== undefined ? { maxLLMCalls: getNumberArg("--max-llm-calls")! } : {}),
-    ...(getNumberArg("--plan-frequency") !== undefined ? { planFrequency: getNumberArg("--plan-frequency")! } : {}),
-    ...(getNumberArg("--min-backlog-size") !== undefined ? { minBacklogSize: getNumberArg("--min-backlog-size")! } : {}),
-    ...(getBooleanArg("--auto-commit") !== undefined ? { autoCommit: getBooleanArg("--auto-commit")! } : {}),
-    ...(agentBackendOverride ? { agentBackend: agentBackendOverride } : {}),
-  };
-
-  await loop.writeSettings(next);
-}
 
 function addLog(line: string) {
   logBuffer.push(line);
@@ -457,7 +407,7 @@ server.listen(PORT, async () => {
 
   if (cliRepo) {
     await setRepo(cliRepo);
-    await applyCliSettingsOverrides();
+    await applyCliSettingsOverrides(loop!);
 
     if (cliStart) {
       console.log("Starting Ralph loop...");

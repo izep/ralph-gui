@@ -427,3 +427,210 @@ describe("RalphLoop file helpers", () => {
     await expect(loop.writeRalphFile("../escape.txt", "bad")).rejects.toThrow("Invalid file name");
   });
 });
+
+// ---------------------------------------------------------------------------
+// readEpic
+// ---------------------------------------------------------------------------
+
+describe("RalphLoop.readEpic", () => {
+  it("returns empty string when epic file does not exist", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    const content = await loop.readEpic();
+    expect(content).toBe("");
+  });
+
+  it("reads from default path ralph/epic.md after bootstrap", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await writeFile(path.join(tmpDir, "ralph", "epic.md"), "# My Epic", "utf-8");
+    const content = await loop.readEpic();
+    expect(content).toBe("# My Epic");
+  });
+
+  it("reads from custom epicFile path configured in settings", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await writeFile(
+      path.join(tmpDir, "ralph", "settings.json"),
+      JSON.stringify({ epicFile: "docs/epic.md" }),
+      "utf-8"
+    );
+    await mkdir(path.join(tmpDir, "docs"), { recursive: true });
+    await writeFile(path.join(tmpDir, "docs", "epic.md"), "# Custom Epic", "utf-8");
+    const content = await loop.readEpic();
+    expect(content).toBe("# Custom Epic");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// writeEpic
+// ---------------------------------------------------------------------------
+
+describe("RalphLoop.writeEpic", () => {
+  it("writes content to the default epic path", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic("# Hello");
+    const content = await readFile(path.join(tmpDir, "ralph", "epic.md"), "utf-8");
+    expect(content).toBe("# Hello");
+  });
+
+  it("creates parent directories and writes to a custom path", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await writeFile(
+      path.join(tmpDir, "ralph", "settings.json"),
+      JSON.stringify({ epicFile: "nested/dir/epic.md" }),
+      "utf-8"
+    );
+    await loop.writeEpic("# Nested");
+    const content = await readFile(path.join(tmpDir, "nested", "dir", "epic.md"), "utf-8");
+    expect(content).toBe("# Nested");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// isEpicConfigured
+// ---------------------------------------------------------------------------
+
+describe("RalphLoop.isEpicConfigured", () => {
+  it("returns false when epic has default placeholder content", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    const result = await loop.isEpicConfigured();
+    expect(result).toBe(false);
+  });
+
+  it("returns false when epic file does not exist", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    const result = await loop.isEpicConfigured();
+    expect(result).toBe(false);
+  });
+
+  it("returns true when epic has real content", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic("# Real Epic\n\nBuild something great.");
+    const result = await loop.isEpicConfigured();
+    expect(result).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// checkRequirements (configured path)
+// ---------------------------------------------------------------------------
+
+describe("RalphLoop.checkRequirements (configured path)", () => {
+  it("uses requirementsFile from settings when set", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await writeFile(
+      path.join(tmpDir, "ralph", "settings.json"),
+      JSON.stringify({ requirementsFile: "docs/reqs.md" }),
+      "utf-8"
+    );
+    await mkdir(path.join(tmpDir, "docs"), { recursive: true });
+    await writeFile(path.join(tmpDir, "docs", "reqs.md"), "# Reqs", "utf-8");
+    const result = await loop.checkRequirements();
+    expect(result).toBe("docs/reqs.md");
+  });
+
+  it("returns null when configured requirementsFile does not exist", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await writeFile(
+      path.join(tmpDir, "ralph", "settings.json"),
+      JSON.stringify({ requirementsFile: "nonexistent.md" }),
+      "utf-8"
+    );
+    const result = await loop.checkRequirements();
+    expect(result).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Smart resume
+// ---------------------------------------------------------------------------
+
+describe("RalphLoop smart resume", () => {
+  async function writeTaskStatus(dir: string, tasks: object[]) {
+    const statusData = {
+      tasks,
+      currentTaskNum: 1,
+      totalLLMCalls: 5,
+      maxLLMCalls: 100,
+      nextTask: { taskId: 1, content: "prior content", updatedAt: new Date().toISOString() },
+      feedback: { taskId: null, content: "", updatedAt: new Date().toISOString() },
+      lastUpdated: new Date().toISOString(),
+    };
+    await writeFile(
+      path.join(dir, "ralph", "task-status.json"),
+      JSON.stringify(statusData),
+      "utf-8"
+    );
+  }
+
+  it("logs resume-dev message when an inProgress task exists", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic("# Epic\n\nTest smart resume.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+    await writeTaskStatus(tmpDir, [
+      {
+        id: 1,
+        title: "Implement feature",
+        description: "Do the thing",
+        status: "inProgress",
+        devIterations: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+
+    await loop.start();
+    await new Promise((r) => setTimeout(r, 80));
+
+    expect(cb.logs.some((l) => l.includes("Resuming dev for task #1"))).toBe(true);
+
+    loop.stop();
+    await new Promise((r) => setTimeout(r, 100));
+  });
+
+  it("logs resume-QA message when an inQa task exists", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic("# Epic\n\nTest QA resume.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+    await writeTaskStatus(tmpDir, [
+      {
+        id: 2,
+        title: "Review auth flow",
+        description: "Check the auth",
+        status: "inQa",
+        devIterations: 1,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ]);
+
+    await loop.start();
+    await new Promise((r) => setTimeout(r, 80));
+
+    expect(cb.logs.some((l) => l.includes("Resuming QA for task #2"))).toBe(true);
+
+    loop.stop();
+    await new Promise((r) => setTimeout(r, 100));
+  });
+});

@@ -130,7 +130,7 @@ export class RalphLoop {
     if (!epicConfigured) {
       return {
         ok: false,
-        error: "Epic is not configured. Update ralph/epic.md with your current epic before starting.",
+        error: "Epic is not configured. Fill out the epic file before starting the loop.",
       };
     }
 
@@ -479,59 +479,59 @@ export class RalphLoop {
         // Dev phase
         const devPrompt = await this.buildPrompt("dev-prompt.md", s, { task: nextTaskContent, feedback });
 
-      let devOutput: string;
-      try {
-        devOutput = await this.llmCaller.call(
-          devPrompt,
-          s.devModel,
-          this.repoRoot,
-          {
-            agentBackend: s.agentBackend,
-            reasoningEffort: s.devReasoningEffort,
-          }
-        );
-      } catch (err) {
-        throw new Error(`Dev phase failed: ${err}`);
-      }
-      totalLLMCalls++;
+        let devOutput: string;
+        try {
+          devOutput = await this.llmCaller.call(
+            devPrompt,
+            s.devModel,
+            this.repoRoot,
+            {
+              agentBackend: s.agentBackend,
+              reasoningEffort: s.devReasoningEffort,
+            }
+          );
+        } catch (err) {
+          throw new Error(`Dev phase failed: ${err}`);
+        }
+        totalLLMCalls++;
 
-      // Log a summary (first 200 chars)
-      const summary = devOutput.slice(0, 200).replace(/\n/g, " ");
-      this.cb.onLog(`[dev] ${summary}${devOutput.length > 200 ? "..." : ""}`);
+        // Log a summary (first 200 chars)
+        const summary = devOutput.slice(0, 200).replace(/\n/g, " ");
+        this.cb.onLog(`[dev] ${summary}${devOutput.length > 200 ? "..." : ""}`);
 
-      if (devOutput.includes("<status>blocked</status>")) {
-        const blockedInfo = parseBlockedInfo(devOutput);
-        const capturedAt = new Date().toISOString();
-        await this.taskManager.setTaskStatus(
-          effectiveTaskId,
-          "blocked",
-          totalLLMCalls,
-          s.maxLLMCalls,
-          "",
-          "",
-          devIteration,
-          {
-            summary: blockedInfo.summary,
-            impact: blockedInfo.impact,
-            nextStep: blockedInfo.nextStep,
-            needs: blockedInfo.needs,
-            capturedAt,
-          }
-        );
-        this.cb.onLog(
-          `Task #${effectiveTaskId} BLOCKED in iteration #${devIteration}`
-        );
-        break;
-      }
+        if (devOutput.includes("<status>blocked</status>")) {
+          const blockedInfo = parseBlockedInfo(devOutput);
+          const capturedAt = new Date().toISOString();
+          await this.taskManager.setTaskStatus(
+            effectiveTaskId,
+            "blocked",
+            totalLLMCalls,
+            s.maxLLMCalls,
+            "",
+            "",
+            devIteration,
+            {
+              summary: blockedInfo.summary,
+              impact: blockedInfo.impact,
+              nextStep: blockedInfo.nextStep,
+              needs: blockedInfo.needs,
+              capturedAt,
+            }
+          );
+          this.cb.onLog(
+            `Task #${effectiveTaskId} BLOCKED in iteration #${devIteration}`
+          );
+          break;
+        }
 
-      // Respect limits between dev and QA calls.
-      if (totalLLMCalls >= s.maxLLMCalls) {
-        this.cb.onLog(
-          `[system] Max LLM calls reached (${totalLLMCalls}/${s.maxLLMCalls})`
-        );
-        break;
+        // Respect limits between dev and QA calls.
+        if (totalLLMCalls >= s.maxLLMCalls) {
+          this.cb.onLog(
+            `[system] Max LLM calls reached (${totalLLMCalls}/${s.maxLLMCalls})`
+          );
+          break;
+        }
       }
-      } // end if (!startAtQa)
       startAtQa = false;
 
       // QA phase
@@ -662,11 +662,11 @@ export class RalphLoop {
     // Task
     if (options?.task) parts.push("Current Task:\n" + options.task);
 
-    // QA feedback
-    if (options?.feedback) parts.push("QA Feedback:\n" + options.feedback);
-
     // Prompt template (already has its own heading)
     parts.push(await this.fileManager.read(templateName));
+
+    // QA feedback
+    if (options?.feedback) parts.push("QA Feedback:\n" + options.feedback);
 
     return parts.join(SEP);
   }
