@@ -30,17 +30,20 @@ When pointed at a target repo via `--repo`, Ralph bootstraps a `ralph/` director
 - [x] Auto-commit option after each verified task
 - [x] Embedded prompt templates (bootstrapped per target repo)
 
-## Planned: configurable agent CLI (plan / dev / QA)
+## Implemented: configurable agent CLI (plan / dev / QA)
 
-Ralph shall support choosing which local CLI executes plan, dev, and QA iterations, with behavior equivalent to today’s Copilot-driven loop (same prompts, repo cwd, non-interactive execution, model strings passed through where the CLI supports them).
+- [x] Persisted `agentBackend` setting in `ralph/settings.json`, with UI selection and default `copilot`
+- [x] Server-side per-backend caller wiring for Copilot, Cursor Agent, Claude, and Gemini
+- [x] Per-backend executable resolution with PATH lookup and env overrides (`COPILOT_BIN`, `CURSOR_AGENT_BIN`, `CLAUDE_BIN`, `GEMINI_BIN`)
+- [x] Per-backend command caching and backend-specific invocation arguments
+- [x] `--agent-backend` CLI override support for headless runs
+- [x] Extended tests for backend normalization, command resolution, and call-path wiring
+- [x] README prerequisites and examples updated for non-Copilot backends
 
-- [ ] Add a persisted setting (for example `agentBackend` or `agentCli`) with at least: **Copilot** (current default), **`cursor-agent`**, and **`claude`** (Anthropic Claude Code / `claude` CLI), stored in `ralph/settings.json` and surfaced in the Settings panel.
-- [ ] Refactor the server-side caller so spawn arguments, stdin vs argv prompt delivery, and optional flags (for example yolo / print / approval bypass) are chosen per backend; resolve each executable via PATH with optional env overrides (for example `COPILOT_BIN`, `CURSOR_AGENT_BIN`, `CLAUDE_BIN`).
-- [ ] Ensure command resolution and caches are correct when the user switches backend between loop iterations; document that model names are backend-specific.
-- [ ] Map **reasoning effort** (and any Copilot-only flags) only where supported; otherwise ignore or document no-op behavior per backend.
-- [ ] Extend automated tests for command resolution and caller wiring; extend `./start.sh` / server CLI overrides if flags are used for headless runs.
-- [ ] Update [README.md](README.md) prerequisites and examples for non-Copilot backends.
+## Planned follow-up
+
+- [ ] Keep tracking backend-specific flag behavior as upstream CLIs evolve, and update docs/tests for any new safety-relevant defaults.
 
 ## Last Updated
 
-2026-04-16
+2026-04-21

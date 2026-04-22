@@ -6,6 +6,7 @@ import { fileURLToPath } from "url";
 import { RalphLoop } from "./ralph-loop.js";
 import { DEFAULT_SETTINGS } from "./templates.js";
 import type { Settings } from "./settings-manager.js";
+import { normalizeAgentBackend } from "./llm-caller.js";
 
 // --- CLI args ---
 const args = process.argv.slice(2);
@@ -53,11 +54,7 @@ async function applyCliSettingsOverrides(): Promise<void> {
   const current = await loop.readSettings();
 
   const agentBackendArg = getArg("--agent-backend");
-  const agentBackendOverride =
-    agentBackendArg &&
-    ["copilot", "cursor-agent", "claude", "gemini"].includes(agentBackendArg.toLowerCase())
-      ? agentBackendArg.toLowerCase()
-      : undefined;
+  const agentBackendOverride = agentBackendArg ? normalizeAgentBackend(agentBackendArg) : undefined;
 
   const next: Settings = {
     ...current,

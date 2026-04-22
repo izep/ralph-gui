@@ -1,8 +1,17 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { EventEmitter } from "events";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import os from "os";
 import path from "path";
 import { chmod, mkdtemp, rm, writeFile } from "fs/promises";
+
+const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
+
+vi.mock("child_process", () => ({
+  spawn: spawnMock,
+}));
+
 import {
+  LLMCaller,
   normalizeAgentBackend,
   normalizePromptForArgv,
   resolveClaudeCommand,
@@ -12,14 +21,39 @@ import {
   shouldUseShellForCommand,
 } from "./llm-caller.js";
 
+class MockChildProcess extends EventEmitter {
+  stdout = new EventEmitter();
+  stderr = new EventEmitter();
+  stdin = {
+    write: vi.fn(),
+    end: vi.fn(),
+  };
+}
+
 let tmpDir: string;
+
+async function makeExecutable(name: string): Promise<string> {
+  const executable = path.join(tmpDir, process.platform === "win32" ? `${name}.cmd` : name);
+  await writeFile(executable, process.platform === "win32" ? "@echo off" : "#!/bin/sh\nexit 0\n", "utf-8");
+  if (process.platform !== "win32") {
+    await chmod(executable, 0o755);
+  }
+  return executable;
+}
 
 beforeEach(async () => {
   tmpDir = await mkdtemp(path.join(os.tmpdir(), "ralph-copilot-"));
+  spawnMock.mockReset();
+  spawnMock.mockImplementation(() => new MockChildProcess());
 });
 
 afterEach(async () => {
   await rm(tmpDir, { recursive: true, force: true });
+  delete process.env.COPILOT_BIN;
+  delete process.env.CURSOR_AGENT_BIN;
+  delete process.env.CLAUDE_BIN;
+  delete process.env.GEMINI_BIN;
+  delete process.env.RALPH_AGENT_BACKEND_OVERRIDE;
 });
 
 describe("resolveCopilotCommand", () => {
@@ -178,5 +212,97 @@ describe("normalizePromptForArgv", () => {
 
   it("leaves normal prompts unchanged", () => {
     expect(normalizePromptForArgv("hello")).toBe("hello");
+  });
+});
+
+describe("LLMCaller.call", () => {
+  it("uses stdin for copilot and includes reasoning effort", async () => {
+    process.env.COPILOT_BIN = await makeExecutable("copilot");
+    const caller = new LLMCaller(() => true);
+
+    const resultPromise = caller.call("hello prompt", "gpt-5-mini", tmpDir, {
+      agentBackend: "copilot",
+      reasoningEffort: "high",
+    });
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
+    const [command, args] = spawnMock.mock.calls[0] as [string, string[]];
+    const proc = spawnMock.mock.results[0].value as MockChildProcess;
+
+    expect(command).toBe(process.env.COPILOT_BIN);
+    expect(args).toEqual([
+      "--model", "gpt-5-mini",
+      "--autopilot", "-s", "--yolo", "--no-color",
+      "--reasoning-effort", "high",
+    ]);
+    expect(proc.stdin.write).toHaveBeenCalledWith("hello prompt");
+
+    proc.stdout.emit("data", Buffer.from("ok"));
+    proc.emit("close", 0);
+    await expect(resultPromise).resolves.toBe("ok");
+  });
+
+  it("passes prompt in argv for cursor-agent and does not write stdin", async () => {
+    process.env.CURSOR_AGENT_BIN = await makeExecutable("cursor-agent");
+    const caller = new LLMCaller(() => true);
+
+    const resultPromise = caller.call("cursor prompt", "gpt-5-mini", tmpDir, {
+      agentBackend: "cursor-agent",
+    });
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
+    const [command, args] = spawnMock.mock.calls[0] as [string, string[]];
+    const proc = spawnMock.mock.results[0].value as MockChildProcess;
+
+    expect(command).toBe(process.env.CURSOR_AGENT_BIN);
+    expect(args).toEqual([
+      "-p", "cursor prompt",
+      "--model", "gpt-5-mini",
+      "--output-format", "text",
+    ]);
+    expect(proc.stdin.write).not.toHaveBeenCalled();
+
+    proc.stdout.emit("data", Buffer.from("ok"));
+    proc.emit("close", 0);
+    await expect(resultPromise).resolves.toBe("ok");
+  });
+
+  it("honors RALPH_AGENT_BACKEND_OVERRIDE over requested backend", async () => {
+    process.env.GEMINI_BIN = await makeExecutable("gemini");
+    process.env.RALPH_AGENT_BACKEND_OVERRIDE = "gemini";
+    const caller = new LLMCaller(() => true);
+
+    const resultPromise = caller.call("gemini prompt", "gemini-2.5-pro", tmpDir, {
+      agentBackend: "copilot",
+    });
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
+    const [command, args] = spawnMock.mock.calls[0] as [string, string[]];
+    const proc = spawnMock.mock.results[0].value as MockChildProcess;
+
+    expect(command).toBe(process.env.GEMINI_BIN);
+    expect(args).toEqual([
+      "-p", "gemini prompt",
+      "-m", "gemini-2.5-pro",
+      "--yolo", "--output-format", "text",
+    ]);
+
+    proc.stdout.emit("data", Buffer.from("ok"));
+    proc.emit("close", 0);
+    await expect(resultPromise).resolves.toBe("ok");
+  });
+
+  it("fails with a clear error for oversized argv prompts", async () => {
+    process.env.CLAUDE_BIN = await makeExecutable("claude");
+    const caller = new LLMCaller(() => true);
+
+    const hugePrompt = "x".repeat(50_000);
+    await expect(
+      caller.call(hugePrompt, "claude-sonnet-4.6", tmpDir, {
+        agentBackend: "claude",
+      }),
+    ).rejects.toThrow("Prompt too large to pass via argv for claude");
+
+    expect(spawnMock).not.toHaveBeenCalled();
   });
 });

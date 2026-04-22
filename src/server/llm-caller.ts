@@ -4,10 +4,11 @@ import { constants } from "fs";
 import { access } from "fs/promises";
 import path from "path";
 
-export type AgentBackendId = "copilot" | "cursor-agent" | "claude" | "gemini";
+export const AGENT_BACKENDS = ["copilot", "cursor-agent", "claude", "gemini"] as const;
+export type AgentBackendId = (typeof AGENT_BACKENDS)[number];
 
 export interface LLMCallOpts {
-  agentBackend?: string;
+  agentBackend?: AgentBackendId;
   reasoningEffort?: string;
 }
 
@@ -22,11 +23,17 @@ export function normalizeAgentBackend(value: string | undefined): AgentBackendId
   return "copilot";
 }
 
-/** Set to `null` to honor UI / ralph settings. Temporary: force Gemini for local CLI testing. */
-const TEST_OVERRIDE_AGENT_BACKEND: AgentBackendId | null = null; // "gemini"; // To test specific agent cli
+function getAgentBackendOverrideFromEnv(): AgentBackendId | null {
+  const override = process.env.RALPH_AGENT_BACKEND_OVERRIDE?.trim();
+  if (!override) {
+    return null;
+  }
+
+  return normalizeAgentBackend(override);
+}
 
 function effectiveAgentBackend(opts: CopilotOpts): AgentBackendId {
-  return TEST_OVERRIDE_AGENT_BACKEND ?? normalizeAgentBackend(opts.agentBackend);
+  return getAgentBackendOverrideFromEnv() ?? normalizeAgentBackend(opts.agentBackend);
 }
 
 /** Avoid argv parsing treating the prompt as a flag when it starts with "-". */
@@ -220,6 +227,19 @@ function backendCliLabel(backend: AgentBackendId): string {
   }
 }
 
+const ARG_PROMPT_MAX_CHARS = 16_000;
+
+function assertPromptFitsArgv(prompt: string, backend: AgentBackendId): void {
+  if (prompt.length <= ARG_PROMPT_MAX_CHARS) {
+    return;
+  }
+
+  throw new Error(
+    `Prompt too large to pass via argv for ${backendCliLabel(backend)} (${prompt.length} chars > ${ARG_PROMPT_MAX_CHARS}).`,
+  );
+}
+
+
 async function resolveCommandForBackend(
   backend: AgentBackendId,
   env: NodeJS.ProcessEnv,
@@ -292,6 +312,7 @@ export class LLMCaller {
             break;
           }
           case "cursor-agent": {
+            assertPromptFitsArgv(prompt, backend);
             args = [
               "-p",
               normalizePromptForArgv(prompt),
@@ -304,6 +325,7 @@ export class LLMCaller {
             break;
           }
           case "claude": {
+            assertPromptFitsArgv(prompt, backend);
             args = [
               "-p",
               normalizePromptForArgv(prompt),
@@ -321,6 +343,7 @@ export class LLMCaller {
             break;
           }
           case "gemini": {
+            assertPromptFitsArgv(prompt, backend);
             args = [
               "-p",
               normalizePromptForArgv(prompt),

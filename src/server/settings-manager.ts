@@ -1,6 +1,7 @@
 // Settings and repository configuration
 import { readFile, writeFile } from "fs/promises";
 import path from "path";
+import { normalizeAgentBackend, type AgentBackendId } from "./llm-caller.js";
 
 export interface Settings {
   maxLLMCalls: number;
@@ -13,7 +14,7 @@ export interface Settings {
   planFrequency: number;
   minBacklogSize: number;
   // Supported values: "copilot" | "cursor-agent" | "claude" | "gemini"
-  agentBackend: string;
+  agentBackend: AgentBackendId;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -42,8 +43,15 @@ export class SettingsManager {
         path.join(this.ralphDir, "settings.json"),
         "utf-8"
       );
-      const parsed = JSON.parse(raw) as Partial<Settings> & { reasoningEffort?: string };
-      const merged = { ...DEFAULT_SETTINGS, ...parsed };
+      const parsed = JSON.parse(raw) as Partial<Omit<Settings, "agentBackend">> & {
+        agentBackend?: string;
+        reasoningEffort?: string;
+      };
+      const merged: Settings = {
+        ...DEFAULT_SETTINGS,
+        ...parsed,
+        agentBackend: normalizeAgentBackend(parsed.agentBackend),
+      };
 
       // Backward compatibility for older settings.json files.
       if (!parsed.devReasoningEffort && parsed.reasoningEffort) {
@@ -63,6 +71,7 @@ export class SettingsManager {
 
   async write(settings: Settings): Promise<void> {
     const normalized = { ...DEFAULT_SETTINGS, ...settings };
+    normalized.agentBackend = normalizeAgentBackend(settings.agentBackend);
     await writeFile(
       path.join(this.ralphDir, "settings.json"),
       JSON.stringify(normalized, null, 2),

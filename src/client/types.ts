@@ -52,6 +52,8 @@ export interface LoopStatus {
   error: string | null;
 }
 
+export type AgentBackendId = "copilot" | "cursor-agent" | "claude" | "gemini";
+
 export interface Settings {
   maxLLMCalls: number;
   planModel: string;
@@ -62,8 +64,7 @@ export interface Settings {
   autoCommit: boolean;
   planFrequency: number;
   minBacklogSize: number;
-  // Supported values: "copilot" | "cursor-agent" | "claude" | "gemini"
-  agentBackend: string;
+  agentBackend: AgentBackendId;
 }
 
 export interface Readiness {
