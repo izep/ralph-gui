@@ -229,6 +229,7 @@ const defaultSettings: Settings = {
   autoCommit: false,
   planFrequency: 1,
   minBacklogSize: 3,
+  agentBackend: "copilot",
 };
 
 const readyState: Readiness = {
