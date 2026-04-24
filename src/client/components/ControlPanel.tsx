@@ -1,5 +1,9 @@
 import { useState, useEffect } from "react";
 import type { Settings, Readiness } from "../types";
+import {
+  DEFAULT_ANIMATION_LAB_UI_PREFS,
+  type AnimationLabUiPrefs,
+} from "../lib/animationLabPrefs";
 import { RepositorySection } from "./RepositorySection";
 import { LoopConfigSection, normalizeAgentBackend } from "./LoopConfigSection";
 import { EpicSection } from "./EpicSection";
@@ -20,6 +24,8 @@ export function ControlPanel({
   onRefreshBacklog,
   isRunning,
   onClose,
+  animationLabPrefs = DEFAULT_ANIMATION_LAB_UI_PREFS,
+  onAnimationLabPrefsChange,
 }: {
   settings: Settings;
   epic: string;
@@ -33,6 +39,8 @@ export function ControlPanel({
   onRefreshBacklog: () => Promise<{ ok: boolean; error?: string }>;
   isRunning: boolean;
   onClose: () => void;
+  animationLabPrefs?: AnimationLabUiPrefs;
+  onAnimationLabPrefsChange?: (prefs: AnimationLabUiPrefs) => void;
 }) {
   const [localSettings, setLocalSettings] = useState<Settings>(settings);
   const [localEpic, setLocalEpic] = useState(epic);
@@ -142,6 +150,31 @@ export function ControlPanel({
         promptSaved={promptSaved}
         onSavePrompt={handleSavePrompt}
       />
+
+      {onAnimationLabPrefsChange && (
+        <section className="control-panel__section">
+          <h3>Board Motion</h3>
+          <p className="cp-hint">
+            Board-only UI. Opt in to the lane test card and column-flight lab under the
+            board. These settings stay in this browser.
+          </p>
+          <fieldset className="cp-fieldset">
+            <label className="cp-field cp-field--row">
+              <input
+                type="checkbox"
+                checked={animationLabPrefs.enabled}
+                onChange={(event) =>
+                  onAnimationLabPrefsChange({
+                    ...animationLabPrefs,
+                    enabled: event.target.checked,
+                  })
+                }
+              />
+              <span>Show lane animation test card and flight lab</span>
+            </label>
+          </fieldset>
+        </section>
+      )}
     </aside>
   );
 }

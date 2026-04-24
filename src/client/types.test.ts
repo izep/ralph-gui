@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { groupTasks } from "./types";
+import { displayColumnForTask, groupTasks } from "./types";
 import type { Task } from "./types";
 
 function makeTask(overrides: Partial<Task> & { id: number }): Task {
@@ -59,5 +59,10 @@ describe("groupTasks", () => {
 
     const groups = groupTasks(tasks);
     expect(groups["done"]).toHaveLength(3);
+  });
+
+  it("maps blocked tasks to the inProgress display column", () => {
+    expect(displayColumnForTask(makeTask({ id: 1, status: "blocked" }))).toBe("inProgress");
+    expect(displayColumnForTask(makeTask({ id: 2, status: "done" }))).toBe("done");
   });
 });

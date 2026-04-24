@@ -2,19 +2,41 @@ import { useState } from "react";
 import type { Task } from "../types";
 import { timeAgo } from "../format";
 
-export function TaskCard({ task }: { task: Task }) {
+export function TaskCard({
+  task,
+  onPrimaryClick,
+  primaryActionLabel = "Next column ->",
+}: {
+  task: Task;
+  onPrimaryClick?: () => void;
+  primaryActionLabel?: string;
+}) {
   const [expanded, setExpanded] = useState(false);
+  const isLab = Boolean(onPrimaryClick);
 
   const isBlocked = task.status === "blocked";
   const blocked = task.blocked;
 
   return (
     <div
-      className={`task-card ${isBlocked ? "task-card--blocked" : ""}`}
-      onClick={() => setExpanded(!expanded)}
+      className={["task-card", isBlocked && "task-card--blocked", isLab && "task-card--board-lab"]
+        .filter(Boolean)
+        .join(" ")}
+      data-task-id={String(task.id)}
+      onClick={() => {
+        if (onPrimaryClick) {
+          onPrimaryClick();
+          return;
+        }
+        setExpanded(!expanded);
+      }}
     >
+      {isLab && (
+        <p className="task-card__lab-kicker">Test harness · lane-to-lane motion</p>
+      )}
       <div className="task-card__header">
         <span className="task-card__id">#{task.id}</span>
+        {isLab && <span className="task-card__badge badge--lab">Lane test</span>}
         {isBlocked && <span className="task-card__badge badge--blocked">BLOCKED</span>}
         {task.devIterations > 0 && (
           <span className="task-card__badge badge--iterations">
@@ -66,7 +88,7 @@ export function TaskCard({ task }: { task: Task }) {
           <span className="task-card__time">{timeAgo(task.updatedAt)}</span>
         )}
         <span className="task-card__expand">
-          {expanded ? "collapse" : "details"}
+          {isLab ? primaryActionLabel : expanded ? "collapse" : "details"}
         </span>
       </div>
     </div>

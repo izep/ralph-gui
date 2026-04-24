@@ -1,0 +1,11 @@
+#!/bin/sh
+
+current_branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null)
+
+if [ "$current_branch" = "main" ]; then
+  echo "Commits to main are blocked in this repository."
+  echo "Create a feature branch before committing."
+  exit 1
+fi
+
+exit 0

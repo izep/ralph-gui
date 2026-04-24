@@ -300,6 +300,15 @@ body {
 }
 
 /* Kanban board */
+.kanban-board-stack {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .kanban-board {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -307,6 +316,94 @@ body {
   background: var(--border);
   flex: 1;
   overflow: hidden;
+  min-height: 0;
+}
+
+.column-flight-lab {
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.column-flight-lab__summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 8px 16px;
+  font-weight: 600;
+  color: var(--text);
+  user-select: none;
+}
+
+.column-flight-lab__summary::-webkit-details-marker {
+  display: none;
+}
+
+.column-flight-lab__summary::before {
+  content: "> ";
+  color: var(--text-muted);
+}
+
+.column-flight-lab[open] .column-flight-lab__summary::before {
+  content: "v ";
+}
+
+.column-flight-lab__body {
+  padding: 0 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.column-flight-lab__hint {
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.column-flight-lab__code {
+  font-family: "SF Mono", "Menlo", monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.column-flight-lab__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.column-flight-lab__btn {
+  font-size: 11px;
+  padding: 4px 10px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.column-flight-lab__btn:hover {
+  background: var(--surface-hover);
+}
+
+.column-flight-lab__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.column-flight-lab__label {
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.column-flight-lab__field input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
 }
 
 /* Column */
@@ -379,6 +476,34 @@ body {
 .kanban-column__body::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 2px;
+}
+
+.task-card--column-flying {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.task-card--board-lab {
+  border: 1px dashed rgba(59, 130, 246, 0.45);
+  background: linear-gradient(145deg, rgba(59, 130, 246, 0.07) 0%, var(--surface) 100%);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.06) inset;
+}
+
+.task-card__lab-kicker {
+  margin: -2px 0 8px;
+  padding: 0 0 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #93c5fd;
+  border-bottom: 1px solid rgba(59, 130, 246, 0.28);
+}
+
+.badge--lab {
+  background: rgba(59, 130, 246, 0.18);
+  color: #93c5fd;
+  border: 1px solid rgba(59, 130, 246, 0.4);
 }
 
 /* Task card */

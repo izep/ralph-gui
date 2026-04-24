@@ -101,6 +101,12 @@ npm install
 npm run dev
 ```
 
+Git workflow note:
+
+- Commits to `main` are blocked by a local `pre-commit` hook.
+- Pushes to `main` are blocked by a local `pre-push` hook.
+- Create a feature branch before committing, then open a pull request to merge back to `main`.
+
 - Backend: `http://localhost:3001`
 - Frontend: Vite dev server
 
