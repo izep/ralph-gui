@@ -1,9 +1,22 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useRalph } from "./hooks/useRalph";
 import { KanbanColumn } from "./components/KanbanColumn";
 import { ControlPanel } from "./components/ControlPanel";
 import { LogViewer } from "./components/LogViewer";
+import { ColumnFlightLabPanel } from "./components/ColumnFlightLabPanel";
+import { useAnimationLabPrefs } from "./hooks/useAnimationLabPrefs";
+import { useTaskColumnFlight } from "./hooks/useTaskColumnFlight";
 import { ErrorBanner } from "./components/ErrorBanner";
+import {
+  buildInitialLabColumnFlightOptions,
+  writeColumnFlightLabToStorage,
+  type ColumnFlightOptions,
+} from "./lib/columnFlight";
+import {
+  ANIMATION_LAB_TASK_ID,
+  makeAnimationLabTask,
+  nextBoardPhaseForLab,
+} from "./lib/animationLab";
 import { COLUMNS, groupTasks } from "./types";
 import "./App.css";
 
@@ -16,12 +29,23 @@ const STATUS_LABELS: Record<string, string> = {
 
 export default function App() {
   const ralph = useRalph();
+  const [animationLabPrefs, setAnimationLabPrefs] = useAnimationLabPrefs();
   const [showSettings, setShowSettings] = useState(false);
   const [showLog, setShowLog] = useState(false);
   const [errorDismissed, setErrorDismissed] = useState(false);
   const [panelWidth, setPanelWidth] = useState(400);
+  const [animationLabTask, setAnimationLabTask] = useState(() => makeAnimationLabTask("backlog"));
+  const [labColumnFlightOptions, setLabColumnFlightOptions] = useState<ColumnFlightOptions>(
+    buildInitialLabColumnFlightOptions
+  );
   const panelWidthRef = useRef(400);
+  const labColumnFlightRef = useRef(labColumnFlightOptions);
   panelWidthRef.current = panelWidth;
+  labColumnFlightRef.current = labColumnFlightOptions;
+
+  useEffect(() => {
+    writeColumnFlightLabToStorage(labColumnFlightOptions);
+  }, [labColumnFlightOptions]);
 
   const startResize = useCallback((e: React.MouseEvent) => {
     const startX = e.clientX;
@@ -39,7 +63,17 @@ export default function App() {
     e.preventDefault();
   }, []);
 
-  const groups = groupTasks(ralph.tasks.tasks);
+  const serverTasksOnly = useMemo(
+    () => ralph.tasks.tasks.filter((task) => task.id !== ANIMATION_LAB_TASK_ID),
+    [ralph.tasks.tasks]
+  );
+  const groups = useMemo(() => groupTasks(serverTasksOnly), [serverTasksOnly]);
+  const animationLabEnabled = animationLabPrefs.enabled;
+  const boardTasks = useMemo(
+    () => (animationLabEnabled ? [animationLabTask, ...serverTasksOnly] : serverTasksOnly),
+    [animationLabEnabled, animationLabTask, serverTasksOnly]
+  );
+  useTaskColumnFlight(boardTasks, labColumnFlightRef);
   const pct =
     ralph.tasks.maxLLMCalls > 0
       ? Math.round((ralph.tasks.totalLLMCalls / ralph.tasks.maxLLMCalls) * 100)
@@ -56,6 +90,16 @@ export default function App() {
     ralph.readiness.epicConfigured;
   const settingsVisible = showSettings || !isReady;
   const canStart = isReady && !isRunning;
+
+  useEffect(() => {
+    if (ralph.loopStatus.error) setErrorDismissed(false);
+  }, [ralph.loopStatus.error]);
+
+  const advanceAnimationLab = () => {
+    setAnimationLabTask((previousTask) =>
+      makeAnimationLabTask(nextBoardPhaseForLab(previousTask.status))
+    );
+  };
 
   function handleRestart() {
     setErrorDismissed(false);
@@ -164,15 +208,31 @@ export default function App() {
       )}
 
       <div className="app-body">
-        <main className="kanban-board">
-          {COLUMNS.map((col) => (
-            <KanbanColumn
-              key={col.key}
-              column={col}
-              tasks={groups[col.key] || []}
+        <div className="kanban-board-stack">
+          <main className="kanban-board">
+            {COLUMNS.map((col) => (
+              <KanbanColumn
+                key={col.key}
+                column={col}
+                tasks={groups[col.key] || []}
+                animationLab={
+                  animationLabEnabled
+                    ? {
+                        task: animationLabTask,
+                        onAdvance: advanceAnimationLab,
+                      }
+                    : undefined
+                }
+              />
+            ))}
+          </main>
+          {animationLabEnabled && (
+            <ColumnFlightLabPanel
+              value={labColumnFlightOptions}
+              onChange={setLabColumnFlightOptions}
             />
-          ))}
-        </main>
+          )}
+        </div>
 
         {settingsVisible && (
           <div className="settings-panel-wrapper" style={{ width: panelWidth }}>
@@ -190,6 +250,8 @@ export default function App() {
               onRefreshBacklog={ralph.refreshBacklog}
               isRunning={isRunning}
               onClose={() => setShowSettings(false)}
+              animationLabPrefs={animationLabPrefs}
+              onAnimationLabPrefsChange={setAnimationLabPrefs}
             />
           </div>
         )}

@@ -7,6 +7,8 @@ import { KanbanColumn } from "./KanbanColumn";
 import { LogViewer } from "./LogViewer";
 import { TaskCard } from "./TaskCard";
 import { ControlPanel } from "./ControlPanel";
+import { makeAnimationLabTask } from "../lib/animationLab";
+import { DEFAULT_ANIMATION_LAB_UI_PREFS } from "../lib/animationLabPrefs";
 import type { Task, ColumnDef, Settings, Readiness } from "../types";
 
 // jsdom does not implement scrollIntoView
@@ -106,6 +108,24 @@ describe("KanbanColumn", () => {
     expect(screen.getByText("Fix the bug")).toBeInTheDocument();
     expect(screen.getByText("Add feature")).toBeInTheDocument();
   });
+
+  it("renders the client animation lab first in Backlog and counts it", () => {
+    const lab = makeAnimationLabTask("backlog");
+    const tasks = [makeTask({ id: 1, title: "Real task" })];
+    const { container } = render(
+      <KanbanColumn
+        column={backlogColumn}
+        tasks={tasks}
+        animationLab={{ task: lab, onAdvance: () => {} }}
+      />
+    );
+
+    expect(screen.getByText("2")).toBeInTheDocument();
+    expect(container.querySelector("[data-ralph-animation-lab]")).toBeInTheDocument();
+    const titles = screen.getAllByRole("heading", { level: 3 });
+    expect(titles[0]).toHaveTextContent("Lane-to-lane animation (click this card)");
+    expect(titles[1]).toHaveTextContent("Real task");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -157,6 +177,13 @@ describe("LogViewer", () => {
 // ---------------------------------------------------------------------------
 
 describe("TaskCard", () => {
+  it("retains task card class hooks used by layout styles", () => {
+    const { container } = render(<TaskCard task={makeTask({ id: 9 })} />);
+    expect(container.querySelector(".task-card")).toBeTruthy();
+    expect(container.querySelector(".task-card__header")).toBeTruthy();
+    expect(container.querySelector(".task-card__footer")).toBeTruthy();
+  });
+
   it("renders task ID and title", () => {
     render(<TaskCard task={makeTask({ id: 42, title: "Fix the bug" })} />);
     expect(screen.getByText("#42")).toBeInTheDocument();
@@ -212,6 +239,23 @@ describe("TaskCard", () => {
     fireEvent.click(screen.getByText("details"));
     expect(screen.getByText("collapse")).toBeInTheDocument();
     expect(screen.getByText("Full description content here")).toBeInTheDocument();
+  });
+
+  it("uses the primary click action when provided for the animation lab card", () => {
+    let advanced = false;
+    render(
+      <TaskCard
+        task={makeAnimationLabTask("backlog")}
+        onPrimaryClick={() => {
+          advanced = true;
+        }}
+      />
+    );
+
+    expect(screen.getByText("Lane test")).toBeInTheDocument();
+    expect(screen.getByText("Next column ->")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Next column ->"));
+    expect(advanced).toBe(true);
   });
 });
 
@@ -331,5 +375,37 @@ describe("ControlPanel", () => {
     );
     const btn = screen.getByText("Refresh Tasks");
     expect(btn).toBeDisabled();
+  });
+
+  it("renders board animation lab toggle and calls onAnimationLabPrefsChange", () => {
+    let nextPrefs = DEFAULT_ANIMATION_LAB_UI_PREFS;
+    render(
+      <ControlPanel
+        settings={defaultSettings}
+        epic=""
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={noop}
+        onSaveEpic={noop}
+        onSavePrompt={noop}
+        onSetRepo={noopResult}
+        onRefreshBacklog={noopResult}
+        isRunning={false}
+        onClose={() => {}}
+        animationLabPrefs={DEFAULT_ANIMATION_LAB_UI_PREFS}
+        onAnimationLabPrefsChange={(prefs) => {
+          nextPrefs = prefs;
+        }}
+      />
+    );
+
+    expect(screen.getByText(/column-flight lab under the board/i)).toBeInTheDocument();
+    const checkbox = screen.getByRole("checkbox", {
+      name: /Show lane animation test card and flight lab/i,
+    }) as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+    fireEvent.click(checkbox);
+    expect(nextPrefs).toEqual({ enabled: true });
   });
 });

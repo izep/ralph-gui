@@ -105,6 +105,11 @@ export function groupTasks(tasks: Task[]): Record<TaskStatusValue, Task[]> {
   return groups;
 }
 
+export function displayColumnForTask(task: Task): TaskStatusValue {
+  if (task.status === "blocked") return "inProgress";
+  return task.status;
+}
+
 export const COLUMNS: ColumnDef[] = [
   {
     key: "backlog",
