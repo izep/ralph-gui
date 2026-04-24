@@ -11,8 +11,7 @@
     "test": "vitest --config config/vitest.config.ts",
     "test:ci": "vitest run --config config/vitest.config.ts",
     "typecheck": "tsc -b config/tsconfig.json --noEmit",
-    "exp": "node scripts/run-experiment.mjs",
-    "prepare": "husky"
+    "exp": "node scripts/run-experiment.mjs"
   },
   "dependencies": {
     "express": "^4.21.0",
@@ -29,7 +28,6 @@
     "@types/ws": "^8.5.13",
     "@vitejs/plugin-react": "^5.2.0",
     "concurrently": "^9.1.0",
-    "husky": "^9.1.7",
     "jsdom": "^29.0.1",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",
