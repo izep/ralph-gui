@@ -4,7 +4,7 @@ import { KanbanColumn } from "./components/KanbanColumn";
 import { ControlPanel } from "./components/ControlPanel";
 import { LogViewer } from "./components/LogViewer";
 import { ErrorBanner } from "./components/ErrorBanner";
-import { COLUMNS, groupTasks } from "./types";
+import { COLUMNS, groupTasks, sortTasks } from "./types";
 import "./App.css";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -169,7 +169,7 @@ export default function App() {
             <KanbanColumn
               key={col.key}
               column={col}
-              tasks={groups[col.key] || []}
+              tasks={sortTasks(groups[col.key] || [], ralph.settings.taskColumnSort)}
             />
           ))}
         </main>

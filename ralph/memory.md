@@ -16,8 +16,8 @@ Keep entries concise and non-obvious. Remove entries that are no longer relevant
 
 ## Gotchas
 
-- Task column display order: `taskColumnSort` is persisted on `Settings` (default `idAsc`). Wiring `sortTasks` into `App.tsx` controls visible row order only; merge-on-read fills the key for older `settings.json` files.
+- Task column display order: `taskColumnSort` is persisted on `Settings` (default `idAsc`). `App.tsx` passes `sortTasks(groups[col.key] || [], settings.taskColumnSort)` into each column so only visible row order changes; merge-on-read fills the key for older `settings.json` files.
 
 - If `npm run typecheck` fails with TS2688 (cannot find type definition file for `node`), install `@types/node` as a devDependency; the root `package.json` may not list it even when `tsconfig` references Node types.
 
-- `docs/epics/epic-sort.md` describes the full Task Column Sort epic (UI select + `sortTasks` helper); until those pieces land, the board still renders tasks in `groupTasks` order even though the setting exists.
+- `sortTasks` lives in `src/client/types.ts`; ISO `updatedAt` ordering uses `localeCompare` (lexicographic order matches chronological order for standard ISO-8601 strings).

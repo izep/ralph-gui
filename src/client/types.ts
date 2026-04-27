@@ -112,6 +112,31 @@ export function groupTasks(tasks: Task[]): Record<TaskStatusValue, Task[]> {
   return groups;
 }
 
+export function sortTasks(tasks: Task[], taskColumnSort: TaskColumnSort): Task[] {
+  const sorted = [...tasks];
+  sorted.sort((a, b) => {
+    switch (taskColumnSort) {
+      case "updatedAtAsc": {
+        const c = a.updatedAt.localeCompare(b.updatedAt);
+        return c !== 0 ? c : a.id - b.id;
+      }
+      case "updatedAtDesc": {
+        const c = b.updatedAt.localeCompare(a.updatedAt);
+        return c !== 0 ? c : b.id - a.id;
+      }
+      case "idAsc":
+        return a.id - b.id;
+      case "idDesc":
+        return b.id - a.id;
+      default: {
+        const _exhaustive: never = taskColumnSort;
+        return _exhaustive;
+      }
+    }
+  });
+  return sorted;
+}
+
 export const COLUMNS: ColumnDef[] = [
   {
     key: "backlog",
