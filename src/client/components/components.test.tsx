@@ -233,6 +233,7 @@ const defaultSettings: Settings = {
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,
+  taskColumnSort: "idAsc",
 };
 
 const readyState: Readiness = {

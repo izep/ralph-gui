@@ -1,0 +1,15 @@
+{
+  "maxLLMCalls": 500,
+  "planModel": "composer-2",
+  "devModel": "auto",
+  "qaModel": "auto",
+  "devReasoningEffort": "xhigh",
+  "qaReasoningEffort": "high",
+  "autoCommit": true,
+  "planFrequency": 5,
+  "minBacklogSize": 3,
+  "agentBackend": "cursor-agent",
+  "epicFile": "docs/epics/epic-sort.md",
+  "requirementsFile": "docs/requirements.md",
+  "pauseAfterPlan": false
+}

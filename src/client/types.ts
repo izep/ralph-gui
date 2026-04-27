@@ -54,6 +54,12 @@ export interface LoopStatus {
 
 export type AgentBackendId = "copilot" | "cursor-agent" | "claude" | "gemini";
 
+export type TaskColumnSort =
+  | "updatedAtAsc"
+  | "updatedAtDesc"
+  | "idAsc"
+  | "idDesc";
+
 export interface Settings {
   maxLLMCalls: number;
   planModel: string;
@@ -68,6 +74,7 @@ export interface Settings {
   epicFile: string;
   requirementsFile: string;
   pauseAfterPlan: boolean;
+  taskColumnSort: TaskColumnSort;
 }
 
 export interface Readiness {
