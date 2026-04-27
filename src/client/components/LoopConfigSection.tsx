@@ -1,4 +1,4 @@
-import type { Settings, AgentBackendId } from "../types";
+import type { Settings, AgentBackendId, TaskColumnSort } from "../types";
 
 export function normalizeAgentBackend(value: string | undefined): AgentBackendId {
   const v = value?.trim().toLowerCase();
@@ -145,6 +145,24 @@ export function LoopConfigSection({
             onChangeSettings({ ...localSettings, minBacklogSize: Number(e.target.value) })
           }
         />
+      </label>
+
+      <label className="cp-field">
+        <span>Task Column Sort</span>
+        <select
+          value={localSettings.taskColumnSort}
+          onChange={(e) =>
+            onChangeSettings({
+              ...localSettings,
+              taskColumnSort: e.target.value as TaskColumnSort,
+            })
+          }
+        >
+          <option value="updatedAtAsc">Last edit (oldest first)</option>
+          <option value="updatedAtDesc">Last edit (newest first)</option>
+          <option value="idAsc">Task id (low to high)</option>
+          <option value="idDesc">Task id (high to low)</option>
+        </select>
       </label>
 
       <label className="cp-field cp-field--row">

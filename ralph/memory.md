@@ -16,8 +16,8 @@ Keep entries concise and non-obvious. Remove entries that are no longer relevant
 
 ## Gotchas
 
-- Task column display order: `taskColumnSort` is persisted on `Settings` (default `idAsc`). `App.tsx` passes `sortTasks(groups[col.key] || [], settings.taskColumnSort)` into each column so only visible row order changes; merge-on-read fills the key for older `settings.json` files.
+- Task column display order: `taskColumnSort` is persisted on `Settings` (default `idAsc`). `LoopConfigSection.tsx` exposes **Task Column Sort**; `App.tsx` passes `sortTasks(groups[col.key] || [], settings.taskColumnSort)` into each column so only visible row order changes; merge-on-read fills the key for older `settings.json` files.
 
-- If `npm run typecheck` fails with TS2688 (cannot find type definition file for `node`), install `@types/node` as a devDependency; the root `package.json` may not list it even when `tsconfig` references Node types.
+- If `npm run typecheck` fails with TS2688 (cannot find type definition file for `node`), ensure `@types/node` is installed (`package.json` lists it in devDependencies; run `npm install` after clone).
 
 - `sortTasks` lives in `src/client/types.ts`; ISO `updatedAt` ordering uses `localeCompare` (lexicographic order matches chronological order for standard ISO-8601 strings).
