@@ -1,0 +1,16 @@
+{
+  "maxLLMCalls": 100,
+  "planModel": "claude-sonnet-4.6",
+  "devModel": "gpt-5-mini",
+  "qaModel": "gpt-5-mini",
+  "devReasoningEffort": "xhigh",
+  "qaReasoningEffort": "high",
+  "autoCommit": false,
+  "planFrequency": 1,
+  "minBacklogSize": 3,
+  "agentBackend": "copilot",
+  "epicFile": "ralph/epic.md",
+  "requirementsFile": "",
+  "pauseAfterPlan": false,
+  "taskColumnSort": "idAsc"
+}
