@@ -16,6 +16,8 @@ export interface Task {
     nextStep: string;
     needs: string;
     capturedAt: string;
+    resolved?: boolean;
+    resolvedAt?: string;
   };
   devIterations: number;
   createdAt: string;

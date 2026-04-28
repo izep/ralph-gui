@@ -4,9 +4,21 @@ import { timeAgo } from "../format";
 
 export function TaskCard({ task }: { task: Task }) {
   const [expanded, setExpanded] = useState(false);
+  const [resolving, setResolving] = useState(false);
 
   const isBlocked = task.status === "blocked";
   const blocked = task.blocked;
+
+  async function handleResolveBlocker(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!e.target.checked) return;
+    setResolving(true);
+    try {
+      await fetch(`/api/tasks/${task.id}/resolve-blocker`, { method: "POST" });
+    } catch (err) {
+      console.error("Failed to resolve blocker:", err);
+      setResolving(false);
+    }
+  }
 
   return (
     <div
@@ -54,6 +66,20 @@ export function TaskCard({ task }: { task: Task }) {
               <strong>Needs:</strong> {blocked.needs}
             </p>
           )}
+          <div
+            className="task-card__resolve"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <label className="task-card__resolve-label">
+              <input
+                type="checkbox"
+                checked={resolving}
+                disabled={resolving}
+                onChange={handleResolveBlocker}
+              />
+              {" Blocker resolved"}
+            </label>
+          </div>
         </div>
       )}
 

@@ -246,3 +246,119 @@ describe("TaskManager.syncBacklogTasksByTitle", () => {
     expect(res.tasks.find((t) => t.title === "Task A")?.id).toBe(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// resolveBlocker
+// ---------------------------------------------------------------------------
+
+describe("TaskManager.resolveBlocker", () => {
+  it("transitions a blocked task to backlog and stamps resolved metadata", async () => {
+    const tm = new TaskManager(tmp);
+    const now = new Date().toISOString();
+    await tm.writeStatus(withFlowState({
+      tasks: [
+        {
+          id: 1, title: "Blocked task", description: "desc", status: "blocked",
+          devIterations: 1, createdAt: now, updatedAt: now,
+          blocked: { summary: "Missing key", impact: "Blocks tests", nextStep: "Add key", needs: "API_KEY", capturedAt: now },
+        },
+        { id: 2, title: "Backlog A", description: "", status: "backlog", devIterations: 0, createdAt: now, updatedAt: now },
+      ],
+      currentTaskNum: 1,
+      totalLLMCalls: 5,
+      maxLLMCalls: 100,
+      lastUpdated: now,
+    }));
+
+    await tm.resolveBlocker(1, 5, 100);
+    const res = await tm.readStatus();
+
+    const task = res.tasks.find((t) => t.id === 1);
+    expect(task?.status).toBe("backlog");
+    expect(task?.blocked?.resolved).toBe(true);
+    expect(task?.blocked?.resolvedAt).toBeDefined();
+    expect(task?.blocked?.summary).toBe("Missing key");
+    expect(task?.blocked?.needs).toBe("API_KEY");
+  });
+
+  it("appends resolved task after last backlog entry (stable ordering)", async () => {
+    const tm = new TaskManager(tmp);
+    const now = new Date().toISOString();
+    await tm.writeStatus(withFlowState({
+      tasks: [
+        {
+          id: 1, title: "Blocked", description: "", status: "blocked",
+          devIterations: 1, createdAt: now, updatedAt: now,
+          blocked: { summary: "s", impact: "i", nextStep: "n", needs: "x", capturedAt: now },
+        },
+        { id: 2, title: "Backlog B", description: "", status: "backlog", devIterations: 0, createdAt: now, updatedAt: now },
+        { id: 3, title: "Backlog C", description: "", status: "backlog", devIterations: 0, createdAt: now, updatedAt: now },
+      ],
+      currentTaskNum: 1,
+      totalLLMCalls: 0,
+      maxLLMCalls: 100,
+      lastUpdated: now,
+    }));
+
+    await tm.resolveBlocker(1, 0, 100);
+    const res = await tm.readStatus();
+
+    const ids = res.tasks.map((t) => t.id);
+    // blocked-1 should come after backlog-2 and backlog-3
+    expect(ids.indexOf(2)).toBeLessThan(ids.indexOf(1));
+    expect(ids.indexOf(3)).toBeLessThan(ids.indexOf(1));
+    expect(res.tasks[res.tasks.length - 1].id).toBe(1);
+  });
+
+  it("places resolved task first when no other backlog tasks exist", async () => {
+    const tm = new TaskManager(tmp);
+    const now = new Date().toISOString();
+    await tm.writeStatus(withFlowState({
+      tasks: [
+        {
+          id: 5, title: "Blocked only", description: "", status: "blocked",
+          devIterations: 0, createdAt: now, updatedAt: now,
+          blocked: { summary: "s", impact: "i", nextStep: "n", needs: "x", capturedAt: now },
+        },
+        { id: 6, title: "Done task", description: "", status: "done", devIterations: 1, createdAt: now, updatedAt: now },
+      ],
+      currentTaskNum: 5,
+      totalLLMCalls: 0,
+      maxLLMCalls: 100,
+      lastUpdated: now,
+    }));
+
+    await tm.resolveBlocker(5, 0, 100);
+    const res = await tm.readStatus();
+    const task = res.tasks.find((t) => t.id === 5);
+    expect(task?.status).toBe("backlog");
+  });
+
+  it("rejects when task is not found", async () => {
+    const tm = new TaskManager(tmp);
+    const now = new Date().toISOString();
+    await tm.writeStatus(withFlowState({
+      tasks: [],
+      currentTaskNum: 0,
+      totalLLMCalls: 0,
+      maxLLMCalls: 100,
+      lastUpdated: now,
+    }));
+    await expect(tm.resolveBlocker(99, 0, 100)).rejects.toThrow("not found");
+  });
+
+  it("rejects when task is not in blocked status", async () => {
+    const tm = new TaskManager(tmp);
+    const now = new Date().toISOString();
+    await tm.writeStatus(withFlowState({
+      tasks: [
+        { id: 1, title: "Backlog task", description: "", status: "backlog", devIterations: 0, createdAt: now, updatedAt: now },
+      ],
+      currentTaskNum: 0,
+      totalLLMCalls: 0,
+      maxLLMCalls: 100,
+      lastUpdated: now,
+    }));
+    await expect(tm.resolveBlocker(1, 0, 100)).rejects.toThrow("not blocked");
+  });
+});

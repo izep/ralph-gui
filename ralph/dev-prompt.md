@@ -8,6 +8,8 @@ If review feedback is included in this prompt, treat it as a continuation: updat
 
 Read `ralph/memory.md` before starting  — accumulated project learnings and conventions; apply them
 
+If the Current Task data includes a previously blocked marker (fields such as `blocked.summary`, `blocked.needs`, `blocked.nextStep`), treat that context as additional background: the blocker has been user-resolved, so proceed with the implementation using the `nextStep` hint if provided.
+
 ## Instructions
 
 1. Understand the full task before making changes.

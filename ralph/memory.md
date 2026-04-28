@@ -21,3 +21,11 @@ Keep entries concise and non-obvious. Remove entries that are no longer relevant
 - If `npm run typecheck` fails with TS2688 (cannot find type definition file for `node`), ensure `@types/node` is installed (`package.json` lists it in devDependencies; run `npm install` after clone).
 
 - `sortTasks` lives in `src/client/types.ts`; ISO `updatedAt` ordering uses `localeCompare` (lexicographic order matches chronological order for standard ISO-8601 strings).
+
+- `groupTasks` in `src/client/types.ts` routes `blocked` tasks into the `inProgress` column (no separate Blocked column). The `COLUMNS` constant only defines four columns (backlog, inProgress, inQa, done).
+
+- `TaskManager.setTaskStatus` automatically deletes `t.blocked` when transitioning away from `blocked` status (line ~152). The upcoming `resolveBlocker` method must preserve blocker metadata by stamping `resolved`/`resolvedAt` before status changes, bypassing that deletion path.
+
+- Server HTTP endpoints live in `src/server/index.ts`; all mutating task endpoints should check `loop.isRunning` and return 409 if the loop is active to prevent race conditions.
+
+- Blocker resolved fields: the `blocked` sub-object includes optional `resolved?: boolean` and `resolvedAt?: string` in both client and server task types. TypeScript typecheck passed after confirming the fields exist and are optional.

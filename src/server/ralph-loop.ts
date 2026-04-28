@@ -635,6 +635,11 @@ export class RalphLoop {
     return this.settingsManager.write(settings);
   }
 
+  async resolveBlocker(taskId: number): Promise<void> {
+    const status = await this.taskManager.readStatus();
+    await this.taskManager.resolveBlocker(taskId, status.totalLLMCalls, status.maxLLMCalls);
+  }
+
   async readStatusFile(): Promise<StatusData> {
     return this.taskManager.readStatus();
   }
