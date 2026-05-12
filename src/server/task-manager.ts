@@ -13,6 +13,8 @@ export interface TaskEntry {
     nextStep: string;
     needs: string;
     capturedAt: string;
+    resolved?: boolean;
+    resolvedAt?: string;
   };
   devIterations: number;
   createdAt: string;
@@ -180,6 +182,46 @@ export class TaskManager {
     }
 
     data.currentTaskNum = taskId;
+    data.totalLLMCalls = totalLLMCalls;
+    data.maxLLMCalls = maxLLMCalls;
+    await this.writeStatus(data);
+  }
+
+  async resolveBlocker(
+    taskId: number,
+    totalLLMCalls: number,
+    maxLLMCalls: number
+  ): Promise<void> {
+    const data = await this.readStatus();
+    const now = new Date().toISOString();
+
+    const task = data.tasks.find((t) => t.id === taskId);
+    if (!task) {
+      throw new Error(`Task ${taskId} not found`);
+    }
+    if (task.status !== "blocked") {
+      throw new Error(`Task ${taskId} is not blocked (status: ${task.status})`);
+    }
+
+    // Stamp resolution metadata before changing status
+    if (task.blocked) {
+      task.blocked.resolved = true;
+      task.blocked.resolvedAt = now;
+    }
+
+    // Remove task from current position
+    data.tasks = data.tasks.filter((t) => t.id !== taskId);
+
+    // Find insertion point: right after the last backlog task
+    let lastBacklogIdx = -1;
+    for (let i = 0; i < data.tasks.length; i++) {
+      if (data.tasks[i].status === "backlog") lastBacklogIdx = i;
+    }
+
+    task.status = "backlog";
+    task.updatedAt = now;
+
+    data.tasks.splice(lastBacklogIdx + 1, 0, task);
     data.totalLLMCalls = totalLLMCalls;
     data.maxLLMCalls = maxLLMCalls;
     await this.writeStatus(data);

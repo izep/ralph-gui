@@ -35,6 +35,7 @@ const DEFAULT_SETTINGS: Settings = {
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,
+  taskColumnSort: "idAsc",
 };
 
 const WS_RECONNECT_DELAY = 3000;

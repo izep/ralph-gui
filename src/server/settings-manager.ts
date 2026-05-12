@@ -3,6 +3,12 @@ import { readFile, writeFile } from "fs/promises";
 import path from "path";
 import { normalizeAgentBackend, type AgentBackendId } from "./llm-caller.js";
 
+export type TaskColumnSort =
+  | "updatedAtAsc"
+  | "updatedAtDesc"
+  | "idAsc"
+  | "idDesc";
+
 export interface Settings {
   maxLLMCalls: number;
   planModel: string;
@@ -20,6 +26,7 @@ export interface Settings {
   // Relative path to the requirements file; empty string means auto-discover
   requirementsFile: string;
   pauseAfterPlan: boolean;
+  taskColumnSort: TaskColumnSort;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -36,6 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,
+  taskColumnSort: "idAsc",
 };
 
 export class SettingsManager {

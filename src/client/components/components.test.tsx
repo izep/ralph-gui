@@ -213,6 +213,40 @@ describe("TaskCard", () => {
     expect(screen.getByText("collapse")).toBeInTheDocument();
     expect(screen.getByText("Full description content here")).toBeInTheDocument();
   });
+
+  it("shows Blocker resolved checkbox for blocked tasks with blocked metadata", () => {
+    render(
+      <TaskCard
+        task={makeTask({
+          id: 3,
+          status: "blocked",
+          blocked: {
+            summary: "Need access",
+            impact: "Blocks CI",
+            nextStep: "Request access",
+            needs: "credentials",
+            capturedAt: "2026-01-01T00:00:00Z",
+          },
+        })}
+      />
+    );
+    expect(screen.getByLabelText(/Blocker resolved/)).toBeInTheDocument();
+  });
+
+  it("does not show Blocker resolved checkbox for non-blocked tasks", () => {
+    render(<TaskCard task={makeTask({ id: 4, status: "backlog" })} />);
+    expect(screen.queryByLabelText(/Blocker resolved/)).not.toBeInTheDocument();
+  });
+
+  it("does not show Blocker resolved checkbox for inProgress tasks", () => {
+    render(<TaskCard task={makeTask({ id: 5, status: "inProgress" })} />);
+    expect(screen.queryByLabelText(/Blocker resolved/)).not.toBeInTheDocument();
+  });
+
+  it("does not show Blocker resolved checkbox for done tasks", () => {
+    render(<TaskCard task={makeTask({ id: 6, status: "done" })} />);
+    expect(screen.queryByLabelText(/Blocker resolved/)).not.toBeInTheDocument();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -233,6 +267,7 @@ const defaultSettings: Settings = {
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,
+  taskColumnSort: "idAsc",
 };
 
 const readyState: Readiness = {

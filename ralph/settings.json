@@ -1,0 +1,15 @@
+{
+  "maxLLMCalls": 500,
+  "planModel": "claude-sonnet-4.6",
+  "devModel": "gpt-5-mini",
+  "qaModel": "gpt-5-mini",
+  "devReasoningEffort": "xhigh",
+  "qaReasoningEffort": "high",
+  "autoCommit": true,
+  "planFrequency": 1,
+  "minBacklogSize": 3,
+  "agentBackend": "copilot",
+  "epicFile": "docs/epics/epic-002-blocked-task-resume.plan.md",
+  "requirementsFile": "docs/requirements.md",
+  "pauseAfterPlan": false
+}

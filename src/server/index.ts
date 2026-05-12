@@ -307,6 +307,26 @@ app.post("/api/backlog/refresh", async (_req, res) => {
   res.json(await activeLoop.refreshBacklog());
 });
 
+// Resolve blocker
+app.post("/api/tasks/:id/resolve-blocker", async (req, res) => {
+  const activeLoop = requireRepoConfigured(res);
+  if (!activeLoop) return;
+  const taskId = parseInt(req.params.id, 10);
+  if (isNaN(taskId)) return res.status(400).json({ ok: false, error: "Invalid task id" });
+  if (activeLoop.isRunning) return res.status(409).json({ ok: false, error: "Cannot resolve blocker while loop is running" });
+  try {
+    await activeLoop.resolveBlocker(taskId);
+    res.json({ ok: true });
+  } catch (err) {
+    const msg = String(err);
+    if (msg.includes("not found") || msg.includes("not blocked")) {
+      res.status(404).json({ ok: false, error: msg });
+    } else {
+      res.status(500).json({ ok: false, error: msg });
+    }
+  }
+});
+
 // --- WebSocket ---
 const server = createServer(app);
 const wss = new WebSocketServer({ server, path: "/ws" });
