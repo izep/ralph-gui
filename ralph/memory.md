@@ -58,3 +58,4 @@ Keep entries concise and non-obvious. Remove entries that are no longer relevant
 Note: keep `applyCopilotFleetPrefix` usage restricted to the `copilot` backend only (defense in depth).
 - Added fleet helpers (FLEET_CAPABLE_BACKENDS, backendSupportsFleetMode, effectiveFleetMode, applyCopilotFleetPrefix), fleetMode in settings/types; typecheck passed.
 - UI: LoopConfigSection now includes a Fleet mode checkbox (persisted via settings); it is disabled when the selected backend is not fleet-capable. Server: ralph-loop forwards settings.fleetMode to LLMCaller for dev and QA calls only.
+- Running `npm test` launches Vitest in watch mode by default in this repo; use `npm run test:ci` for a single-run CI-style test execution or stop the watcher after the run when automating.
