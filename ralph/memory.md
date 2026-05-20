@@ -56,3 +56,4 @@ Keep entries concise and non-obvious. Remove entries that are no longer relevant
 - Ran `npm run typecheck` locally; the TypeScript build passed after these edits.
 
 Note: keep `applyCopilotFleetPrefix` usage restricted to the `copilot` backend only (defense in depth).
+- Added fleet helpers (FLEET_CAPABLE_BACKENDS, backendSupportsFleetMode, effectiveFleetMode, applyCopilotFleetPrefix), fleetMode in settings/types; typecheck passed.
