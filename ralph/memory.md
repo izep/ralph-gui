@@ -83,3 +83,13 @@ Note: keep `applyCopilotFleetPrefix` usage restricted to the `copilot` backend o
 - Remaining gap (task 11): component behavioral tests — DockerSection Set Docker button calling `onValidateDocker`, EpicSection Set button calling `onSetEpicFile`, not-found dialog appearing, Create button calling `onCreateEpicFile`. The existing 28 component tests only cover renders and the fleet checkbox; API-call assertions are missing.
 - Mock prop types already wired in ControlPanel.tsx: `onValidateDocker`, `onMergeEpicWork`, `onSetEpicFile`, `onCreateEpicFile`. Use `vi.fn()` spy variants in the new tests; the `renderPanel` helper passes noop versions; create separate render calls with spy mocks.
 - QA note: Verified component behavioral tests for DockerSection 'Set Docker' and EpicSection 'Set' dialog are present in `src/client/components/components.test.tsx` and pass. Ran `npm run test:ci` — Vitest reported 187 tests passing.
+## 2026-05-20 Plan Survey — agent-model-dropdowns remaining
+
+- `src/shared/` does not exist yet; agent-models catalog is not implemented.
+- LoopConfigSection.tsx still has text inputs for planModel/devModel/qaModel (lines ~85–115).
+- `/models-reference` route is absent from index.ts (confirmed via grep).
+- `docs/coding-agents-available-models.md` exists with 4 sections: Cursor, Claude Code CLI, Gemini CLI, GitHub Copilot CLI.
+- Shared catalog module should NOT import from `src/client/types.ts` to avoid circular deps; duplicate `AgentBackendId` type locally.
+- PREFERRED defaults from doc: copilot→gpt-5.4/gpt-5.4-mini/gpt-5.4-mini; cursor-agent→claude-sonnet-4.6/gpt-5-mini/gpt-5-mini; claude→claude-sonnet-4.6/claude-haiku-4.5/claude-haiku-4.5; gemini→gemini-2.0-auto/gemini-2.0-flash/gemini-2.0-flash.
+- Tasks 12–15 cover: catalog module, LoopConfigSection dropdown UI + link, /models-reference + /api/agent-models routes, and tests.
+- Added shared agent models catalog: src/shared/agent-models.ts (preferred models + helpers).
