@@ -75,3 +75,11 @@ Note: keep `applyCopilotFleetPrefix` usage restricted to the `copilot` backend o
 - git-manager tests use a real temp git repo (`mkdtemp + git init + execSync`) without spawn mocks — cleaner for git integration tests. The `git()` helper uses `execSync` with stdio pipe.
 - docker-runner tests mock `child_process.spawn` via `vi.hoisted`; use `vi.waitFor` to sequence async mock events.
 - All 183 tests pass after changes.
+
+## 2026-05-20 Epic 003 Plan Survey (tasks 4-10 state)
+
+- Tasks 4-10 are fully implemented in the codebase (docker-compose.agents.yml, Dockerfile, docker/README.md, docker-runner.ts, DockerSection.tsx, EpicSection with EpicFileDialog, git-manager extensions, all API endpoints in index.ts, CLI args in cli-args.ts, README Docker/fleet sections).
+- task-status.json shows these as "backlog" because they were implemented outside the loop before it could mark them done. Do NOT re-implement; mark them done and move to the actual remaining gap.
+- Remaining gap (task 11): component behavioral tests — DockerSection Set Docker button calling `onValidateDocker`, EpicSection Set button calling `onSetEpicFile`, not-found dialog appearing, Create button calling `onCreateEpicFile`. The existing 28 component tests only cover renders and the fleet checkbox; API-call assertions are missing.
+- Mock prop types already wired in ControlPanel.tsx: `onValidateDocker`, `onMergeEpicWork`, `onSetEpicFile`, `onCreateEpicFile`. Use `vi.fn()` spy variants in the new tests; the `renderPanel` helper passes noop versions; create separate render calls with spy mocks.
+- QA note: Verified component behavioral tests for DockerSection 'Set Docker' and EpicSection 'Set' dialog are present in `src/client/components/components.test.tsx` and pass. Ran `npm run test:ci` — Vitest reported 187 tests passing.
