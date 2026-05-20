@@ -74,6 +74,12 @@ export interface Settings {
   minBacklogSize: number;
   agentBackend: AgentBackendId;
   fleetMode: boolean;
+  useDocker: boolean;
+  dockerComposeFile: string;
+  dockerService: string;
+  epicBaseBranch: string;
+  dockerWorkBranch: string;
+  dockerIsolateBranch: boolean;
   epicFile: string;
   requirementsFile: string;
   pauseAfterPlan: boolean;
@@ -86,6 +92,8 @@ export interface Readiness {
   requirementsFile: string | null;
   gitBranch: string;
   epicConfigured: boolean;
+  dockerHostOk?: boolean;
+  dockerHostError?: string;
 }
 
 export type ServerMessage =

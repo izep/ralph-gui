@@ -1,0 +1,16 @@
+services:
+  ralph-agent:
+    build:
+      context: ./docker
+    working_dir: /workspace
+    volumes:
+      - ${RALPH_REPO_ROOT:-.}:/workspace
+    environment:
+      - GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME:-Ralph Agent}
+      - GIT_AUTHOR_EMAIL=${GIT_AUTHOR_EMAIL:-ralph@localhost}
+      - GIT_COMMITTER_NAME=${GIT_COMMITTER_NAME:-Ralph Agent}
+      - GIT_COMMITTER_EMAIL=${GIT_COMMITTER_EMAIL:-ralph@localhost}
+    env_file:
+      - path: .env
+        required: false
+    restart: "no"

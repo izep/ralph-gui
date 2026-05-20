@@ -19,6 +19,56 @@ export class GitManager {
     }
   }
 
+  async createOrCheckoutBranch(branchName: string, fromBranch: string): Promise<void> {
+    await this.runGit(["checkout", "-B", branchName, fromBranch]);
+  }
+
+  async mergeWorkBranch(
+    workBranch: string,
+    strategy: "no-ff" | "ff" = "no-ff",
+  ): Promise<{ ok: boolean; conflicts?: string[] }> {
+    const mergeArgs = strategy === "no-ff"
+      ? ["merge", "--no-ff", workBranch]
+      : ["merge", workBranch];
+    try {
+      await this.runGit(mergeArgs);
+      return { ok: true };
+    } catch {
+      // Collect conflict paths
+      try {
+        const statusOut = await this.runGit(["status", "--porcelain"]);
+        const conflicts = statusOut
+          .split("\n")
+          .filter((line) => line.startsWith("UU") || line.startsWith("AA") || line.startsWith("DD"))
+          .map((line) => line.slice(3).trim())
+          .filter(Boolean);
+        return { ok: false, conflicts };
+      } catch {
+        return { ok: false, conflicts: [] };
+      }
+    }
+  }
+
+  async getBranchAheadBehind(
+    base: string,
+    work: string,
+  ): Promise<{ ahead: number; behind: number }> {
+    try {
+      const aheadOut = await this.runGit(["rev-list", "--count", `${base}..${work}`]);
+      const behindOut = await this.runGit(["rev-list", "--count", `${work}..${base}`]);
+      return {
+        ahead: parseInt(aheadOut.trim(), 10) || 0,
+        behind: parseInt(behindOut.trim(), 10) || 0,
+      };
+    } catch {
+      return { ahead: 0, behind: 0 };
+    }
+  }
+
+  async deleteLocalBranch(branch: string): Promise<void> {
+    await this.runGit(["branch", "-d", branch]);
+  }
+
   async autoCommit(taskNum: number, title: string): Promise<void> {
     try {
       await this.runGit(["add", "-A"]);

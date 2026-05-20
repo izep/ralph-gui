@@ -17,6 +17,7 @@ import {
 import { RalphFileManager } from "./ralph-file-manager.js";
 import { SettingsManager, DEFAULT_SETTINGS, type Settings } from "./settings-manager.js";
 import { GitManager } from "./git-manager.js";
+import { checkDockerHost } from "./docker-runner.js";
 
 const DEFAULT_EPIC_NORMALIZED = DEFAULT_EPIC.replace(/\r\n/g, "\n").trim();
 
@@ -137,6 +138,53 @@ export class RalphLoop {
         ok: false,
         error: "No requirements document found. Add a requirements.md to the repo root before starting.",
       };
+    }
+
+    // Docker pre-flight check
+    const settings = await this.settingsManager.read();
+    if (settings.useDocker) {
+      const dockerCheck = await checkDockerHost();
+      if (!dockerCheck.ok) {
+        this.cb.onLog(`[system] Docker check failed: ${dockerCheck.message}`);
+        return { ok: false, error: dockerCheck.message };
+      }
+
+      // Capture epic base branch and optionally create work branch
+      const currentBranch = await this.gitManager.getCurrentBranch();
+      if (!currentBranch || currentBranch === "HEAD") {
+        return {
+          ok: false,
+          error: "Repository is in detached HEAD state. Check out a branch before starting with Docker.",
+        };
+      }
+
+      const epicBaseBranch = currentBranch;
+      let dockerWorkBranch = settings.dockerWorkBranch;
+
+      if (settings.dockerIsolateBranch) {
+        // Generate a deterministic work branch name if not already set
+        if (!dockerWorkBranch || dockerWorkBranch === currentBranch) {
+          const epicSlug = path.basename(settings.epicFile || "epic").replace(/\.[^.]+$/, "");
+          const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+          dockerWorkBranch = `ralph/epic-${epicSlug}-${dateStr}`;
+        }
+        try {
+          await this.gitManager.createOrCheckoutBranch(dockerWorkBranch, epicBaseBranch);
+          this.cb.onLog(`[system] Work branch: ${dockerWorkBranch} (base: ${epicBaseBranch})`);
+        } catch (err) {
+          return {
+            ok: false,
+            error: `Failed to create work branch '${dockerWorkBranch}': ${String(err)}`,
+          };
+        }
+      }
+
+      // Persist captured branch info to settings
+      await this.settingsManager.write({
+        ...settings,
+        epicBaseBranch,
+        dockerWorkBranch: settings.dockerIsolateBranch ? dockerWorkBranch : "",
+      });
     }
 
     const runId = ++this.runGeneration;
@@ -505,6 +553,9 @@ export class RalphLoop {
               agentBackend: s.agentBackend,
               reasoningEffort: s.devReasoningEffort,
               fleetMode: s.fleetMode,
+              useDocker: s.useDocker,
+              dockerComposeFile: s.dockerComposeFile,
+              dockerService: s.dockerService,
             }
           );
         } catch (err) {
@@ -575,6 +626,9 @@ export class RalphLoop {
             agentBackend: s.agentBackend,
             reasoningEffort: s.qaReasoningEffort,
             fleetMode: s.fleetMode,
+            useDocker: s.useDocker,
+            dockerComposeFile: s.dockerComposeFile,
+            dockerService: s.dockerService,
           }
         );
       } catch (err) {

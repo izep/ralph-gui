@@ -4,6 +4,7 @@ import { RepositorySection } from "./RepositorySection";
 import { LoopConfigSection, normalizeAgentBackend } from "./LoopConfigSection";
 import { EpicSection } from "./EpicSection";
 import { PromptsSection } from "./PromptsSection";
+import { DockerSection } from "./DockerSection";
 
 const DEFAULT_PROMPT_KEY = "plan-prompt.md";
 
@@ -18,6 +19,10 @@ export function ControlPanel({
   onSavePrompt,
   onSetRepo,
   onRefreshBacklog,
+  onSetEpicFile,
+  onCreateEpicFile,
+  onValidateDocker,
+  onMergeEpicWork,
   isRunning,
   onClose,
 }: {
@@ -31,6 +36,10 @@ export function ControlPanel({
   onSavePrompt: (name: string, content: string) => Promise<void>;
   onSetRepo: (path: string) => Promise<{ ok: boolean; error?: string }>;
   onRefreshBacklog: () => Promise<{ ok: boolean; error?: string }>;
+  onSetEpicFile: (path: string) => Promise<{ ok: boolean; content?: string; notFound?: boolean }>;
+  onCreateEpicFile: (path: string) => Promise<{ ok: boolean; content?: string }>;
+  onValidateDocker: () => Promise<{ ok: boolean; reason?: string; message?: string }>;
+  onMergeEpicWork: () => Promise<{ ok: boolean; conflicts?: string[]; error?: string }>;
   isRunning: boolean;
   onClose: () => void;
 }) {
@@ -111,6 +120,16 @@ export function ControlPanel({
         onRequirementsFileChange={(v) => setLocalSettings({ ...localSettings, requirementsFile: v })}
       />
 
+      <DockerSection
+        localSettings={localSettings}
+        onChangeSettings={setLocalSettings}
+        readiness={readiness}
+        repoLocked={repoLocked}
+        isRunning={isRunning}
+        onValidateDocker={onValidateDocker}
+        onMergeEpicWork={onMergeEpicWork}
+      />
+
       <LoopConfigSection
         localSettings={localSettings}
         onChangeSettings={setLocalSettings}
@@ -131,6 +150,8 @@ export function ControlPanel({
         onRefreshBacklog={handleRefreshBacklog}
         refreshing={refreshing}
         isRunning={isRunning}
+        onSetEpicFile={onSetEpicFile}
+        onCreateEpicFile={onCreateEpicFile}
       />
 
       <PromptsSection

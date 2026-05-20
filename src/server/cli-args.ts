@@ -48,6 +48,10 @@ export async function applyCliSettingsOverrides(loop: {
     ...(getNumberArg("--min-backlog-size") !== undefined ? { minBacklogSize: getNumberArg("--min-backlog-size")! } : {}),
     ...(getBooleanArg("--auto-commit") !== undefined ? { autoCommit: getBooleanArg("--auto-commit")! } : {}),
     ...(agentBackendOverride ? { agentBackend: agentBackendOverride } : {}),
+    ...(getBooleanArg("--fleet") !== undefined ? { fleetMode: getBooleanArg("--fleet")! } : {}),
+    ...(getBooleanArg("--use-docker") !== undefined ? { useDocker: getBooleanArg("--use-docker")! } : {}),
+    ...(getArg("--docker-compose") ? { dockerComposeFile: getArg("--docker-compose")! } : {}),
+    ...(getArg("--docker-service") ? { dockerService: getArg("--docker-service")! } : {}),
   };
 
   await loop.writeSettings(next);

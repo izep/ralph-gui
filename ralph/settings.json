@@ -12,5 +12,5 @@
   "epicFile": "docs/epics/epic-003-docker-container.plan.md",
   "requirementsFile": "docs/requirements.md",
   "pauseAfterPlan": false,
-  "taskColumnSort": "idAsc"
+  "taskColumnSort": "updatedAtDesc"
 }

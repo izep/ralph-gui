@@ -188,6 +188,10 @@ export default function App() {
               onSavePrompt={ralph.savePrompt}
               onSetRepo={ralph.setRepo}
               onRefreshBacklog={ralph.refreshBacklog}
+              onSetEpicFile={ralph.setEpicFile}
+              onCreateEpicFile={ralph.createEpicFile}
+              onValidateDocker={ralph.validateDocker}
+              onMergeEpicWork={ralph.mergeEpicWork}
               isRunning={isRunning}
               onClose={() => setShowSettings(false)}
             />

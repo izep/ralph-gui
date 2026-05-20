@@ -59,3 +59,19 @@ Note: keep `applyCopilotFleetPrefix` usage restricted to the `copilot` backend o
 - Added fleet helpers (FLEET_CAPABLE_BACKENDS, backendSupportsFleetMode, effectiveFleetMode, applyCopilotFleetPrefix), fleetMode in settings/types; typecheck passed.
 - UI: LoopConfigSection now includes a Fleet mode checkbox (persisted via settings); it is disabled when the selected backend is not fleet-capable. Server: ralph-loop forwards settings.fleetMode to LLMCaller for dev and QA calls only.
 - Running `npm test` launches Vitest in watch mode by default in this repo; use `npm run test:ci` for a single-run CI-style test execution or stop the watcher after the run when automating.
+
+## 2026-05-20 Epic 003 Implementation Notes
+
+- Docker runner (`src/server/docker-runner.ts`): `checkDockerHost()` probes in order: CLI installed (ENOENT/code 127) → daemon running (docker info) → compose available (docker compose version). Each returns a typed `DockerHostCheck` with `reason` + `message`.
+- `resolveComposeFile` uses `PACKAGE_ROOT = path.resolve(__dirname, "../..")` (two levels up from `src/server/`) to find bundled `docker-compose.agents.yml` at repo root.
+- `LLMCallOpts` extended with `useDocker`, `dockerComposeFile`, `dockerService`; when `useDocker` is true, `LLMCaller.call()` wraps the backend spawn with `buildDockerSpawn()` and sets `RALPH_REPO_ROOT` env var.
+- Settings extended with `useDocker`, `dockerComposeFile`, `dockerService`, `epicBaseBranch`, `dockerWorkBranch`, `dockerIsolateBranch`. All three layers (settings-manager.ts, client/types.ts, useRalph.ts fallback) were updated simultaneously.
+- `ralph-loop.start()` checks Docker host and captures/creates epic branch before starting the loop; fails fast with clear error messages for detached HEAD or Docker issues.
+- `GitManager` extended with `createOrCheckoutBranch`, `mergeWorkBranch`, `getBranchAheadBehind`, `deleteLocalBranch`.
+- New API endpoints in index.ts: `POST /api/epic/set-file`, `POST /api/epic/create-file`, `POST /api/docker/validate`, `GET /api/docker/status`, `GET /api/git/branch-status`, `POST /api/git/merge-epic-work`.
+- `buildReadiness()` now includes `dockerHostOk`/`dockerHostError` fields when `settings.useDocker` is true.
+- EpicSection: Set button inline with the Epic File input. When file not found, opens an inline `EpicFileDialog` (not a separate file — the dialog component is defined in the same file for co-location).
+- Modal CSS: `.cp-modal-overlay`, `.cp-modal`, `.cp-modal__title`, `.cp-modal__body`, `.cp-modal__actions` added to App.css.
+- git-manager tests use a real temp git repo (`mkdtemp + git init + execSync`) without spawn mocks — cleaner for git integration tests. The `git()` helper uses `execSync` with stdio pipe.
+- docker-runner tests mock `child_process.spawn` via `vi.hoisted`; use `vi.waitFor` to sequence async mock events.
+- All 183 tests pass after changes.

@@ -12,6 +12,9 @@ vi.mock("child_process", () => ({
 
 import {
   backendSupportsReasoningEffort,
+  backendSupportsFleetMode,
+  effectiveFleetMode,
+  applyCopilotFleetPrefix,
   LLMCaller,
   normalizeAgentBackend,
   normalizePromptForArgv,
@@ -388,5 +391,149 @@ describe("LLMCaller.call", () => {
     ).rejects.toThrow("Prompt too large to pass via argv for claude");
 
     expect(spawnMock).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Fleet helpers
+// ---------------------------------------------------------------------------
+
+describe("backendSupportsFleetMode", () => {
+  it("returns true for copilot", () => {
+    expect(backendSupportsFleetMode("copilot")).toBe(true);
+  });
+  it("returns false for claude", () => {
+    expect(backendSupportsFleetMode("claude")).toBe(false);
+  });
+  it("returns false for cursor-agent", () => {
+    expect(backendSupportsFleetMode("cursor-agent")).toBe(false);
+  });
+  it("returns false for gemini", () => {
+    expect(backendSupportsFleetMode("gemini")).toBe(false);
+  });
+});
+
+describe("effectiveFleetMode", () => {
+  it("returns true when fleetMode true and backend is copilot", () => {
+    expect(effectiveFleetMode(true, "copilot")).toBe(true);
+  });
+  it("returns false when fleetMode false even if backend is copilot", () => {
+    expect(effectiveFleetMode(false, "copilot")).toBe(false);
+  });
+  it("returns false when fleetMode true but backend is claude", () => {
+    expect(effectiveFleetMode(true, "claude")).toBe(false);
+  });
+  it("returns false when fleetMode true but backend is cursor-agent", () => {
+    expect(effectiveFleetMode(true, "cursor-agent")).toBe(false);
+  });
+});
+
+describe("applyCopilotFleetPrefix", () => {
+  it("returns prompt unchanged when disabled", () => {
+    expect(applyCopilotFleetPrefix("my prompt", false)).toBe("my prompt");
+  });
+  it("prepends /fleet when enabled", () => {
+    const result = applyCopilotFleetPrefix("my prompt", true);
+    expect(result).toBe("/fleet\n\nmy prompt");
+  });
+  it("is idempotent when prompt already starts with /fleet", () => {
+    const prompt = "/fleet\n\nmy prompt";
+    expect(applyCopilotFleetPrefix(prompt, true)).toBe(prompt);
+  });
+  it("handles leading whitespace before /fleet", () => {
+    const prompt = "  /fleet\n\nmy prompt";
+    expect(applyCopilotFleetPrefix(prompt, true)).toBe(prompt);
+  });
+});
+
+describe("LLMCaller.call with fleetMode", () => {
+  it("applies /fleet prefix on stdin when copilot + fleetMode true", async () => {
+    process.env.COPILOT_BIN = await makeExecutable("gh");
+    const caller = new LLMCaller(() => true);
+
+    const resultPromise = caller.call("do the work", "gpt-5-mini", tmpDir, {
+      agentBackend: "copilot",
+      fleetMode: true,
+    });
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
+    const proc = spawnMock.mock.results[0].value as MockChildProcess;
+
+    const stdinWrite = proc.stdin.write as ReturnType<typeof vi.fn>;
+    await vi.waitFor(() => expect(stdinWrite).toHaveBeenCalledTimes(1));
+    const written = stdinWrite.mock.calls[0][0] as string;
+    expect(written).toMatch(/^\/fleet/);
+
+    proc.stdout.emit("data", Buffer.from("done"));
+    proc.emit("close", 0);
+    await expect(resultPromise).resolves.toBe("done");
+  });
+
+  it("does NOT apply /fleet prefix when claude + fleetMode true (defense in depth)", async () => {
+    process.env.CLAUDE_BIN = await makeExecutable("claude");
+    const caller = new LLMCaller(() => true);
+
+    const shortPrompt = "short prompt";
+    const resultPromise = caller.call(shortPrompt, "claude-sonnet-4.6", tmpDir, {
+      agentBackend: "claude",
+      fleetMode: true,
+    });
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
+    const [, args] = spawnMock.mock.calls[0] as [string, string[]];
+    // claude uses argv, not stdin — verify /fleet is not in argv
+    expect(args.join(" ")).not.toContain("/fleet");
+
+    const proc = spawnMock.mock.results[0].value as MockChildProcess;
+    proc.stdout.emit("data", Buffer.from("result"));
+    proc.emit("close", 0);
+    await expect(resultPromise).resolves.toBe("result");
+  });
+});
+
+describe("LLMCaller.call with useDocker", () => {
+  it("uses docker compose exec argv when useDocker is true", async () => {
+    process.env.COPILOT_BIN = await makeExecutable("gh");
+    const caller = new LLMCaller(() => true);
+
+    const resultPromise = caller.call("prompt", "gpt-5-mini", tmpDir, {
+      agentBackend: "copilot",
+      useDocker: true,
+      dockerService: "ralph-agent",
+      dockerComposeFile: "",
+    });
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
+    const [cmd, args] = spawnMock.mock.calls[0] as [string, string[]];
+    expect(cmd).toBe("docker");
+    expect(args).toContain("compose");
+    expect(args).toContain("exec");
+    expect(args).toContain("-T");
+    expect(args).toContain("ralph-agent");
+
+    const proc = spawnMock.mock.results[0].value as MockChildProcess;
+    proc.stdout.emit("data", Buffer.from("done"));
+    proc.emit("close", 0);
+    await expect(resultPromise).resolves.toBe("done");
+  });
+
+  it("uses host CLI argv when useDocker is false", async () => {
+    process.env.COPILOT_BIN = await makeExecutable("gh");
+    const caller = new LLMCaller(() => true);
+
+    const resultPromise = caller.call("prompt", "gpt-5-mini", tmpDir, {
+      agentBackend: "copilot",
+      useDocker: false,
+    });
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
+    const [cmd] = spawnMock.mock.calls[0] as [string, string[]];
+    // Should be the resolved 'gh' path, not 'docker'
+    expect(cmd).not.toBe("docker");
+
+    const proc = spawnMock.mock.results[0].value as MockChildProcess;
+    proc.stdout.emit("data", Buffer.from("done"));
+    proc.emit("close", 0);
+    await expect(resultPromise).resolves.toBe("done");
   });
 });

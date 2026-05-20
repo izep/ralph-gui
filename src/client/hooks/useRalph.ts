@@ -33,6 +33,12 @@ const DEFAULT_SETTINGS: Settings = {
   minBacklogSize: 3,
   agentBackend: "copilot",
   fleetMode: false,
+  useDocker: false,
+  dockerComposeFile: "",
+  dockerService: "ralph-agent",
+  epicBaseBranch: "",
+  dockerWorkBranch: "",
+  dockerIsolateBranch: true,
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,
@@ -166,6 +172,34 @@ export function useRalph() {
     return res.json();
   }, []);
 
+  const setEpicFile = useCallback(async (epicFile: string) => {
+    const res = await fetch("/api/epic/set-file", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ epicFile }),
+    });
+    return res.json() as Promise<{ ok: boolean; content?: string; notFound?: boolean; epicFile?: string }>;
+  }, []);
+
+  const createEpicFile = useCallback(async (epicFile: string) => {
+    const res = await fetch("/api/epic/create-file", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ epicFile }),
+    });
+    return res.json() as Promise<{ ok: boolean; content?: string }>;
+  }, []);
+
+  const validateDocker = useCallback(async () => {
+    const res = await fetch("/api/docker/validate", { method: "POST" });
+    return res.json() as Promise<{ ok: boolean; reason?: string; message?: string }>;
+  }, []);
+
+  const mergeEpicWork = useCallback(async () => {
+    const res = await fetch("/api/git/merge-epic-work", { method: "POST" });
+    return res.json() as Promise<{ ok: boolean; conflicts?: string[]; error?: string }>;
+  }, []);
+
   return {
     tasks,
     loopStatus,
@@ -184,5 +218,9 @@ export function useRalph() {
     setRepo,
     savePrompt,
     refreshBacklog,
+    setEpicFile,
+    createEpicFile,
+    validateDocker,
+    mergeEpicWork,
   };
 }

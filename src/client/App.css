@@ -782,3 +782,48 @@ body {
 .control-panel::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); }
 .control-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 .control-panel::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* Modal overlay (used by EpicFileDialog) */
+.cp-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.cp-modal {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  max-width: 400px;
+  width: 90%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cp-modal__title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+.cp-modal__body {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+.cp-modal__body code {
+  background: var(--bg);
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: var(--text);
+  word-break: break-all;
+}
+.cp-modal__actions {
+  display: flex;
+  gap: 8px;
+  flex-direction: column;
+}

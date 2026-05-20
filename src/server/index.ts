@@ -6,6 +6,8 @@ import { fileURLToPath } from "url";
 import { RalphLoop } from "./ralph-loop.js";
 import { DEFAULT_SETTINGS } from "./templates.js";
 import { getArg, hasFlag, applyCliSettingsOverrides } from "./cli-args.js";
+import { checkDockerHost, resolveComposeFile } from "./docker-runner.js";
+import { GitManager } from "./git-manager.js";
 
 // --- CLI args ---
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -60,10 +62,20 @@ async function buildReadiness() {
   let requirementsFile: string | null = null;
   let gitBranch = "";
   let epicConfigured = false;
+  let dockerHostOk: boolean | undefined;
+  let dockerHostError: string | undefined;
   if (loop) {
     requirementsFile = await loop.checkRequirements();
     gitBranch = await loop.getCurrentBranch();
     epicConfigured = await loop.isEpicConfigured();
+    const settings = await loop.readSettings();
+    if (settings.useDocker) {
+      const dockerCheck = await checkDockerHost();
+      dockerHostOk = dockerCheck.ok;
+      if (!dockerCheck.ok) {
+        dockerHostError = dockerCheck.message;
+      }
+    }
   }
   return {
     repoConfigured,
@@ -71,6 +83,7 @@ async function buildReadiness() {
     requirementsFile,
     gitBranch,
     epicConfigured,
+    ...(dockerHostOk !== undefined ? { dockerHostOk, dockerHostError } : {}),
   };
 }
 
@@ -324,6 +337,143 @@ app.post("/api/tasks/:id/resolve-blocker", async (req, res) => {
     } else {
       res.status(500).json({ ok: false, error: msg });
     }
+  }
+});
+
+// Epic file set and create
+app.post("/api/epic/set-file", async (req, res) => {
+  const activeLoop = requireRepoConfigured(res);
+  if (!activeLoop) return;
+  const { epicFile } = req.body;
+  if (!epicFile || typeof epicFile !== "string") {
+    return res.status(400).json({ ok: false, error: "epicFile is required" });
+  }
+  const trimmed = epicFile.trim();
+  // Reject path traversal outside repo root
+  const resolved = path.resolve(activeLoop.repoRoot, trimmed);
+  if (!resolved.startsWith(activeLoop.repoRoot + path.sep) && resolved !== activeLoop.repoRoot) {
+    return res.status(400).json({ ok: false, error: "Path traversal not allowed" });
+  }
+  try {
+    const { readFile: rf } = await import("fs/promises");
+    const content = await rf(resolved, "utf-8");
+    const settings = await activeLoop.readSettings();
+    await activeLoop.writeSettings({ ...settings, epicFile: trimmed });
+    broadcast(JSON.stringify({ type: "epic", data: content }));
+    const readiness = await buildReadiness();
+    broadcast(JSON.stringify({ type: "readiness", data: readiness }));
+    res.json({ ok: true, content, created: false });
+  } catch (err: unknown) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") {
+      return res.json({ ok: false, notFound: true, epicFile: trimmed });
+    }
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.post("/api/epic/create-file", async (req, res) => {
+  const activeLoop = requireRepoConfigured(res);
+  if (!activeLoop) return;
+  const { epicFile } = req.body;
+  if (!epicFile || typeof epicFile !== "string") {
+    return res.status(400).json({ ok: false, error: "epicFile is required" });
+  }
+  const trimmed = epicFile.trim();
+  const resolved = path.resolve(activeLoop.repoRoot, trimmed);
+  if (!resolved.startsWith(activeLoop.repoRoot + path.sep) && resolved !== activeLoop.repoRoot) {
+    return res.status(400).json({ ok: false, error: "Path traversal not allowed" });
+  }
+  try {
+    const { mkdir: mkdirFs, writeFile: wf } = await import("fs/promises");
+    await mkdirFs(path.dirname(resolved), { recursive: true });
+    const { DEFAULT_EPIC } = await import("./templates.js");
+    await wf(resolved, DEFAULT_EPIC, "utf-8");
+    const settings = await activeLoop.readSettings();
+    await activeLoop.writeSettings({ ...settings, epicFile: trimmed });
+    broadcast(JSON.stringify({ type: "epic", data: DEFAULT_EPIC }));
+    const readiness = await buildReadiness();
+    broadcast(JSON.stringify({ type: "readiness", data: readiness }));
+    res.json({ ok: true, content: DEFAULT_EPIC, created: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+// Docker validate and status
+app.post("/api/docker/validate", async (_req, res) => {
+  const activeLoop = requireRepoConfigured(res);
+  if (!activeLoop) return;
+  const hostCheck = await checkDockerHost();
+  if (!hostCheck.ok) {
+    return res.json(hostCheck);
+  }
+  try {
+    const settings = await activeLoop.readSettings();
+    const composeFile = resolveComposeFile(
+      { dockerComposeFile: settings.dockerComposeFile },
+      activeLoop.repoRoot,
+    );
+    // Verify compose file resolves (exists on disk)
+    const { access: accessFs, constants: fsConstants } = await import("fs");
+    await new Promise<void>((resolve, reject) => {
+      accessFs(composeFile, fsConstants.R_OK, (err) => {
+        if (err) reject(new Error(`Compose file not found: ${composeFile}`));
+        else resolve();
+      });
+    });
+    res.json({ ok: true, composeFile });
+  } catch (err) {
+    res.json({ ok: false, reason: "compose_missing", message: String(err) });
+  }
+});
+
+app.get("/api/docker/status", async (_req, res) => {
+  const hostCheck = await checkDockerHost();
+  res.json(hostCheck);
+});
+
+// Git branch status and merge-back
+app.get("/api/git/branch-status", async (_req, res) => {
+  const activeLoop = requireRepoConfigured(res);
+  if (!activeLoop) return;
+  try {
+    const settings = await activeLoop.readSettings();
+    const gitManager = new GitManager(activeLoop.repoRoot);
+    const { epicBaseBranch, dockerWorkBranch } = settings;
+    let ahead = 0;
+    let behind = 0;
+    if (epicBaseBranch && dockerWorkBranch) {
+      const ab = await gitManager.getBranchAheadBehind(epicBaseBranch, dockerWorkBranch);
+      ahead = ab.ahead;
+      behind = ab.behind;
+    }
+    res.json({ epicBaseBranch, dockerWorkBranch, ahead, behind });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
+
+app.post("/api/git/merge-epic-work", async (_req, res) => {
+  const activeLoop = requireRepoConfigured(res);
+  if (!activeLoop) return;
+  if (activeLoop.isRunning) return res.status(409).json({ ok: false, error: "Cannot merge while loop is running" });
+  try {
+    const settings = await activeLoop.readSettings();
+    const { epicBaseBranch, dockerWorkBranch } = settings;
+    if (!epicBaseBranch || !dockerWorkBranch) {
+      return res.status(400).json({ ok: false, error: "epicBaseBranch and dockerWorkBranch must be set in settings" });
+    }
+    const gitManager = new GitManager(activeLoop.repoRoot);
+    // Checkout base branch
+    await gitManager.createOrCheckoutBranch(epicBaseBranch, epicBaseBranch);
+    const mergeResult = await gitManager.mergeWorkBranch(dockerWorkBranch);
+    if (!mergeResult.ok) {
+      return res.json({ ok: false, conflicts: mergeResult.conflicts ?? [] });
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) });
   }
 });
 

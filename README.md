@@ -147,6 +147,67 @@ Behavior:
 
 Use `./start.sh --help` for options.
 
+## Fleet Mode (Copilot only)
+
+Fleet mode prefixes the dev and QA prompts with `/fleet` before sending them via stdin to the Copilot CLI. This enables parallel subagent execution for tasks that benefit from it.
+
+- **Default: off.** Enable in Settings → Loop Configuration → Fleet mode.
+- Only available when `agentBackend` is `copilot`. The checkbox is grayed out for other backends.
+- Fleet mode is **not** applied to the planning phase.
+- May increase premium request usage; see GitHub Copilot billing documentation.
+
+CLI flag: `--fleet true|false`
+
+## Docker Agent Execution
+
+Ralph can run coding agents inside a Docker container with the target repository bind-mounted to `/workspace`. This is useful for isolation, reproducibility, and controlled toolchain environments.
+
+### Prerequisites
+
+- Docker Engine or Docker Desktop + Compose plugin installed and running
+- The agent CLI you want to use installed inside the container (see [`docker/README.md`](docker/README.md))
+
+### Quick start
+
+```bash
+# Start the bundled ralph-agent container (from ralph-gui root)
+docker compose -f docker-compose.agents.yml up -d
+```
+
+### Settings
+
+Enable **Run agents in Docker** in Settings → Docker Agents. Configure:
+
+| Setting | Purpose |
+|---------|---------|
+| Compose File | Path to docker-compose file (blank = bundled `docker-compose.agents.yml`) |
+| Service Name | Compose service to exec into (default: `ralph-agent`) |
+| Isolate on work branch | Create a `ralph/epic-*` branch so agent commits are isolated from your base branch |
+
+Click **Set Docker** to validate. Ralph will check the Docker daemon is running and the compose file resolves.
+
+### Branch workflow
+
+When `useDocker` + `dockerIsolateBranch` is enabled:
+
+1. At loop start, the current branch is saved as **Epic Base Branch**.
+2. A work branch `ralph/epic-<slug>` is created from the base branch.
+3. All agent commits land on the work branch (host and container share the same `.git`).
+4. Click **Merge work into epic branch** in the Docker section to merge back.
+
+### CLI flags
+
+```bash
+./start.sh \
+  --use-docker true \
+  --docker-service ralph-agent \
+  --docker-compose path/to/compose.yml   # optional, relative to repo root
+```
+
+### Not installed vs daemon stopped
+
+Ralph distinguishes between "Docker not installed" and "Docker daemon not running" and surfaces distinct error messages for each case.
+
 ## Settings Defaults
 
 Default loop settings are:
@@ -161,8 +222,11 @@ Default loop settings are:
 - `planFrequency: 1`
 - `minBacklogSize: 3`
 - `agentBackend: copilot`
+- `fleetMode: false`
+- `useDocker: false`
+- `dockerService: ralph-agent`
 
-Use your selected CLI’s help output for supported models (for example `copilot --help`, `claude --help`, `cursor-agent --help`, or `gemini --help`).
+Use your selected CLI's help output for supported models (for example `copilot --help`, `claude --help`, `cursor-agent --help`, or `gemini --help`).
 
 ## Required Requirements File
 

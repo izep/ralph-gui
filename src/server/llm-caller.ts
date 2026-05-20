@@ -3,6 +3,8 @@ import { spawn, type ChildProcess } from "child_process";
 import { constants } from "fs";
 import { access } from "fs/promises";
 import path from "path";
+import { buildDockerSpawn, resolveComposeFile } from "./docker-runner.js";
+import type { Settings } from "./settings-manager.js";
 
 export const AGENT_BACKENDS = ["copilot", "cursor-agent", "claude", "gemini"] as const;
 export type AgentBackendId = (typeof AGENT_BACKENDS)[number];
@@ -27,6 +29,10 @@ export interface LLMCallOpts {
   agentBackend?: AgentBackendId;
   reasoningEffort?: string;
   fleetMode?: boolean;
+  useDocker?: boolean;
+  dockerComposeFile?: string;
+  dockerService?: string;
+  repoRoot?: string;
 }
 
 /** @deprecated Use LLMCallOpts instead */
@@ -384,10 +390,33 @@ export class LLMCaller {
           }
         }
 
-        const proc = spawn(command, args, {
-          cwd: repoRoot,
-          shell: shouldUseShellForCommand(command),
+        let spawnCmd: string;
+        let spawnArgs: string[];
+        let spawnCwd: string;
+
+        if (opts.useDocker) {
+          const dummySettings: Pick<Settings, "dockerComposeFile"> = {
+            dockerComposeFile: opts.dockerComposeFile ?? "",
+          };
+          const composeFile = resolveComposeFile(dummySettings, repoRoot);
+          const service = opts.dockerService ?? "ralph-agent";
+          const spec = buildDockerSpawn(composeFile, service, command, args);
+          spawnCmd = spec.cmd;
+          spawnArgs = spec.args;
+          spawnCwd = repoRoot;
+        } else {
+          spawnCmd = command;
+          spawnArgs = args;
+          spawnCwd = repoRoot;
+        }
+
+        const proc = spawn(spawnCmd, spawnArgs, {
+          cwd: spawnCwd,
+          shell: opts.useDocker ? false : shouldUseShellForCommand(command),
           stdio: ["pipe", "pipe", "pipe"],
+          env: opts.useDocker
+            ? { ...process.env, RALPH_REPO_ROOT: repoRoot }
+            : process.env,
         });
         this.currentProcess = proc;
 

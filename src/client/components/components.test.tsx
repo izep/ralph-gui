@@ -265,6 +265,12 @@ const defaultSettings: Settings = {
   minBacklogSize: 3,
   agentBackend: "copilot",
   fleetMode: false,
+  useDocker: false,
+  dockerComposeFile: "",
+  dockerService: "ralph-agent",
+  epicBaseBranch: "",
+  dockerWorkBranch: "",
+  dockerIsolateBranch: true,
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,
@@ -282,9 +288,12 @@ const readyState: Readiness = {
 describe("ControlPanel", () => {
   const noop = async () => {};
   const noopResult = async () => ({ ok: true });
+  const noopContent = async () => ({ ok: true, content: "" });
+  const noopDocker = async () => ({ ok: true });
+  const noopMerge = async () => ({ ok: true });
 
-  it("renders settings header and section titles", () => {
-    render(
+  function renderPanel(isRunning = false) {
+    return render(
       <ControlPanel
         settings={defaultSettings}
         epic=""
@@ -296,10 +305,18 @@ describe("ControlPanel", () => {
         onSavePrompt={noop}
         onSetRepo={noopResult}
         onRefreshBacklog={noopResult}
-        isRunning={false}
+        onSetEpicFile={noopContent}
+        onCreateEpicFile={noopContent}
+        onValidateDocker={noopDocker}
+        onMergeEpicWork={noopMerge}
+        isRunning={isRunning}
         onClose={() => {}}
       />
     );
+  }
+
+  it("renders settings header and section titles", () => {
+    renderPanel();
     expect(screen.getByText("Settings")).toBeInTheDocument();
     expect(screen.getByText("Repository")).toBeInTheDocument();
     expect(screen.getByText("Loop Configuration")).toBeInTheDocument();
@@ -308,50 +325,31 @@ describe("ControlPanel", () => {
   });
 
   it("shows git branch when available", () => {
-    render(
-      <ControlPanel
-        settings={defaultSettings}
-        epic=""
-        prompts={{}}
-        repoRoot="/test/repo"
-        readiness={readyState}
-        onSaveSettings={noop}
-        onSaveEpic={noop}
-        onSavePrompt={noop}
-        onSetRepo={noopResult}
-        onRefreshBacklog={noopResult}
-        isRunning={false}
-        onClose={() => {}}
-      />
-    );
+    renderPanel();
     expect(screen.getByText("main")).toBeInTheDocument();
   });
 
   it("shows close button when repo is configured", () => {
-    render(
-      <ControlPanel
-        settings={defaultSettings}
-        epic=""
-        prompts={{}}
-        repoRoot="/test/repo"
-        readiness={readyState}
-        onSaveSettings={noop}
-        onSaveEpic={noop}
-        onSavePrompt={noop}
-        onSetRepo={noopResult}
-        onRefreshBacklog={noopResult}
-        isRunning={false}
-        onClose={() => {}}
-      />
-    );
+    renderPanel();
     // Close button uses × character
     expect(screen.getAllByText("×").length).toBeGreaterThan(0);
   });
 
   it("disables Refresh Backlog when running", () => {
+    renderPanel(true);
+    const btn = screen.getByText("Refresh Tasks");
+    expect(btn).toBeDisabled();
+  });
+
+  it("renders Docker Agents section", () => {
+    renderPanel();
+    expect(screen.getByText("Docker Agents")).toBeInTheDocument();
+  });
+
+  it("fleet checkbox disabled when agent backend is not copilot", () => {
     render(
       <ControlPanel
-        settings={defaultSettings}
+        settings={{ ...defaultSettings, agentBackend: "claude" }}
         epic=""
         prompts={{}}
         repoRoot="/test/repo"
@@ -361,11 +359,28 @@ describe("ControlPanel", () => {
         onSavePrompt={noop}
         onSetRepo={noopResult}
         onRefreshBacklog={noopResult}
-        isRunning={true}
+        onSetEpicFile={noopContent}
+        onCreateEpicFile={noopContent}
+        onValidateDocker={noopDocker}
+        onMergeEpicWork={noopMerge}
+        isRunning={false}
         onClose={() => {}}
       />
     );
-    const btn = screen.getByText("Refresh Tasks");
-    expect(btn).toBeDisabled();
+    const checkbox = screen.getByRole("checkbox", { name: /fleet mode/i });
+    expect(checkbox).toBeDisabled();
+  });
+
+  it("fleet checkbox enabled when agent backend is copilot", () => {
+    renderPanel();
+    const checkbox = screen.getByRole("checkbox", { name: /fleet mode/i });
+    expect(checkbox).not.toBeDisabled();
+  });
+
+  it("Epic Set button is present", () => {
+    renderPanel();
+    // There should be a Set button in the Epic File row
+    const setButtons = screen.getAllByText("Set");
+    expect(setButtons.length).toBeGreaterThan(0);
   });
 });

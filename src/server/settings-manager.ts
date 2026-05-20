@@ -21,8 +21,16 @@ export interface Settings {
   minBacklogSize: number;
   // Supported values: "copilot" | "cursor-agent" | "claude" | "gemini"
   agentBackend: AgentBackendId;
-  // Enable running agents in Docker containers (UI persists even if backend cannot use fleet)
+  // Enable fleet mode (persisted even if backend is not fleet-capable; UI grays it out)
   fleetMode: boolean;
+  // Docker agent execution
+  useDocker: boolean;
+  dockerComposeFile: string;
+  dockerService: string;
+  // Git branch metadata captured at loop start when useDocker is true
+  epicBaseBranch: string;
+  dockerWorkBranch: string;
+  dockerIsolateBranch: boolean;
   // Relative path to the epic file from the repo root (default: "ralph/epic.md")
   epicFile: string;
   // Relative path to the requirements file; empty string means auto-discover
@@ -43,6 +51,12 @@ export const DEFAULT_SETTINGS: Settings = {
   minBacklogSize: 3,
   agentBackend: "copilot",
   fleetMode: false,
+  useDocker: false,
+  dockerComposeFile: "",
+  dockerService: "ralph-agent",
+  epicBaseBranch: "",
+  dockerWorkBranch: "",
+  dockerIsolateBranch: true,
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,
