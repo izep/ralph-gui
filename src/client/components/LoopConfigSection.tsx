@@ -8,6 +8,12 @@ export function normalizeAgentBackend(value: string | undefined): AgentBackendId
   return "copilot";
 }
 
+export const FLEET_CAPABLE_BACKENDS = ["copilot"] as const satisfies readonly AgentBackendId[];
+
+export function backendSupportsFleetMode(backend: AgentBackendId): boolean {
+  return (FLEET_CAPABLE_BACKENDS as readonly string[]).includes(backend);
+}
+
 export function LoopConfigSection({
   localSettings,
   onChangeSettings,
@@ -44,6 +50,23 @@ export function LoopConfigSection({
           <option value="gemini">Google Gemini CLI</option>
         </select>
       </label>
+
+      <label className="cp-field cp-field--row">
+        <input
+          type="checkbox"
+          checked={localSettings.fleetMode}
+          disabled={!backendSupportsFleetMode(localSettings.agentBackend)}
+          onChange={(e) =>
+            onChangeSettings({ ...localSettings, fleetMode: e.target.checked })
+          }
+        />
+        <span>Fleet mode</span>
+      </label>
+      {!backendSupportsFleetMode(localSettings.agentBackend) ? (
+        <p className="cp-hint">Only available for agents that support parallel subagents (currently GitHub Copilot CLI).</p>
+      ) : (
+        <p className="cp-hint">Uses Copilot /fleet on dev/QA; may increase premium request usage.</p>
+      )}
 
       <label className="cp-field">
         <span>Max LLM Calls</span>

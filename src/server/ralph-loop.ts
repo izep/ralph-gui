@@ -504,6 +504,7 @@ export class RalphLoop {
             {
               agentBackend: s.agentBackend,
               reasoningEffort: s.devReasoningEffort,
+              fleetMode: s.fleetMode,
             }
           );
         } catch (err) {
@@ -573,6 +574,7 @@ export class RalphLoop {
           {
             agentBackend: s.agentBackend,
             reasoningEffort: s.qaReasoningEffort,
+            fleetMode: s.fleetMode,
           }
         );
       } catch (err) {
