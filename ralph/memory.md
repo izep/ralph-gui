@@ -87,7 +87,7 @@ Note: keep `applyCopilotFleetPrefix` usage restricted to the `copilot` backend o
 
 - **`src/shared/agent-models.ts` exists** (Task 12 core deliverable). Catalog has all backend IDs + `preferredFor` + helpers; strength/tier/multiplier/yolo/fleet are empty strings — **valid for v1** (metrics live in `docs/coding-agents-available-models.md`).
 - **Task 12 thrashing:** 32+ dev iterations because (a) dev re-ran “create file” without checking disk, (b) dev output lacked `<status>done</status>`, (c) task spec implied full markdown metadata in TS, (d) no `agent-models.test.ts` for QA to latch onto. **Fix:** verify-or-create + add tests + see revised Task 12 in `docs/epics/epic-003-docker-container.plan.md` and `ralph/epic.md`.
-- LoopConfigSection.tsx still has text inputs for planModel/devModel/qaModel — **Task 13**.
+- LoopConfigSection.tsx now uses AGENT_MODEL_CATALOG dropdowns with a Custom option and a 'View models' link; preferred defaults auto-applied on backend change.
 - `/models-reference` route absent from index.ts — **Task 14**.
 - `docs/coding-agents-available-models.md` exists with 4 platform sections.
 - Shared catalog must NOT import `src/client/types.ts`; duplicate `AgentBackendId` locally (already done in agent-models.ts).
