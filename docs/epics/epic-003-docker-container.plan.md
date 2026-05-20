@@ -1,7 +1,10 @@
 ---
 name: Epic 003 — Docker agents, Copilot fleet, Epic Set
-overview: Add fleet mode (capability-gated, grayed UI when unsupported) for dev/QA on Copilot, optional Docker agent execution (bundled compose + per-repo override), and Epic File Set load/create flow.
+overview: Fleet mode, Docker agents + git merge-back, Epic Set, and per-platform model dropdowns with preferred defaults plus an HTML models reference popup from the coding-agents catalog.
 todos:
+  - id: agent-model-dropdowns
+    content: Copy docs/coding-agents-available-models.md, derive catalog TS, plan/dev/qa dropdowns, preferred defaults, models reference HTML popup
+    status: pending
   - id: fleet-settings
     content: Add fleetMode setting, FLEET_CAPABLE_BACKENDS + effectiveFleetMode guard, grayed-out UI checkbox, prefix helper + dev/QA wiring
     status: pending
@@ -18,7 +21,7 @@ todos:
     content: Epic path Set button, EpicFileDialog, POST set-file/create-file APIs, useRalph + ControlPanel handlers
     status: pending
   - id: tests-docs
-    content: Extend llm-caller/ralph-loop/component tests; document fleet + docker in README
+    content: Tests for fleet/docker/epic/models; README documents Docker, fleet, model catalog, and reference link
     status: pending
 isProject: false
 ---
@@ -32,6 +35,7 @@ isProject: false
 1. Add **fleet mode** as a persisted option (grayed out when the selected agent cannot use it); honor it on **dev and QA** only for fleet-capable backends (v1: Copilot CLI `/fleet`).
 2. Send agent work to a **Docker container** (image preinstalls **Node, npm, pnpm, git**) so the selected coding agent CLI runs inside the container, with work **merged back** to the git branch in use when the epic loop started.
 3. Add a **Set** button beside the Epic File path field to load epic content from disk or offer to create the file from the default template.
+4. Replace free-text **Plan / Dev / QA model** fields with **dropdowns** scoped to the selected agent platform, **preselect preferred models** per platform, and provide a **link** that opens an HTML reference page listing all models and table metrics for that platform.
 
 ## Decisions (locked in)
 
@@ -46,6 +50,8 @@ isProject: false
 | Epic git branches | Capture **epic base branch** at loop start; optional **work branch** for isolated commits; user-triggered **merge into epic base branch** when done |
 | Container toolchain | Preinstall **git**, **Node LTS**, **npm** (with Node), **pnpm** (via Corepack) so agents can run installs, scripts, and git inside the container |
 | Docker host checks | When `useDocker` is enabled, detect **Docker CLI missing** vs **daemon not running** and surface distinct error messages before validate/loop start |
+| Model selection UI | Plan/Dev/QA models are **`<select>` dropdowns** filtered by `agentBackend`; defaults come from **Preferred For** column in the models catalog; optional **Custom** entry for manual ID |
+| Models reference doc | Living markdown in [`docs/coding-agents-available-models.md`](../../docs/coding-agents-available-models.md) (copied from WTW attachment); update this file when vendors ship new models; TS catalog + HTML popup stay aligned |
 
 ## Current state
 
@@ -53,6 +59,7 @@ isProject: false
 - **Fleet** is not implemented; upstream Copilot exposes `/fleet` as an interactive slash command (no `--fleet` CLI flag). Non-interactive use prefixes the prompt with `/fleet` before stdin.
 - **Docker** does not exist on branch `docker-dev` yet; agents always run on the host.
 - **Epic** uses path (`settings.epicFile`) + content ([`EpicSection.tsx`](../../src/client/components/EpicSection.tsx)). Path changes only persist via **Save Settings**; no load/create-on-set flow.
+- **Models** are free-text inputs in [`LoopConfigSection.tsx`](../../src/client/components/LoopConfigSection.tsx) (`planModel`, `devModel`, `qaModel`) with static defaults in [`settings-manager.ts`](../../src/server/settings-manager.ts); no per-platform catalog or reference UI.
 
 ```mermaid
 flowchart TB
@@ -409,6 +416,153 @@ Do not use `window.confirm` (testability + styling).
 
 ---
 
+## 4. Agent model dropdowns and reference catalog
+
+### Reference markdown in `docs/` (maintained over time)
+
+**First step:** copy the WTW attachment **Coding Agents & CLIs Available Models** (`20260520-coding-agents-available-models.md`) into the repo as:
+
+- [`docs/coding-agents-available-models.md`](../../docs/coding-agents-available-models.md)
+
+This file is the **human-editable source of truth** — when Cursor, Copilot, Claude, or Gemini release new models, update the tables here first, then refresh the TS catalog (and optionally regenerate HTML). It lives beside [`docs/requirements.md`](../../docs/requirements.md) and epic plans under `docs/epics/`.
+
+Contents (unchanged from attachment):
+
+- **Cursor** — model table with ID, strength, tier, multiplier, YOLO, fleet, preferred for
+- **Claude Code CLI**
+- **Gemini CLI**
+- **GitHub Copilot CLI**
+
+No `docs/reference/` subfolder for v1 — keep one obvious path under `docs/`.
+
+### Task 12 thrashing — root cause and fix (2026-05-20)
+
+Task **#12** hit **32 dev iterations** with QA never closing. Investigation (see [`ralph/memory.md`](../../ralph/memory.md) + on-disk state):
+
+| Cause | Evidence | Fix |
+|-------|----------|-----|
+| **Work already done** | [`src/shared/agent-models.ts`](../../src/shared/agent-models.ts) exists with all backend IDs, `preferredFor`, helpers, and preferred triples | Narrow Task 12 to **verify-or-create**; do not rewrite the file if the checklist below passes |
+| **Ambiguous “complete”** | Task text implies copying full table metadata (strength, tier, multiplier, …) into TS; implementation uses **empty strings** for those fields (valid for dropdowns) | **v1 catalog = IDs + labels + `preferredFor` only**; rich metrics stay in [`docs/coding-agents-available-models.md`](../../docs/coding-agents-available-models.md) and the Task 14 HTML page |
+| **Dev output format** | Latest QA `feedback` is narration (“Creating…”, “Running typecheck…”) with **no** `<status>verified</status>`; dev prompt requires `<status>done</status>` | Dev must end with `<status>done</status>` after running commands; if file exists, **inspect first**, then test, then done — no re-implementation loops |
+| **Missing automated proof** | No `src/shared/agent-models.test.ts`; QA prompt says run tests; task AC only mentioned `typecheck` | Add **required** `agent-models.test.ts` in Task 12 (small, deterministic) |
+| **Stale memory** | `memory.md` still says “`src/shared/` does not exist” (lines 88–89) while later lines say catalog exists | Purge contradictory lines; add “Task 12 DoD” pointer |
+| **Placeholder epic** | [`ralph/epic.md`](../../ralph/epic.md) is still the default template — loop lacks epic-level DoD | Replace with concrete Epic 003 content (below) |
+
+**Revised Task 12 (use in backlog / replan)** — title: **Agent-models catalog (minimal v1 + tests)**
+
+**In scope:** `src/shared/agent-models.ts`; `src/shared/agent-models.test.ts`; duplicate `AgentBackendId` in shared file (no import from client).
+
+**Out of scope:** LoopConfigSection dropdowns (Task 13); `/models-reference` route (Task 14); populating strength/tier/multiplier/yolo/fleet in TS (defer — reference doc + HTML).
+
+**Definition of done (checklist):**
+
+1. `src/shared/agent-models.ts` exports `AgentModelEntry`, `AGENT_MODEL_CATALOG`, `PREFERRED_MODELS_BY_BACKEND`, `getPreferredModels`, `isModelInCatalog`.
+2. Every model ID listed in the task’s bullet lists for copilot / cursor-agent / claude / gemini is present with correct `preferredFor` where specified.
+3. `PREFERRED_MODELS_BY_BACKEND` matches the preferred table in this plan.
+4. `metadata` fields (`strength`, `tier`, etc.) may be `''` in v1 — **not** grounds for QA rejection.
+5. `npm run typecheck` passes.
+6. `npm run test:ci -- src/shared/agent-models.test.ts` passes (preferred-in-catalog + `isModelInCatalog` cases).
+7. Dev pass ends with `<status>done</status>`; QA ends with `<status>verified</status>` when 1–6 hold.
+
+**If the file already exists:** run steps 5–6 only; if green, report “already satisfied” and emit done — **do not** delete or recreate the catalog.
+
+### Catalog module
+
+Add [`src/shared/agent-models.ts`](../../src/shared/agent-models.ts) (or `src/server/agent-models-catalog.ts` + thin client re-export) defining:
+
+```ts
+export interface AgentModelEntry {
+  id: string;           // CLI model ID passed to --model / -m
+  label: string;        // Human name from table
+  strength: string;
+  tier: string;
+  multiplier: string;
+  yoloMode: string;
+  fleetMode: string;
+  preferredFor: string[]; // parsed from "Preferred For" — Planning | Dev | QA
+}
+
+export const AGENT_MODEL_CATALOG: Record<AgentBackendId, AgentModelEntry[]>;
+export const PREFERRED_MODELS_BY_BACKEND: Record<AgentBackendId, { plan: string; dev: string; qa: string }>;
+```
+
+**Preferred defaults** (from **Preferred For** in the attachment — applied when user selects a platform or clicks “Use recommended models”):
+
+| Platform (`agentBackend`) | Plan | Dev | QA |
+|---------------------------|------|-----|-----|
+| `copilot` | `gpt-5.4` | `gpt-5.4-mini` | `gpt-5.4-mini` |
+| `cursor-agent` | `claude-sonnet-4.6` | `gpt-5-mini` | `gpt-5-mini` |
+| `claude` | `claude-sonnet-4.6` | `claude-haiku-4.5` | `claude-haiku-4.5` |
+| `gemini` | `gemini-2.0-auto` | `gemini-2.0-flash` | `gemini-2.0-flash` |
+
+Update [`DEFAULT_SETTINGS`](../../src/server/settings-manager.ts) so out-of-the-box defaults match **`copilot`** row (current Ralph default backend), or keep today’s values until first save — on **new repo bootstrap**, write preferred triple for active `agentBackend`.
+
+**Sync workflow (v1):**
+
+1. Edit [`docs/coding-agents-available-models.md`](../../docs/coding-agents-available-models.md) when models change.
+2. Update [`src/shared/agent-models.ts`](../../src/shared/agent-models.ts) to match (hand-edit; add a short comment at top of TS pointing to the doc).
+3. Re-test dropdowns and `/models-reference` HTML.
+
+Optional follow-up: script `scripts/sync-agent-models-from-doc.mjs` to parse markdown tables into TS.
+
+Parse each markdown table section into `AGENT_MODEL_CATALOG` at build time **or** hand-author the catalog in TS from the doc (v1: hand-authored TS for testability).
+
+### Loop Configuration UI
+
+In [`LoopConfigSection.tsx`](../../src/client/components/LoopConfigSection.tsx):
+
+- Replace Plan / Dev / QA **text inputs** with **`<select>`** dropdowns:
+  - Options = `AGENT_MODEL_CATALOG[agentBackend]` (show `label` + `id`, value = `id`).
+  - Last option: **Custom…** — reveals a small text input when selected (persist custom ID in `planModel` / `devModel` / `qaModel`).
+- Beside **Agent Backend** (or under the model row group), add link: **View models for GitHub Copilot CLI** (label reflects current platform).
+  - `onClick` → `window.open('/models-reference?backend=copilot', '_blank', 'noopener,width=960,height=720')` (or modal + iframe; default **new window** for easy side-by-side reading).
+
+**When `agentBackend` changes:**
+
+1. Filter dropdown option lists to the new platform’s catalog.
+2. If current `planModel` / `devModel` / `qaModel` are **not** in that catalog, replace with `PREFERRED_MODELS_BY_BACKEND[backend]` for each role (auto-preselect preferred).
+3. Optional confirm: “Apply recommended models for Copilot?” — v1: **auto-apply** preferred triple without modal (document in hint).
+
+Mark preferred options in the dropdown (e.g. suffix ` (recommended for planning)` on options whose `preferredFor` includes `Planning` / `Dev` / `QA`).
+
+### Models reference HTML page
+
+Serve a read-only reference page from the Express app (static or SSR):
+
+- Route: `GET /models-reference` with query `?backend=copilot|cursor-agent|claude|gemini`
+- Implementation options (pick one in implementation):
+  - **A)** Hand-built HTML template in [`src/server/models-reference-page.ts`](../../src/server/models-reference-page.ts) rendering `AGENT_MODEL_CATALOG[backend]` as an HTML `<table>` with columns: Model, ID, Strength, Tier, Multiplier, YOLO Mode, Fleet Mode, Preferred For
+  - **B)** Prebuilt static HTML under `public/models-reference/` generated from markdown at build time
+
+Page header: platform display name + link back to Ralph UI (`/`). Style with minimal readable CSS (embedded in page or [`public/models-reference.css`](../../public/models-reference.css)) — tables match attachment layout.
+
+Optional: `GET /api/agent-models?backend=copilot` returns JSON catalog for tests; HTML page can use same data.
+
+```mermaid
+flowchart LR
+  User[User in Loop Config]
+  BackendSelect[Agent Backend select]
+  ModelSelects[Plan Dev QA dropdowns]
+  Link[View models link]
+  Popup["GET /models-reference?backend=…"]
+  Catalog[agent-models.ts catalog]
+
+  User --> BackendSelect
+  BackendSelect --> Catalog
+  Catalog --> ModelSelects
+  Link --> Popup
+  Catalog --> Popup
+```
+
+### Tests
+
+- **Task 12:** `src/shared/agent-models.test.ts` — preferred IDs ∈ catalog; `isModelInCatalog` true/false (required before QA can verify task 12).
+- **Task 13:** Component — backend switch updates models; View models link query.
+- **Task 14:** Server — `/models-reference` HTML contains model IDs; optional `/api/agent-models` JSON.
+- **Task 15:** Aggregate any remaining coverage; do not fold Task 12 tests into Task 15 only.
+
+---
+
 ## File change summary
 
 | Area | Primary files |
@@ -417,6 +571,7 @@ Do not use `window.confirm` (testability + styling).
 | Docker | `docker-runner.ts`, `docker-compose.agents.yml`, `docker/Dockerfile`, `llm-caller.ts`, `ralph-loop.ts`, `DockerSection.tsx`, `ControlPanel.tsx`, `index.ts` |
 | Git merge-back | `git-manager.ts`, `ralph-loop.ts`, `settings-manager.ts`, `index.ts`, `DockerSection` or `RepositorySection`, prompt templates |
 | Epic Set | `EpicSection.tsx`, `EpicFileDialog.tsx`, `ControlPanel.tsx`, `index.ts`, `useRalph.ts`, `App.css` |
+| Model dropdowns | `docs/coding-agents-available-models.md` (reference copy), `src/shared/agent-models.ts`, `LoopConfigSection.tsx`, `settings-manager.ts`, `index.ts` (`/models-reference`), `public/` or SSR template |
 
 ---
 
@@ -433,6 +588,8 @@ Do not use `window.confirm` (testability + styling).
 | Docker not installed vs daemon stopped | `checkDockerHost()` distinct `reason` + messages; block loop start and Set Docker |
 | Fleet increases premium usage | UI hint when enabled; default off |
 | User enables fleet then switches backend | Setting persists; UI grays out checkbox; server ignores until capable backend returns |
+| Stale model ID after backend switch | Auto-replace with preferred triple when ID not in new catalog |
+| Catalog drifts from vendor CLIs | Update `docs/coding-agents-available-models.md` first, then TS catalog; popup reads same catalog data |
 
 ---
 
@@ -443,3 +600,4 @@ Do not use `window.confirm` (testability + styling).
 3. `useDocker` + healthy Docker + running compose service → `node`, `pnpm`, `git` in container; dev edits on host mount; commits on work branch.
 4. After epic work: **Merge work into epic branch** lands work-branch commits onto `epicBaseBranch`; conflicts reported, not auto-fixed.
 5. Epic Set: existing path loads textarea; missing path → dialog → create fills template.
+6. Select **GitHub Copilot CLI** → Plan/Dev/QA dropdowns show Copilot models with **gpt-5.4** / **gpt-5.4-mini** preselected; **View models** opens HTML table matching attachment. Switch to **Claude** → dropdowns swap catalog; preferred **claude-sonnet-4.6** / **claude-haiku-4.5** preselected.

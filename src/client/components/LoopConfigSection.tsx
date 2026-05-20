@@ -1,4 +1,7 @@
+import { useEffect, useState } from "react";
 import type { Settings, AgentBackendId, TaskColumnSort } from "../types";
+// @ts-ignore - shared catalog lives outside client project include; import for runtime only
+import { AGENT_MODEL_CATALOG, PREFERRED_MODELS_BY_BACKEND, isModelInCatalog } from "../../shared/agent-models";
 
 export function normalizeAgentBackend(value: string | undefined): AgentBackendId {
   const v = value?.trim().toLowerCase();
@@ -27,6 +30,73 @@ export function LoopConfigSection({
   settingsSaved: boolean;
   onSaveSettings: () => void;
 }) {
+
+  const BACKEND_DISPLAY_NAMES: Record<AgentBackendId, string> = {
+    copilot: 'GitHub Copilot CLI',
+    'cursor-agent': 'Cursor',
+    claude: 'Claude Code CLI',
+    gemini: 'Gemini CLI',
+  };
+
+  const [planIsCustom, setPlanIsCustom] = useState<boolean>(() =>
+    !isModelInCatalog(localSettings.agentBackend, localSettings.planModel)
+  );
+  const [devIsCustom, setDevIsCustom] = useState<boolean>(() =>
+    !isModelInCatalog(localSettings.agentBackend, localSettings.devModel)
+  );
+  const [qaIsCustom, setQaIsCustom] = useState<boolean>(() =>
+    !isModelInCatalog(localSettings.agentBackend, localSettings.qaModel)
+  );
+
+  useEffect(() => {
+    // When backend changes, if current models are not in the new catalog, replace with preferred defaults
+    const backend = localSettings.agentBackend;
+    const preferred = PREFERRED_MODELS_BY_BACKEND[backend];
+    const updates: Partial<Settings> = {};
+    let changed = false;
+
+    if (!isModelInCatalog(backend, localSettings.planModel)) {
+      updates.planModel = preferred.plan;
+      setPlanIsCustom(false);
+      changed = true;
+    } else {
+      setPlanIsCustom(false);
+    }
+
+    if (!isModelInCatalog(backend, localSettings.devModel)) {
+      updates.devModel = preferred.dev;
+      setDevIsCustom(false);
+      changed = true;
+    } else {
+      setDevIsCustom(false);
+    }
+
+    if (!isModelInCatalog(backend, localSettings.qaModel)) {
+      updates.qaModel = preferred.qa;
+      setQaIsCustom(false);
+      changed = true;
+    } else {
+      setQaIsCustom(false);
+    }
+
+    if (changed) {
+      onChangeSettings({ ...localSettings, ...updates });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localSettings.agentBackend]);
+
+  const catalog = AGENT_MODEL_CATALOG[localSettings.agentBackend] || [];
+
+  function renderOption(entry: { id: string; label: string; preferredFor: string[] }, role: 'Planning' | 'Dev' | 'QA') {
+    const rec = entry.preferredFor.includes(role);
+    const suffix = rec ? ` — recommended for ${role.toLowerCase()}` : '';
+    return (
+      <option key={entry.id} value={entry.id}>
+        {entry.label} ({entry.id}){suffix}
+      </option>
+    );
+  }
+
   return (
     <section className="control-panel__section">
       <h3>Loop Configuration</h3>
@@ -81,38 +151,106 @@ export function LoopConfigSection({
         />
       </label>
 
+
+      // Plan select
       <label className="cp-field">
         <span>Plan Model</span>
-        <input
-          type="text"
-          value={localSettings.planModel}
-          onChange={(e) =>
-            onChangeSettings({ ...localSettings, planModel: e.target.value })
-          }
-        />
+        <select
+          value={isModelInCatalog(localSettings.agentBackend, localSettings.planModel) ? localSettings.planModel : "__custom__"}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === "__custom__") {
+              setPlanIsCustom(true);
+              onChangeSettings({ ...localSettings, planModel: "" });
+            } else {
+              setPlanIsCustom(false);
+              onChangeSettings({ ...localSettings, planModel: v });
+            }
+          }}
+        >
+          {catalog.map((entry) => renderOption(entry, 'Planning'))}
+          <option value="__custom__">Custom…</option>
+        </select>
+        {planIsCustom && (
+          <input
+            type="text"
+            value={localSettings.planModel}
+            placeholder="Custom model id"
+            onChange={(e) => onChangeSettings({ ...localSettings, planModel: e.target.value })}
+          />
+        )}
       </label>
 
+      {/* Dev select */}
       <label className="cp-field">
         <span>Dev Model</span>
-        <input
-          type="text"
-          value={localSettings.devModel}
-          onChange={(e) =>
-            onChangeSettings({ ...localSettings, devModel: e.target.value })
-          }
-        />
+        <select
+          value={isModelInCatalog(localSettings.agentBackend, localSettings.devModel) ? localSettings.devModel : "__custom__"}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === "__custom__") {
+              setDevIsCustom(true);
+              onChangeSettings({ ...localSettings, devModel: "" });
+            } else {
+              setDevIsCustom(false);
+              onChangeSettings({ ...localSettings, devModel: v });
+            }
+          }}
+        >
+          {catalog.map((entry) => renderOption(entry, 'Dev'))}
+          <option value="__custom__">Custom…</option>
+        </select>
+        {devIsCustom && (
+          <input
+            type="text"
+            value={localSettings.devModel}
+            placeholder="Custom model id"
+            onChange={(e) => onChangeSettings({ ...localSettings, devModel: e.target.value })}
+          />
+        )}
       </label>
 
+      {/* QA select */}
       <label className="cp-field">
         <span>QA Model</span>
-        <input
-          type="text"
-          value={localSettings.qaModel}
-          onChange={(e) =>
-            onChangeSettings({ ...localSettings, qaModel: e.target.value })
-          }
-        />
+        <select
+          value={isModelInCatalog(localSettings.agentBackend, localSettings.qaModel) ? localSettings.qaModel : "__custom__"}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === "__custom__") {
+              setQaIsCustom(true);
+              onChangeSettings({ ...localSettings, qaModel: "" });
+            } else {
+              setQaIsCustom(false);
+              onChangeSettings({ ...localSettings, qaModel: v });
+            }
+          }}
+        >
+          {catalog.map((entry) => renderOption(entry, 'QA'))}
+          <option value="__custom__">Custom…</option>
+        </select>
+        {qaIsCustom && (
+          <input
+            type="text"
+            value={localSettings.qaModel}
+            placeholder="Custom model id"
+            onChange={(e) => onChangeSettings({ ...localSettings, qaModel: e.target.value })}
+          />
+        )}
       </label>
+
+      <p className="cp-hint">
+        <a
+          href="#"
+          onClick={(e) => {
+            e.preventDefault();
+            const url = `/models-reference?backend=${localSettings.agentBackend}`;
+            window.open(url, '_blank', 'noopener,width=960,height=720');
+          }}
+        >
+          View models for {BACKEND_DISPLAY_NAMES[localSettings.agentBackend]}
+        </a>
+      </p>
 
       <label className="cp-field">
         <span>Dev Reasoning Effort</span>

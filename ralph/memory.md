@@ -85,11 +85,22 @@ Note: keep `applyCopilotFleetPrefix` usage restricted to the `copilot` backend o
 - QA note: Verified component behavioral tests for DockerSection 'Set Docker' and EpicSection 'Set' dialog are present in `src/client/components/components.test.tsx` and pass. Ran `npm run test:ci` — Vitest reported 187 tests passing.
 ## 2026-05-20 Plan Survey — agent-model-dropdowns remaining
 
-- `src/shared/` does not exist yet; agent-models catalog is not implemented.
-- LoopConfigSection.tsx still has text inputs for planModel/devModel/qaModel (lines ~85–115).
-- `/models-reference` route is absent from index.ts (confirmed via grep).
-- `docs/coding-agents-available-models.md` exists with 4 sections: Cursor, Claude Code CLI, Gemini CLI, GitHub Copilot CLI.
-- Shared catalog module should NOT import from `src/client/types.ts` to avoid circular deps; duplicate `AgentBackendId` type locally.
-- PREFERRED defaults from doc: copilot→gpt-5.4/gpt-5.4-mini/gpt-5.4-mini; cursor-agent→claude-sonnet-4.6/gpt-5-mini/gpt-5-mini; claude→claude-sonnet-4.6/claude-haiku-4.5/claude-haiku-4.5; gemini→gemini-2.0-auto/gemini-2.0-flash/gemini-2.0-flash.
-- Tasks 12–15 cover: catalog module, LoopConfigSection dropdown UI + link, /models-reference + /api/agent-models routes, and tests.
-- Added shared agent models catalog: src/shared/agent-models.ts (preferred models + helpers).
+- **`src/shared/agent-models.ts` exists** (Task 12 core deliverable). Catalog has all backend IDs + `preferredFor` + helpers; strength/tier/multiplier/yolo/fleet are empty strings — **valid for v1** (metrics live in `docs/coding-agents-available-models.md`).
+- **Task 12 thrashing:** 32+ dev iterations because (a) dev re-ran “create file” without checking disk, (b) dev output lacked `<status>done</status>`, (c) task spec implied full markdown metadata in TS, (d) no `agent-models.test.ts` for QA to latch onto. **Fix:** verify-or-create + add tests + see revised Task 12 in `docs/epics/epic-003-docker-container.plan.md` and `ralph/epic.md`.
+- LoopConfigSection.tsx still has text inputs for planModel/devModel/qaModel — **Task 13**.
+- `/models-reference` route absent from index.ts — **Task 14**.
+- `docs/coding-agents-available-models.md` exists with 4 platform sections.
+- Shared catalog must NOT import `src/client/types.ts`; duplicate `AgentBackendId` locally (already done in agent-models.ts).
+- PREFERRED defaults: copilot→gpt-5.4/gpt-5.4-mini/gpt-5.4-mini; cursor-agent→claude-sonnet-4.6/gpt-5-mini/gpt-5-mini; claude→claude-sonnet-4.6/claude-haiku-4.5/claude-haiku-4.5; gemini→gemini-2.0-auto/gemini-2.0-flash/gemini-2.0-flash.
+- Tasks 13–15: dropdown UI, routes, extra tests. **Do not re-implement Task 12 catalog** unless tests fail.
+
+## Task 12 verification (run before another dev pass)
+
+```bash
+npm run typecheck
+npm run test:ci -- src/shared/agent-models.test.ts   # create this file if missing
+```
+
+If both pass and `agent-models.ts` exports match epic checklist → mark Task 12 done; proceed to Task 13.
+
+- 2026-05-20: agent-models module at src/shared/agent-models.ts exists; npm run typecheck passed after verification.

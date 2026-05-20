@@ -439,7 +439,7 @@ describe("ControlPanel", () => {
   });
 
   it("Epic Set button calls set-file API and loads content", async () => {
-    const onSetEpicFile = vi.fn(async (path: string) => ({ ok: true, content: "# Epic content" }));
+    const onSetEpicFile = vi.fn(async (_path: string) => ({ ok: true, content: "# Epic content" }));
     render(
       <ControlPanel
         settings={defaultSettings}
@@ -469,8 +469,8 @@ describe("ControlPanel", () => {
   });
 
   it("Epic Set button shows dialog when file not found and Create triggers create-file API", async () => {
-    const onSetEpicFile = vi.fn(async (path: string) => ({ ok: false, notFound: true }));
-    const onCreateEpicFile = vi.fn(async (path: string) => ({ ok: true, content: "# Created" }));
+    const onSetEpicFile = vi.fn(async (_path: string) => ({ ok: false, notFound: true }));
+    const onCreateEpicFile = vi.fn(async (_path: string) => ({ ok: true, content: "# Created" }));
 
     render(
       <ControlPanel
