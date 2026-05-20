@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach, beforeAll } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { describe, it, expect, afterEach, beforeAll, vi } from "vitest";
+import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { ErrorBanner } from "./ErrorBanner";
 import { KanbanColumn } from "./KanbanColumn";
@@ -382,5 +382,125 @@ describe("ControlPanel", () => {
     // There should be a Set button in the Epic File row
     const setButtons = screen.getAllByText("Set");
     expect(setButtons.length).toBeGreaterThan(0);
+  });
+
+  it("Set Docker button calls validate API and shows success", async () => {
+    const onValidateDocker = vi.fn(async () => ({ ok: true }));
+    render(
+      <ControlPanel
+        settings={{ ...defaultSettings, useDocker: true }}
+        epic=""
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={async () => {}}
+        onSaveEpic={async () => {}}
+        onSavePrompt={async () => {}}
+        onSetRepo={async () => ({ ok: true })}
+        onRefreshBacklog={async () => ({ ok: true })}
+        onSetEpicFile={async () => ({ ok: true, content: "" })}
+        onCreateEpicFile={async () => ({ ok: true, content: "" })}
+        onValidateDocker={onValidateDocker}
+        onMergeEpicWork={async () => ({ ok: true })}
+        isRunning={false}
+        onClose={() => {}}
+      />
+    );
+
+    fireEvent.click(screen.getByText("Set Docker"));
+    await waitFor(() => expect(onValidateDocker).toHaveBeenCalledTimes(1));
+  });
+
+  it("Set Docker shows error message when validation fails", async () => {
+    const onValidateDocker = vi.fn(async () => ({ ok: false, reason: 'not_running', message: 'Daemon not running' }));
+    render(
+      <ControlPanel
+        settings={{ ...defaultSettings, useDocker: true }}
+        epic=""
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={{ ...readyState, dockerHostOk: false, dockerHostError: 'Daemon not running' }}
+        onSaveSettings={async () => {}}
+        onSaveEpic={async () => {}}
+        onSavePrompt={async () => {}}
+        onSetRepo={async () => ({ ok: true })}
+        onRefreshBacklog={async () => ({ ok: true })}
+        onSetEpicFile={async () => ({ ok: true, content: "" })}
+        onCreateEpicFile={async () => ({ ok: true, content: "" })}
+        onValidateDocker={onValidateDocker}
+        onMergeEpicWork={async () => ({ ok: true })}
+        isRunning={false}
+        onClose={() => {}}
+      />
+    );
+
+    fireEvent.click(screen.getByText("Set Docker"));
+    expect(await screen.findByText(/Daemon not running/)).toBeInTheDocument();
+  });
+
+  it("Epic Set button calls set-file API and loads content", async () => {
+    const onSetEpicFile = vi.fn(async (path: string) => ({ ok: true, content: "# Epic content" }));
+    render(
+      <ControlPanel
+        settings={defaultSettings}
+        epic=""
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={async () => {}}
+        onSaveEpic={async () => {}}
+        onSavePrompt={async () => {}}
+        onSetRepo={async () => ({ ok: true })}
+        onRefreshBacklog={async () => ({ ok: true })}
+        onSetEpicFile={onSetEpicFile}
+        onCreateEpicFile={async () => ({ ok: true, content: "" })}
+        onValidateDocker={async () => ({ ok: true })}
+        onMergeEpicWork={async () => ({ ok: true })}
+        isRunning={false}
+        onClose={() => {}}
+      />
+    );
+
+    const setBtn = screen.getByTitle("Load epic content from this path (or create if not found)");
+    fireEvent.click(setBtn);
+
+    await waitFor(() => expect(onSetEpicFile).toHaveBeenCalledWith(defaultSettings.epicFile));
+    expect(await screen.findByText(/Loaded!/)).toBeInTheDocument();
+  });
+
+  it("Epic Set button shows dialog when file not found and Create triggers create-file API", async () => {
+    const onSetEpicFile = vi.fn(async (path: string) => ({ ok: false, notFound: true }));
+    const onCreateEpicFile = vi.fn(async (path: string) => ({ ok: true, content: "# Created" }));
+
+    render(
+      <ControlPanel
+        settings={defaultSettings}
+        epic=""
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={async () => {}}
+        onSaveEpic={async () => {}}
+        onSavePrompt={async () => {}}
+        onSetRepo={async () => ({ ok: true })}
+        onRefreshBacklog={async () => ({ ok: true })}
+        onSetEpicFile={onSetEpicFile}
+        onCreateEpicFile={onCreateEpicFile}
+        onValidateDocker={async () => ({ ok: true })}
+        onMergeEpicWork={async () => ({ ok: true })}
+        isRunning={false}
+        onClose={() => {}}
+      />
+    );
+
+    const setBtn = screen.getByTitle("Load epic content from this path (or create if not found)");
+    fireEvent.click(setBtn);
+
+    // Dialog should appear
+    expect(await screen.findByText(/Epic file not found/)).toBeInTheDocument();
+
+    // Click Create in dialog
+    fireEvent.click(screen.getByText("Create"));
+    await waitFor(() => expect(onCreateEpicFile).toHaveBeenCalledWith(defaultSettings.epicFile));
   });
 });
