@@ -9,7 +9,8 @@
   "planFrequency": 1,
   "minBacklogSize": 3,
   "agentBackend": "copilot",
-  "epicFile": "docs/epics/epic-002-blocked-task-resume.plan.md",
+  "epicFile": "docs/epics/epic-003-docker-container.plan.md",
   "requirementsFile": "docs/requirements.md",
-  "pauseAfterPlan": false
+  "pauseAfterPlan": false,
+  "taskColumnSort": "idAsc"
 }

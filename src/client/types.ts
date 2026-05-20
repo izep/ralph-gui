@@ -73,6 +73,7 @@ export interface Settings {
   planFrequency: number;
   minBacklogSize: number;
   agentBackend: AgentBackendId;
+  fleetMode: boolean;
   epicFile: string;
   requirementsFile: string;
   pauseAfterPlan: boolean;

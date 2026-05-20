@@ -7,9 +7,26 @@ import path from "path";
 export const AGENT_BACKENDS = ["copilot", "cursor-agent", "claude", "gemini"] as const;
 export type AgentBackendId = (typeof AGENT_BACKENDS)[number];
 
+export const FLEET_CAPABLE_BACKENDS = ["copilot"] as const satisfies readonly AgentBackendId[];
+
+export function backendSupportsFleetMode(backend: AgentBackendId): boolean {
+  return (FLEET_CAPABLE_BACKENDS as readonly string[]).includes(backend);
+}
+
+export function effectiveFleetMode(fleetMode: boolean, backend: AgentBackendId): boolean {
+  return fleetMode && backendSupportsFleetMode(backend);
+}
+
+export function applyCopilotFleetPrefix(prompt: string, enabled: boolean): string {
+  if (!enabled) return prompt;
+  if (prompt.trimStart().startsWith("/fleet")) return prompt;
+  return `/fleet\n\n${prompt}`;
+}
+
 export interface LLMCallOpts {
   agentBackend?: AgentBackendId;
   reasoningEffort?: string;
+  fleetMode?: boolean;
 }
 
 /** @deprecated Use LLMCallOpts instead */
@@ -293,6 +310,7 @@ export class LLMCaller {
         }
 
         const backend = effectiveAgentBackend(opts);
+        const useFleet = effectiveFleetMode(opts.fleetMode ?? false, backend);
         let cached = this.cachedCommands.get(backend);
         if (!cached) {
           cached = await resolveCommandForBackend(backend, process.env, process.platform);
@@ -316,7 +334,7 @@ export class LLMCaller {
             if (reasoningEffort) {
               args.push("--reasoning-effort", reasoningEffort);
             }
-            writeStdin = prompt;
+            writeStdin = applyCopilotFleetPrefix(prompt, useFleet);
             break;
           }
           case "cursor-agent": {

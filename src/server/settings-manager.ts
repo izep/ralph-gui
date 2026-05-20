@@ -21,6 +21,8 @@ export interface Settings {
   minBacklogSize: number;
   // Supported values: "copilot" | "cursor-agent" | "claude" | "gemini"
   agentBackend: AgentBackendId;
+  // Enable running agents in Docker containers (UI persists even if backend cannot use fleet)
+  fleetMode: boolean;
   // Relative path to the epic file from the repo root (default: "ralph/epic.md")
   epicFile: string;
   // Relative path to the requirements file; empty string means auto-discover
@@ -40,6 +42,7 @@ export const DEFAULT_SETTINGS: Settings = {
   planFrequency: 1,
   minBacklogSize: 3,
   agentBackend: "copilot",
+  fleetMode: false,
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,

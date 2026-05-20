@@ -31,3 +31,28 @@ Keep entries concise and non-obvious. Remove entries that are no longer relevant
 - Blocker resolved fields: the `blocked` sub-object includes optional `resolved?: boolean` and `resolvedAt?: string` in both client and server task types. `POST /api/tasks/:id/resolve-blocker` is the endpoint; it delegates to `RalphLoop.resolveBlocker` which calls `TaskManager.resolveBlocker`.
 
 - `TaskCard.tsx` uses local `resolving` state to disable the checkbox while the resolve-blocker fetch is in-flight; the WebSocket push handles the task disappearing from the blocked view after success (no optimistic mutation).
+
+- Epic 003 state (surveyed 2026-05-20): fleet mode, Docker, git merge-back, and Epic Set button are ALL unimplemented. task-status.json starts empty. All 10 tasks are new (IDs 1–10).
+
+- `LLMCaller.call()` resolves backend command once and caches it per backend in `cachedCommands`; `clearCommandCache()` is exposed for tests. The `effectiveAgentBackend()` helper checks `RALPH_AGENT_BACKEND_OVERRIDE` env var first.
+
+- `LLMCallOpts` (aliased as `CopilotOpts`) is the options bag for `LLMCaller.call()`; extend it when adding fleet/docker opts rather than adding new parameters.
+
+- Fleet prefix: only apply `applyCopilotFleetPrefix` inside the `copilot` branch of the backend switch — never for other backends even if `fleetMode` is true in settings (defense in depth).
+
+- Docker bind-mount uses `RALPH_REPO_ROOT` env var in compose; ralph-loop must set this env var when spawning docker compose exec so the correct host path is mounted to `/workspace`.
+
+- `resolveComposeFile` packageRoot can be computed from `new URL('../..', import.meta.url).pathname` (two levels up from `src/server/docker-runner.ts`) to reach the repo root where `docker-compose.agents.yml` lives.
+
+- git-manager tests should use a real temp git repo (mkdtemp + git init) to avoid complex spawn mocks; see existing task-manager tests for the mkdtemp pattern.
+
+- `EpicFileDialog.tsx` must use CSS classes from App.css only (no inline styles, no external lib). Inspect existing modal patterns in ErrorBanner.tsx for the overlay/modal structure if present.
+
+## 2026-05-20 Updates
+
+- Fleet core implemented: added `FLEET_CAPABLE_BACKENDS`, `backendSupportsFleetMode`, `effectiveFleetMode`, and `applyCopilotFleetPrefix` in `src/server/llm-caller.ts`.
+- Settings synced: `fleetMode: boolean` added to `Settings` and `DEFAULT_SETTINGS` (`src/server/settings-manager.ts`), mirrored in `src/client/types.ts`, and the client fallback in `src/client/hooks/useRalph.ts`.
+- Tests updated to include `fleetMode` in test defaults (`src/client/components/components.test.tsx`).
+- Ran `npm run typecheck` locally; the TypeScript build passed after these edits.
+
+Note: keep `applyCopilotFleetPrefix` usage restricted to the `copilot` backend only (defense in depth).

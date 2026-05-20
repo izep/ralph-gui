@@ -264,6 +264,7 @@ const defaultSettings: Settings = {
   planFrequency: 1,
   minBacklogSize: 3,
   agentBackend: "copilot",
+  fleetMode: false,
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,
