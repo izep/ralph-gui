@@ -84,6 +84,9 @@ export interface Settings {
   requirementsFile: string;
   pauseAfterPlan: boolean;
   taskColumnSort: TaskColumnSort;
+  savedModelsByBackend: Partial<
+    Record<AgentBackendId, { planModel: string; devModel: string; qaModel: string }>
+  >;
 }
 
 export interface Readiness {

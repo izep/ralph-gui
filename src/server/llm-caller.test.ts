@@ -313,7 +313,7 @@ describe("LLMCaller.call", () => {
     process.env.CLAUDE_BIN = await makeExecutable("claude");
     const caller = new LLMCaller(() => true);
 
-    const resultPromise = caller.call("claude prompt", "claude-sonnet-4.6", tmpDir, {
+    const resultPromise = caller.call("claude prompt", "claude-sonnet-4-6", tmpDir, {
       agentBackend: "claude",
       reasoningEffort: "high",
     });
@@ -325,7 +325,7 @@ describe("LLMCaller.call", () => {
     expect(command).toBe(process.env.CLAUDE_BIN);
     expect(args).toEqual([
       "-p", "claude prompt",
-      "--model", "claude-sonnet-4.6",
+      "--model", "claude-sonnet-4-6",
       "--permission-mode", "bypassPermissions",
       "--output-format", "text",
       "--effort", "high",
@@ -385,7 +385,7 @@ describe("LLMCaller.call", () => {
 
     const hugePrompt = "x".repeat(50_000);
     await expect(
-      caller.call(hugePrompt, "claude-sonnet-4.6", tmpDir, {
+      caller.call(hugePrompt, "claude-sonnet-4-6", tmpDir, {
         agentBackend: "claude",
       }),
     ).rejects.toThrow("Prompt too large to pass via argv for claude");
@@ -474,7 +474,7 @@ describe("LLMCaller.call with fleetMode", () => {
     const caller = new LLMCaller(() => true);
 
     const shortPrompt = "short prompt";
-    const resultPromise = caller.call(shortPrompt, "claude-sonnet-4.6", tmpDir, {
+    const resultPromise = caller.call(shortPrompt, "claude-sonnet-4-6", tmpDir, {
       agentBackend: "claude",
       fleetMode: true,
     });

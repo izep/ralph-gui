@@ -1,50 +1,61 @@
 # Coding Agents & CLIs Available Models
 
-## Cursor
+## Cursor Agent CLI
 
-| Model             | ID                | Strength                             | Tier       | Multiplier    | YOLO Mode | Fleet Mode         | Preferred For |
-| ----------------- | ----------------- | ------------------------------------ | ---------- | ------------- | --------- | ------------------ | ------------- |
-| Cursor Small      | cursor-small      | Fast code completions                | fast/cheap | Included      | Yes       | Partial (Composer) |
-| Claude Haiku 4.5  | claude-haiku-4.5  | Fast, lightweight tasks              | fast/cheap | low           | Yes       | Partial (Composer) |
-| Claude Sonnet 4.5 | claude-sonnet-4.5 | General-purpose, reasoning           | standard   | 1x ✓          | Yes       | Partial (Composer) |
-| Claude Sonnet 4.6 | claude-sonnet-4.6 | General-purpose + deeper reasoning   | standard   | 1x ✓          | Yes       | Partial (Composer) | Planning      |
-| Claude Opus 4.7   | claude-opus-4.7   | Anthropic's most powerful            | premium    | high          | Yes       | Partial (Composer) |
-| GPT-4.1           | gpt-4.1           | Fast code completions                | fast/cheap | Included      | Yes       | Partial (Composer) |
-| GPT-5 mini        | gpt-5-mini        | General-purpose + reasoning          | fast/cheap | Included      | Yes       | Partial (Composer) | Dev, QA       |
-| GPT-5.4           | gpt-5.4           | Deep reasoning & debugging           | standard   | medium-high   | Yes       | Partial (Composer) |
-| GPT-5.5           | gpt-5.5           | Complex reasoning, most powerful GPT | premium    | premium usage | Yes       | Partial (Composer) |
-| Gemini 2.0 Flash  | gemini-2.0-flash  | Fast context processing              | fast/cheap | Included      | Yes       | Partial (Composer) |
-| Gemini 2.0 Pro    | gemini-2.0-pro    | Massive context, advanced reasoning  | premium    | high          | Yes       | Partial (Composer) |
+IDs from `cursor-agent models` (curated subset). Use exact `--model` values.
+
+| Model             | ID                       | Strength                             | Tier       | Multiplier    | YOLO Mode | Fleet Mode         | Preferred For |
+| ----------------- | ------------------------ | ------------------------------------ | ---------- | ------------- | --------- | ------------------ | ------------- |
+| Auto              | auto                     | Cursor picks the best model          | Varies     | Varies        | Yes       | Partial (Composer) |
+| Composer 2.5 Fast | composer-2.5-fast        | Fast agentic coding (CLI default)    | Included   | Included      | Yes       | Partial (Composer) |
+| GPT-5 Mini        | gpt-5-mini               | General-purpose + reasoning, fast    | fast/cheap | Included      | Yes       | Partial (Composer) | Dev, QA       |
+| GPT-5.4           | gpt-5.4-medium           | Deep reasoning & multi-file tasks    | standard   | medium-high   | Yes       | Partial (Composer) |
+| GPT-5.5           | gpt-5.5-medium           | Complex reasoning, most powerful GPT | premium  | premium usage | Yes       | Partial (Composer) |
+| Claude Sonnet 4.5 | claude-4.5-sonnet        | General-purpose, reasoning           | standard   | 1×            | Yes       | Partial (Composer) |
+| Claude Sonnet 4.6 | claude-4.6-sonnet-medium | General-purpose + deeper reasoning   | standard   | 1×            | Yes       | Partial (Composer) | Planning      |
+| Claude Opus 4.7   | claude-opus-4-7-high     | Anthropic's most powerful            | premium    | high          | Yes       | Partial (Composer) |
+| Gemini 3 Flash    | gemini-3-flash           | Fast context processing              | fast/cheap | Included      | Yes       | Partial (Composer) |
+| Gemini 3.1 Pro    | gemini-3.1-pro           | Massive context, advanced reasoning  | premium    | high          | Yes       | Partial (Composer) |
 
 ## Claude Code CLI
 
+IDs use hyphens (`claude-sonnet-4-6`), not dots. Copilot uses dotted Anthropic IDs separately.
+
 | Model             | ID                | Strength                           | Tier       | Multiplier | YOLO Mode                              | Fleet Mode | Preferred For |
 | ----------------- | ----------------- | ---------------------------------- | ---------- | ---------- | -------------------------------------- | ---------- | ------------- |
-| Claude Haiku 4.5  | claude-haiku-4.5  | Fast, lightweight tasks            | fast/cheap | low        | Yes (`--dangerously-skip-permissions`) | Yes        | Dev, QA       |
-| Claude Sonnet 4.5 | claude-sonnet-4.5 | General-purpose, reasoning         | standard   | 1x ✓       | Yes (`--dangerously-skip-permissions`) | Yes        |
-| Claude Sonnet 4.6 | claude-sonnet-4.6 | General-purpose + deeper reasoning | standard   | 1x ✓       | Yes (`--dangerously-skip-permissions`) | Yes        | Planning      |
-| Claude Opus 4.5   | claude-opus-4.5   | Deep reasoning, complex problems   | premium    | high       | Yes (`--dangerously-skip-permissions`) | Yes        |
-| Claude Opus 4.6   | claude-opus-4.6   | Deep reasoning (fast mode)         | premium    | high       | Yes (`--dangerously-skip-permissions`) | Yes        |
-| Claude Opus 4.7   | claude-opus-4.7   | Anthropic's most powerful          | premium    | high       | Yes (`--dangerously-skip-permissions`) | Yes        |
+| Claude Haiku 4.5  | claude-haiku-4-5  | Fast, lightweight tasks            | fast/cheap | low        | Yes (`--dangerously-skip-permissions`) | Yes        | Dev, QA       |
+| Claude Sonnet 4.5 | claude-sonnet-4-5 | General-purpose, reasoning         | standard   | 1×         | Yes (`--dangerously-skip-permissions`) | Yes        |
+| Claude Sonnet 4.6 | claude-sonnet-4-6 | General-purpose + deeper reasoning | standard   | 1×         | Yes (`--dangerously-skip-permissions`) | Yes        | Planning      |
+| Claude Opus 4.5   | claude-opus-4-5   | Deep reasoning, complex problems   | premium    | high       | Yes (`--dangerously-skip-permissions`) | Yes        |
+| Claude Opus 4.6   | claude-opus-4-6   | Deep reasoning (fast mode)         | premium    | high       | Yes (`--dangerously-skip-permissions`) | Yes        |
+| Claude Opus 4.7   | claude-opus-4-7   | Anthropic's most powerful          | premium    | high       | Yes (`--dangerously-skip-permissions`) | Yes        |
 
 ## Gemini CLI
 
-| Model            | ID               | Strength                     | Tier       | Multiplier | YOLO Mode | Fleet Mode | Preferred For |
-| ---------------- | ---------------- | ---------------------------- | ---------- | ---------- | --------- | ---------- | ------------- |
-| Gemini 1.5 Pro   | gemini-1.5-pro   | Massive context reasoning    | standard   | medium     | Yes       | No         |
-| Gemini 2.0 Flash | gemini-2.0-flash | Fast, lightweight context    | fast/cheap | low        | Yes       | No         | Dev, QA       |
-| Gemini 2.0 Pro   | gemini-2.0-pro   | Deep reasoning, high context | premium    | high       | Yes       | No         |
-| Gemini 2.0 Auto  | gemini-2.0-auto  | Auto routing, task-based     | standard   | medium     | Yes       | No         | Planning      |
+Use `-m` / `--model` with these IDs (`gemini-2.0-*` returns 404 on current CLI). Auto routing is via `/model` in interactive mode, not a separate ID.
+
+| Model                  | ID                     | Strength                     | Tier       | Multiplier | YOLO Mode | Fleet Mode | Preferred For |
+| ---------------------- | ---------------------- | ---------------------------- | ---------- | ---------- | --------- | ---------- | ------------- |
+| Gemini 2.5 Flash       | gemini-2.5-flash       | Fast, lightweight context    | fast/cheap | low        | Yes       | No         | Dev, QA       |
+| Gemini 2.5 Pro         | gemini-2.5-pro         | Deep reasoning, high context | standard   | medium     | Yes       | No         | Planning      |
+| Gemini 3 Flash preview | gemini-3-flash-preview | Fast (Gemini 3 family)       | fast/cheap | low        | Yes       | No         |
+| Gemini 3 Pro preview   | gemini-3-pro-preview   | Complex reasoning (Gemini 3) | premium    | high       | Yes       | No         |
 
 ## GitHub Copilot CLI
 
-| Model         | ID            | Strength                             | Tier       | Multiplier      | YOLO Mode | Fleet Mode     | Preferred For |
-| ------------- | ------------- | ------------------------------------ | ---------- | --------------- | --------- | -------------- | ------------- |
-| GPT-4.1       | gpt-4.1       | Fast code completions                | fast/cheap | 0x ✓ (included) | Yes       | Yes (`/fleet`) |
-| GPT-5 mini    | gpt-5-mini    | General-purpose + reasoning          | fast/cheap | 0x ✓ (included) | Yes       | Yes (`/fleet`) |
-| GPT-5.2       | gpt-5.2       | Deep reasoning & debugging           | standard   | medium          | Yes       | Yes (`/fleet`) |
-| GPT-5.2-Codex | gpt-5.2-codex | Agentic software development         | standard   | medium          | Yes       | Yes (`/fleet`) |
-| GPT-5.3-Codex | gpt-5.3-codex | Agentic tasks (higher quality)       | standard   | medium          | Yes       | Yes (`/fleet`) |
-| GPT-5.4       | gpt-5.4       | Deep reasoning & debugging           | standard   | medium-high     | Yes       | Yes (`/fleet`) | Planning      |
-| GPT-5.4 mini  | gpt-5.4-mini  | Agentic + codebase exploration       | fast/cheap | low             | Yes       | Yes (`/fleet`) | Dev, QA       |
-| GPT-5.5       | gpt-5.5       | Complex reasoning, most powerful GPT | premium    | 7.5x ✓ (promo)  | Yes       | Yes (`/fleet`) |
+| Model             | ID                | Strength                                | Tier                | Multiplier   | YOLO Mode | Fleet Mode     | Preferred For |
+| ----------------- | ----------------- | --------------------------------------- | ------------------- | ------------ | --------- | -------------- | ------------- |
+| GPT-4.1           | gpt-4.1           | Fast, general-purpose coding            | Standard (included) | 0×           | Yes       | Yes (`/fleet`) |
+| GPT-5 mini        | gpt-5-mini        | Reliable coding & writing, fast         | Standard (included) | 0×           | Yes       | Yes (`/fleet`) |
+| GPT-5.4 mini      | gpt-5.4-mini      | Fast responses, lightweight code        | Standard (included) | ~0×          | Yes       | Yes (`/fleet`) | Dev, QA       |
+| Claude Haiku 4.5  | claude-haiku-4.5  | Fastest Anthropic, simple tasks         | Standard (included) | ~0.25×       | Yes       | Yes (`/fleet`) |
+| Claude Sonnet 4.5 | claude-sonnet-4.5 | Balanced reasoning & code               | Standard+           | ~1×          | Yes       | Yes (`/fleet`) |
+| Claude Sonnet 4.6 | claude-sonnet-4.6 | Smarter reasoning, reliable completions | Standard+           | ~1×          | Yes       | Yes (`/fleet`) | Planning      |
+| GPT-5.2           | gpt-5.2           | General reasoning                       | Standard+           | ~1×          | Yes       | Yes (`/fleet`) |
+| GPT-5.2-Codex     | gpt-5.2-codex     | Code generation & review                | Standard+           | ~1×          | Yes       | Yes (`/fleet`) |
+| GPT-5.3-Codex     | gpt-5.3-codex     | Complex engineering, tests, refactors   | Standard+           | ~2×          | Yes       | Yes (`/fleet`) |
+| GPT-5.4           | gpt-5.4           | Deep reasoning, multi-file tasks        | Standard+           | ~2×          | Yes       | Yes (`/fleet`) |
+| GPT-5.5           | gpt-5.5           | Complex reasoning & architecture        | Premium             | 7.5× (promo) | Yes       | Yes (`/fleet`) |
+| Claude Opus 4.5   | claude-opus-4.5   | Anthropic flagship, deep reasoning      | Premium             | ~5×          | Yes       | Yes (`/fleet`) |
+| Claude Opus 4.6   | claude-opus-4.6   | Improved Opus reasoning                 | Premium             | ~5×          | Yes       | Yes (`/fleet`) |
+| Claude Opus 4.7   | claude-opus-4.7   | Most powerful Anthropic model           | Premium             | ~5×          | Yes       | Yes (`/fleet`) |

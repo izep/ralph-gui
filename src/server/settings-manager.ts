@@ -2,6 +2,7 @@
 import { readFile, writeFile } from "fs/promises";
 import path from "path";
 import { normalizeAgentBackend, type AgentBackendId } from "./llm-caller.js";
+import { normalizeSettingsModels, type SavedModelsByBackend } from "../shared/agent-models.js";
 
 export type TaskColumnSort =
   | "updatedAtAsc"
@@ -37,13 +38,15 @@ export interface Settings {
   requirementsFile: string;
   pauseAfterPlan: boolean;
   taskColumnSort: TaskColumnSort;
+  /** Per-agent-backend plan/dev/qa model IDs last saved for that platform */
+  savedModelsByBackend: SavedModelsByBackend;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   maxLLMCalls: 100,
   planModel: "claude-sonnet-4.6",
-  devModel: "gpt-5-mini",
-  qaModel: "gpt-5-mini",
+  devModel: "gpt-5.4-mini",
+  qaModel: "gpt-5.4-mini",
   devReasoningEffort: "xhigh",
   qaReasoningEffort: "high",
   autoCommit: false,
@@ -61,6 +64,7 @@ export const DEFAULT_SETTINGS: Settings = {
   requirementsFile: "",
   pauseAfterPlan: false,
   taskColumnSort: "idAsc",
+  savedModelsByBackend: {},
 };
 
 export class SettingsManager {
@@ -96,6 +100,22 @@ export class SettingsManager {
       if (!parsed.qaModel) {
         merged.qaModel = merged.devModel;
       }
+      if (!parsed.savedModelsByBackend || typeof parsed.savedModelsByBackend !== "object") {
+        merged.savedModelsByBackend = {};
+      }
+
+      const normalizedModels = normalizeSettingsModels(
+        merged.agentBackend,
+        merged.planModel,
+        merged.devModel,
+        merged.qaModel,
+        merged.savedModelsByBackend,
+      );
+      merged.planModel = normalizedModels.planModel;
+      merged.devModel = normalizedModels.devModel;
+      merged.qaModel = normalizedModels.qaModel;
+      merged.savedModelsByBackend = normalizedModels.savedModelsByBackend;
+
       return merged;
     } catch {
       return { ...DEFAULT_SETTINGS };

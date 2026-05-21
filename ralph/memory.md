@@ -104,3 +104,12 @@ npm run test:ci -- src/shared/agent-models.test.ts   # create this file if missi
 If both pass and `agent-models.ts` exports match epic checklist → mark Task 12 done; proceed to Task 13.
 
 - 2026-05-20: agent-models module at src/shared/agent-models.ts exists; npm run typecheck passed after verification.
+
+## 2026-05-20 Epic 003 Tasks 14-15 Completion
+
+- `GET /models-reference?backend=<id>` route added to index.ts; HTML rendering extracted to `src/server/models-reference.ts` (`buildModelsReferenceHtml`) for direct testability — no supertest needed.
+- `GET /api/agent-models?backend=<id>` returns JSON catalog + preferred defaults for the given backend.
+- Server tsconfig updated to include `../shared/agent-models.ts` (not the test file) to avoid nodenext `.js` extension requirement on test imports.
+- `buildModelsReferenceHtml` falls back to copilot catalog AND copilot preferred models for unknown backend IDs.
+- Component tests added to `components.test.tsx`: LoopConfigSection renders copilot options, auto-applies preferred models on backend switch, View models link calls window.open with correct URL.
+- All 201 tests pass; typecheck passes.

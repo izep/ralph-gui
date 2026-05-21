@@ -24,8 +24,8 @@ const EMPTY_TASKS: TaskStatusData = {
 const DEFAULT_SETTINGS: Settings = {
   maxLLMCalls: 100,
   planModel: "claude-sonnet-4.6",
-  devModel: "gpt-5-mini",
-  qaModel: "gpt-5-mini",
+  devModel: "gpt-5.4-mini",
+  qaModel: "gpt-5.4-mini",
   devReasoningEffort: "xhigh",
   qaReasoningEffort: "high",
   autoCommit: false,
@@ -43,6 +43,7 @@ const DEFAULT_SETTINGS: Settings = {
   requirementsFile: "",
   pauseAfterPlan: false,
   taskColumnSort: "idAsc",
+  savedModelsByBackend: {},
 };
 
 const WS_RECONNECT_DELAY = 3000;

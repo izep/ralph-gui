@@ -136,14 +136,14 @@ async function getInitData() {
   const tasks = loop
     ? await loop.readStatusFile()
     : {
-        tasks: [],
-        currentTaskNum: 0,
-        totalLLMCalls: 0,
-        maxLLMCalls: 100,
-        nextTask: { taskId: null, content: "", updatedAt: "" },
-        feedback: { taskId: null, content: "", updatedAt: "" },
-        lastUpdated: "",
-      };
+      tasks: [],
+      currentTaskNum: 0,
+      totalLLMCalls: 0,
+      maxLLMCalls: 100,
+      nextTask: { taskId: null, content: "", updatedAt: "" },
+      feedback: { taskId: null, content: "", updatedAt: "" },
+      lastUpdated: "",
+    };
   const settings = loop ? await loop.readSettings() : DEFAULT_SETTINGS;
   let epic = "";
   try {
@@ -177,6 +177,25 @@ const app = express();
 app.use(express.json({ limit: "1mb" }));
 
 const distPath = path.resolve(__dirname, "../../dist");
+
+// Models reference (before SPA static so it is never swallowed by index.html fallback)
+import { AGENT_MODEL_CATALOG, PREFERRED_MODELS_BY_BACKEND, type AgentBackendId } from "../shared/agent-models.js";
+import { buildModelsReferenceHtml } from "./models-reference.js";
+
+app.get("/api/agent-models", (req, res) => {
+  const backend = (req.query.backend as string) as AgentBackendId;
+  const catalog = AGENT_MODEL_CATALOG[backend];
+  if (!catalog) return res.status(400).json({ ok: false, error: "Unknown backend" });
+  res.json({ ok: true, backend, models: catalog, preferred: PREFERRED_MODELS_BY_BACKEND[backend] });
+});
+
+app.get("/models-reference", (req, res) => {
+  const backend = ((req.query.backend as string) ?? "copilot") as AgentBackendId;
+  const html = buildModelsReferenceHtml(backend);
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(html);
+});
+
 app.use(express.static(distPath));
 
 // Tasks
@@ -185,14 +204,14 @@ app.get("/api/tasks", async (_req, res) => {
     loop
       ? await loop.readStatusFile()
       : {
-          tasks: [],
-          currentTaskNum: 0,
-          totalLLMCalls: 0,
-          maxLLMCalls: 100,
-          nextTask: { taskId: null, content: "", updatedAt: "" },
-          feedback: { taskId: null, content: "", updatedAt: "" },
-          lastUpdated: "",
-        }
+        tasks: [],
+        currentTaskNum: 0,
+        totalLLMCalls: 0,
+        maxLLMCalls: 100,
+        nextTask: { taskId: null, content: "", updatedAt: "" },
+        feedback: { taskId: null, content: "", updatedAt: "" },
+        lastUpdated: "",
+      }
   );
 });
 
@@ -277,7 +296,7 @@ app.put("/api/epic", async (req, res) => {
     broadcast(JSON.stringify({ type: "readiness", data: readiness }));
     // Auto-refresh backlog when epic changes (fire-and-forget, only when loop is not running)
     if (!activeLoop.isRunning) {
-      activeLoop.refreshBacklog().catch(() => {});
+      activeLoop.refreshBacklog().catch(() => { });
     }
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err) });
@@ -561,8 +580,12 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   });
 }
 
-// SPA fallback
-app.get("*", (_req, res) => {
+// SPA fallback (never serve the Kanban app for API or models-reference)
+app.get("*", (req, res, next) => {
+  if (req.path.startsWith("/api/") || req.path === "/models-reference") {
+    next();
+    return;
+  }
   res.sendFile(path.join(distPath, "index.html"));
 });
 

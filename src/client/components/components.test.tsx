@@ -11,7 +11,7 @@ import type { Task, ColumnDef, Settings, Readiness } from "../types";
 
 // jsdom does not implement scrollIntoView
 beforeAll(() => {
-  Element.prototype.scrollIntoView = () => {};
+  Element.prototype.scrollIntoView = () => { };
 });
 
 afterEach(() => {
@@ -27,8 +27,8 @@ describe("ErrorBanner", () => {
     render(
       <ErrorBanner
         error="Something went wrong"
-        onRestart={() => {}}
-        onDismiss={() => {}}
+        onRestart={() => { }}
+        onDismiss={() => { }}
       />
     );
     expect(screen.getByText("Something went wrong")).toBeInTheDocument();
@@ -40,7 +40,7 @@ describe("ErrorBanner", () => {
       <ErrorBanner
         error="fail"
         onRestart={() => { restarted = true; }}
-        onDismiss={() => {}}
+        onDismiss={() => { }}
       />
     );
     fireEvent.click(screen.getByText("Restart Loop"));
@@ -52,7 +52,7 @@ describe("ErrorBanner", () => {
     render(
       <ErrorBanner
         error="fail"
-        onRestart={() => {}}
+        onRestart={() => { }}
         onDismiss={() => { dismissed = true; }}
       />
     );
@@ -117,7 +117,7 @@ describe("LogViewer", () => {
     render(
       <LogViewer
         lines={["[system] Started", "[dev] Working on task"]}
-        onClose={() => {}}
+        onClose={() => { }}
       />
     );
     expect(screen.getByText("[system] Started")).toBeInTheDocument();
@@ -128,14 +128,14 @@ describe("LogViewer", () => {
     render(
       <LogViewer
         lines={["line 1", "line 2", "line 3"]}
-        onClose={() => {}}
+        onClose={() => { }}
       />
     );
     expect(screen.getByText("3 lines")).toBeInTheDocument();
   });
 
   it("shows empty message when no lines", () => {
-    render(<LogViewer lines={[]} onClose={() => {}} />);
+    render(<LogViewer lines={[]} onClose={() => { }} />);
     expect(screen.getByText("No output yet")).toBeInTheDocument();
   });
 
@@ -256,8 +256,8 @@ describe("TaskCard", () => {
 const defaultSettings: Settings = {
   maxLLMCalls: 100,
   planModel: "claude-sonnet-4.6",
-  devModel: "gpt-5-mini",
-  qaModel: "gpt-5-mini",
+  devModel: "gpt-5.4-mini",
+  qaModel: "gpt-5.4-mini",
   devReasoningEffort: "xhigh",
   qaReasoningEffort: "high",
   autoCommit: false,
@@ -275,6 +275,7 @@ const defaultSettings: Settings = {
   requirementsFile: "",
   pauseAfterPlan: false,
   taskColumnSort: "idAsc",
+  savedModelsByBackend: {},
 };
 
 const readyState: Readiness = {
@@ -286,7 +287,7 @@ const readyState: Readiness = {
 };
 
 describe("ControlPanel", () => {
-  const noop = async () => {};
+  const noop = async () => { };
   const noopResult = async () => ({ ok: true });
   const noopContent = async () => ({ ok: true, content: "" });
   const noopDocker = async () => ({ ok: true });
@@ -310,7 +311,7 @@ describe("ControlPanel", () => {
         onValidateDocker={noopDocker}
         onMergeEpicWork={noopMerge}
         isRunning={isRunning}
-        onClose={() => {}}
+        onClose={() => { }}
       />
     );
   }
@@ -364,7 +365,7 @@ describe("ControlPanel", () => {
         onValidateDocker={noopDocker}
         onMergeEpicWork={noopMerge}
         isRunning={false}
-        onClose={() => {}}
+        onClose={() => { }}
       />
     );
     const checkbox = screen.getByRole("checkbox", { name: /fleet mode/i });
@@ -393,9 +394,9 @@ describe("ControlPanel", () => {
         prompts={{}}
         repoRoot="/test/repo"
         readiness={readyState}
-        onSaveSettings={async () => {}}
-        onSaveEpic={async () => {}}
-        onSavePrompt={async () => {}}
+        onSaveSettings={async () => { }}
+        onSaveEpic={async () => { }}
+        onSavePrompt={async () => { }}
         onSetRepo={async () => ({ ok: true })}
         onRefreshBacklog={async () => ({ ok: true })}
         onSetEpicFile={async () => ({ ok: true, content: "" })}
@@ -403,7 +404,7 @@ describe("ControlPanel", () => {
         onValidateDocker={onValidateDocker}
         onMergeEpicWork={async () => ({ ok: true })}
         isRunning={false}
-        onClose={() => {}}
+        onClose={() => { }}
       />
     );
 
@@ -420,9 +421,9 @@ describe("ControlPanel", () => {
         prompts={{}}
         repoRoot="/test/repo"
         readiness={{ ...readyState, dockerHostOk: false, dockerHostError: 'Daemon not running' }}
-        onSaveSettings={async () => {}}
-        onSaveEpic={async () => {}}
-        onSavePrompt={async () => {}}
+        onSaveSettings={async () => { }}
+        onSaveEpic={async () => { }}
+        onSavePrompt={async () => { }}
         onSetRepo={async () => ({ ok: true })}
         onRefreshBacklog={async () => ({ ok: true })}
         onSetEpicFile={async () => ({ ok: true, content: "" })}
@@ -430,7 +431,7 @@ describe("ControlPanel", () => {
         onValidateDocker={onValidateDocker}
         onMergeEpicWork={async () => ({ ok: true })}
         isRunning={false}
-        onClose={() => {}}
+        onClose={() => { }}
       />
     );
 
@@ -447,9 +448,9 @@ describe("ControlPanel", () => {
         prompts={{}}
         repoRoot="/test/repo"
         readiness={readyState}
-        onSaveSettings={async () => {}}
-        onSaveEpic={async () => {}}
-        onSavePrompt={async () => {}}
+        onSaveSettings={async () => { }}
+        onSaveEpic={async () => { }}
+        onSavePrompt={async () => { }}
         onSetRepo={async () => ({ ok: true })}
         onRefreshBacklog={async () => ({ ok: true })}
         onSetEpicFile={onSetEpicFile}
@@ -457,7 +458,7 @@ describe("ControlPanel", () => {
         onValidateDocker={async () => ({ ok: true })}
         onMergeEpicWork={async () => ({ ok: true })}
         isRunning={false}
-        onClose={() => {}}
+        onClose={() => { }}
       />
     );
 
@@ -479,9 +480,9 @@ describe("ControlPanel", () => {
         prompts={{}}
         repoRoot="/test/repo"
         readiness={readyState}
-        onSaveSettings={async () => {}}
-        onSaveEpic={async () => {}}
-        onSavePrompt={async () => {}}
+        onSaveSettings={async () => { }}
+        onSaveEpic={async () => { }}
+        onSavePrompt={async () => { }}
         onSetRepo={async () => ({ ok: true })}
         onRefreshBacklog={async () => ({ ok: true })}
         onSetEpicFile={onSetEpicFile}
@@ -489,7 +490,7 @@ describe("ControlPanel", () => {
         onValidateDocker={async () => ({ ok: true })}
         onMergeEpicWork={async () => ({ ok: true })}
         isRunning={false}
-        onClose={() => {}}
+        onClose={() => { }}
       />
     );
 
@@ -502,5 +503,162 @@ describe("ControlPanel", () => {
     // Click Create in dialog
     fireEvent.click(screen.getByText("Create"));
     await waitFor(() => expect(onCreateEpicFile).toHaveBeenCalledWith(defaultSettings.epicFile));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// LoopConfigSection — model dropdowns and View models link
+// ---------------------------------------------------------------------------
+
+import { LoopConfigSection } from "./LoopConfigSection";
+
+describe("LoopConfigSection model dropdowns", () => {
+  it("shows copilot model options when agentBackend is copilot", () => {
+    const settings: Settings = { ...defaultSettings, agentBackend: "copilot", planModel: "claude-sonnet-4.6", devModel: "gpt-5.4-mini", qaModel: "gpt-5.4-mini" };
+    render(
+      <LoopConfigSection
+        localSettings={settings}
+        onChangeSettings={() => { }}
+        repoLocked={false}
+        settingsSaved={false}
+        onSaveSettings={() => { }}
+      />
+    );
+    // Verify the Plan Model label and a copilot-specific option text are present
+    expect(screen.getByText("Plan Model")).toBeInTheDocument();
+    expect(
+      screen.getByText(/\(claude-sonnet-4\.6\) Claude Sonnet 4\.6 -- recommended for planning/),
+    ).toBeInTheDocument();
+  });
+
+  it("restores saved copilot models when switching back from another backend", async () => {
+    const copilotModels = {
+      planModel: "claude-sonnet-4.6",
+      devModel: "gpt-5.4-mini",
+      qaModel: "gpt-5.4-mini",
+    };
+    let settings: Settings = {
+      ...defaultSettings,
+      agentBackend: "copilot",
+      ...copilotModels,
+      savedModelsByBackend: { copilot: copilotModels },
+    };
+
+    const { rerender } = render(
+      <LoopConfigSection
+        localSettings={settings}
+        onChangeSettings={(s) => {
+          settings = s;
+        }}
+        repoLocked={false}
+        settingsSaved={false}
+        onSaveSettings={() => { }}
+      />,
+    );
+
+    fireEvent.change(screen.getByDisplayValue("GitHub Copilot CLI"), {
+      target: { value: "claude" },
+    });
+    await waitFor(() => expect(settings.agentBackend).toBe("claude"));
+    expect(settings.savedModelsByBackend?.copilot).toEqual(copilotModels);
+
+    rerender(
+      <LoopConfigSection
+        localSettings={settings}
+        onChangeSettings={(s) => {
+          settings = s;
+        }}
+        repoLocked={false}
+        settingsSaved={false}
+        onSaveSettings={() => { }}
+      />,
+    );
+
+    fireEvent.change(screen.getByDisplayValue("Claude Code (claude CLI)"), {
+      target: { value: "copilot" },
+    });
+    await waitFor(() => {
+      expect(settings.agentBackend).toBe("copilot");
+      expect(settings.planModel).toBe("claude-sonnet-4.6");
+      expect(settings.devModel).toBe("gpt-5.4-mini");
+      expect(settings.qaModel).toBe("gpt-5.4-mini");
+    });
+  });
+
+  it("uses cursor-agent CLI IDs for recommended plan model", () => {
+    const settings: Settings = {
+      ...defaultSettings,
+      agentBackend: "cursor-agent",
+      planModel: "claude-4.6-sonnet-medium",
+      devModel: "gpt-5-mini",
+      qaModel: "gpt-5-mini",
+    };
+    render(
+      <LoopConfigSection
+        localSettings={settings}
+        onChangeSettings={() => { }}
+        repoLocked={false}
+        settingsSaved={false}
+        onSaveSettings={() => { }}
+      />,
+    );
+    expect(
+      screen.getByText(
+        /\(claude-4\.6-sonnet-medium\) Claude Sonnet 4\.6 -- recommended for planning/,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("shows claude CLI hyphenated model options when agentBackend is claude", () => {
+    const settings: Settings = {
+      ...defaultSettings,
+      agentBackend: "claude",
+      planModel: "claude-sonnet-4-6",
+      devModel: "claude-haiku-4-5",
+      qaModel: "claude-haiku-4-5",
+    };
+    render(
+      <LoopConfigSection
+        localSettings={settings}
+        onChangeSettings={() => { }}
+        repoLocked={false}
+        settingsSaved={false}
+        onSaveSettings={() => { }}
+      />,
+    );
+    expect(
+      screen.getByText(/\(claude-sonnet-4-6\) Claude Sonnet 4\.6 -- recommended for planning/),
+    ).toBeInTheDocument();
+  });
+
+  it("View models link uses current backend in URL", () => {
+    const openSpy = vi.fn();
+    vi.stubGlobal("open", openSpy);
+
+    const settings: Settings = {
+      ...defaultSettings,
+      agentBackend: "gemini",
+      planModel: "gemini-2.5-pro",
+      devModel: "gemini-2.5-flash",
+      qaModel: "gemini-2.5-flash",
+    };
+    render(
+      <LoopConfigSection
+        localSettings={settings}
+        onChangeSettings={() => { }}
+        repoLocked={false}
+        settingsSaved={false}
+        onSaveSettings={() => { }}
+      />
+    );
+    const link = screen.getByText(/View models for/i);
+    fireEvent.click(link);
+    expect(openSpy).toHaveBeenCalledWith(
+      "/models-reference?backend=gemini",
+      "_blank",
+      "noopener,width=960,height=720"
+    );
+
+    vi.unstubAllGlobals();
   });
 });

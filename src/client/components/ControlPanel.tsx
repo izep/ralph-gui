@@ -67,7 +67,19 @@ export function ControlPanel({
   useEffect(() => setLocalPrompt(prompts[activePrompt] ?? ""), [prompts, activePrompt]);
 
   async function handleSaveSettings() {
-    await onSaveSettings(localSettings);
+    const toSave: Settings = {
+      ...localSettings,
+      savedModelsByBackend: {
+        ...localSettings.savedModelsByBackend,
+        [localSettings.agentBackend]: {
+          planModel: localSettings.planModel,
+          devModel: localSettings.devModel,
+          qaModel: localSettings.qaModel,
+        },
+      },
+    };
+    setLocalSettings(toSave);
+    await onSaveSettings(toSave);
     setSettingsSaved(true);
     setTimeout(() => setSettingsSaved(false), 2000);
   }

@@ -16,5 +16,5 @@
     "composite": true,
     "tsBuildInfoFile": "../../node_modules/.tmp/tsconfig.server.tsbuildinfo"
   },
-  "include": ["./**/*"]
+  "include": ["./**/*", "../shared/agent-models.ts"]
 }
