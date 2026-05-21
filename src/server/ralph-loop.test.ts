@@ -700,7 +700,7 @@ describe("RalphLoop parallel dispatch", () => {
 
     // Ensure SettingsManager.read returns the docker-parallel settings
     const sm = await import("./settings-manager.js");
-    vi.spyOn(sm.SettingsManager.prototype, "read").mockResolvedValue({ ...DEFAULT_SETTINGS, useDocker: true, dockerPoolSize: 2, dockerParallelTasks: true, minBacklogSize: 1 });
+    vi.spyOn(sm.SettingsManager.prototype, "read").mockResolvedValue({ ...DEFAULT_SETTINGS, useDocker: true, dockerPoolSize: 2, dockerParallelTasks: true, minBacklogSize: 3 });
 
     const concurrency = { inFlight: 0, max: 0 };
     (loop as any).runDevQALoop = async function (
@@ -738,7 +738,10 @@ describe("RalphLoop parallel dispatch", () => {
     // Ensure the loop reached the parallel dispatch path and used the Docker pool
     expect(cb.logs.some((l) => l.includes("Parallel dispatch"))).toBe(true);
     expect(dp.DockerPool.prototype.acquire).toHaveBeenCalled();
-    expect(concurrency.max).toBeGreaterThanOrEqual(1);
+    // Ensure LLMCaller was invoked for tasks and that at least two tasks ran concurrently
+    expect(llmMod.LLMCaller.prototype.call).toHaveBeenCalled();
+    expect(llmMod.LLMCaller.prototype.call.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(concurrency.max).toBeGreaterThanOrEqual(2);
 
     // Wait for loop to settle
     await new Promise((r) => setTimeout(r, 200));
