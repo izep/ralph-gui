@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import os from "os";
 import path from "path";
 import { mkdtemp, rm } from "fs/promises";
+vi.mock("fs", () => ({ existsSync: vi.fn() }));
+import * as fs from "fs";
 
 // We need to mock child_process.spawn before importing docker-runner
 const { spawnMock } = vi.hoisted(() => ({ spawnMock: vi.fn() }));
@@ -457,6 +459,101 @@ describe("ensureDockerAgentRunning — missingClis", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.missingClis).toContain("claude");
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ensureDockerAgentRunning — validateSocketMount (Epic 004)
+// ---------------------------------------------------------------------------
+
+describe("ensureDockerAgentRunning — validateSocketMount", () => {
+  beforeEach(() => {
+    // reset the mocked fs.existsSync (vi.mock provided earlier)
+    if (fs.existsSync?.mockReset) fs.existsSync.mockReset();
+    spawnMock.mockReset();
+  });
+
+  afterEach(() => {
+    if (fs.existsSync?.mockReset) fs.existsSync.mockReset();
+    spawnMock.mockReset();
+  });
+
+  it("returns error when docker socket does not exist on host", async () => {
+    if (fs.existsSync?.mockReturnValue) fs.existsSync.mockReturnValue(false);
+
+    // Basic spawn behavior: up, ps, exec for node probe
+    spawnMock.mockImplementation((_cmd: string, args: string[]) => {
+      const proc = new MockProcess();
+      const emitStdoutLocal = (text: string) => {
+        proc.stdout.on.mock.calls
+          .filter((c) => c[0] === "data")
+          .forEach((c) => (c[1] as (d: Buffer) => void)(Buffer.from(text)));
+      };
+      queueMicrotask(() => {
+        if (args.includes("up")) proc.emitClose(0);
+        else if (args.includes("ps")) {
+          emitStdoutLocal("ralph-agent\n");
+          proc.emitClose(0);
+        } else if (args.includes("exec")) {
+          emitStdoutLocal("v22.0.0\n");
+          proc.emitClose(0);
+        } else proc.emitClose(0);
+      });
+      return proc;
+    });
+
+    const result = await ensureDockerAgentRunning(
+      "/compose.yml",
+      "ralph-agent",
+      "/repo",
+      undefined,
+      "copilot",
+      { validateSocketMount: true },
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toMatch(/Docker socket not found/);
+    }
+  });
+
+  it("validates docker info and docker compose version inside container when socket present", async () => {
+    if (fs.existsSync?.mockReturnValue) fs.existsSync.mockReturnValue(true);
+
+    spawnMock.mockImplementation((_cmd: string, args: string[]) => {
+      const proc = new MockProcess();
+      const emitStdoutLocal = (text: string) => {
+        proc.stdout.on.mock.calls
+          .filter((c) => c[0] === "data")
+          .forEach((c) => (c[1] as (d: Buffer) => void)(Buffer.from(text)));
+      };
+      queueMicrotask(() => {
+        if (args.includes("up")) proc.emitClose(0);
+        else if (args.includes("ps")) {
+          emitStdoutLocal("ralph-agent\n");
+          proc.emitClose(0);
+        } else if (args.includes("exec")) {
+          // Return success for node probe, docker info and docker compose version
+          emitStdoutLocal("ok\n");
+          proc.emitClose(0);
+        } else proc.emitClose(0);
+      });
+      return proc;
+    });
+
+    const result = await ensureDockerAgentRunning(
+      "/compose.yml",
+      "ralph-agent",
+      "/repo",
+      undefined,
+      "copilot",
+      { validateSocketMount: true },
+    );
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.missingClis).toBeUndefined();
     }
   });
 });

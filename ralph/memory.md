@@ -128,3 +128,11 @@ If both pass and `agent-models.ts` exports match epic checklist → mark Task 12
 - Validation tip: run `docker compose -f docker-compose.agents.yml config` to confirm build args and envs are present, and `npm run typecheck` to ensure TS unchanged.
 - Note: Running `npm run typecheck` revealed three TS errors in `src/server/docker-pool.test.ts` related to overly-specific tuple typings on mock.calls; tests (not code) need typing fixes to pass CI. This is unrelated to the Dockerfile/compose changes but blocks a clean typecheck until addressed.
 
+
+## 2026-05-21 Epic 004 Mid-Sprint Survey
+
+- Tasks 17–23 and 25 are all fully implemented outside the loop; task-status.json still shows them as `backlog` (loop never ran to mark them done). Verify before re-implementing by checking docker-runner.ts, docker-pool.ts, git-manager.ts, llm-caller.ts, ralph-loop.ts, DockerSection.tsx, and both README files.
+- Two test scenarios from the epic spec are absent (Task 24 gap):
+  1. `docker-runner.test.ts`: `validateSocketMount: true` path — needs `vi.spyOn(fs, 'existsSync')` (or `vi.mock('fs', ...)`) since `existsSync` is imported from `'fs'` in docker-runner.ts. Two cases: socket file missing → ok:false; docker info + compose version both succeed → ok:true.
+  2. `ralph-loop.test.ts`: parallel dispatch when `dockerParallelTasks: true` + `dockerPoolSize: 2` — mock `ensureDockerPool` from `'./docker-pool.js'` to resolve, mock LLMCaller.call, assert both dev calls start concurrently before either resolves.
+- `fs.existsSync` in docker-runner.ts is already imported as a named import; mock it with `vi.spyOn(fsModule, 'existsSync')` after importing `* as fsModule from 'fs'` in the test.

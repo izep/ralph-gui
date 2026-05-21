@@ -1,4 +1,24 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+
+// Mock docker-pool and docker-runner early so RalphLoop imports use the mocks.
+vi.mock("./docker-pool.js", () => {
+  class MockDockerPool {
+    constructor(size) { this.size = size; this.counter = 0; this.released = []; }
+    init() {}
+    acquire() { return Promise.resolve(this.counter++); }
+    release(slot) { this.released.push(slot); }
+    stopAll() {}
+  }
+  return { ensureDockerPool: vi.fn(() => Promise.resolve()), DockerPool: MockDockerPool };
+});
+
+vi.mock("./docker-runner.js", () => ({
+  checkDockerHost: vi.fn(() => Promise.resolve({ ok: true })),
+  ensureDockerAgentRunning: vi.fn(() => Promise.resolve({ ok: true })),
+  resolveComposeFile: vi.fn(() => "/compose.yml"),
+  resolveAgentCliInDockerContainer: vi.fn(() => Promise.resolve('/usr/local/bin/copilot')),
+}));
+
 import { mkdtemp, rm, readFile, writeFile, mkdir, access } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
@@ -632,5 +652,103 @@ describe("RalphLoop smart resume", () => {
 
     loop.stop();
     await new Promise((r) => setTimeout(r, 100));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Parallel dispatch test (Epic 004)
+// ---------------------------------------------------------------------------
+
+describe("RalphLoop parallel dispatch", () => {
+  it("dispatches backlog tasks in parallel using docker pool", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic("# Epic\n\nParallel dispatch test.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+
+    // Write settings enabling docker parallel pool
+    const settings = { ...DEFAULT_SETTINGS, useDocker: true, dockerPoolSize: 2, dockerParallelTasks: true };
+    await writeFile(path.join(tmpDir, "ralph", "settings.json"), JSON.stringify(settings), "utf-8");
+
+    // Write task-status.json with 2 backlog tasks
+    const status = {
+      tasks: [
+        { id: 1, title: "Task One", description: "Do one", status: "backlog", devIterations: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 2, title: "Task Two", description: "Do two", status: "backlog", devIterations: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      ],
+      currentTaskNum: 0,
+      totalLLMCalls: 0,
+      maxLLMCalls: 100,
+      nextTask: { taskId: null, content: "", updatedAt: new Date().toISOString() },
+      feedback: { taskId: null, content: "", updatedAt: new Date().toISOString() },
+      lastUpdated: new Date().toISOString(),
+    };
+    await writeFile(path.join(tmpDir, "ralph", "task-status.json"), JSON.stringify(status), "utf-8");
+
+    // Mock GitManager branch/worktree operations so start() succeeds
+    const gitMod = await import("./git-manager.js");
+    vi.spyOn(gitMod.GitManager.prototype, "getCurrentBranch").mockResolvedValue("main");
+    vi.spyOn(gitMod.GitManager.prototype, "createOrCheckoutBranch").mockResolvedValue();
+    vi.spyOn(gitMod.GitManager.prototype, "createWorktree").mockResolvedValue();
+    vi.spyOn(gitMod.GitManager.prototype, "mergeWorktreeBranch").mockResolvedValue();
+
+    // Replace runDevQALoop with a stub that records concurrent executions
+    const dp = await import("./docker-pool.js");
+    vi.spyOn(dp.DockerPool.prototype, "release");
+    vi.spyOn(dp.DockerPool.prototype, "acquire");
+
+    // Ensure SettingsManager.read returns the docker-parallel settings
+    const sm = await import("./settings-manager.js");
+    vi.spyOn(sm.SettingsManager.prototype, "read").mockResolvedValue({ ...DEFAULT_SETTINGS, useDocker: true, dockerPoolSize: 2, dockerParallelTasks: true, minBacklogSize: 1 });
+
+    const concurrency = { inFlight: 0, max: 0 };
+    (loop as any).runDevQALoop = async function (
+      _taskId: number,
+      _title: string,
+      _content: string,
+      _totalLLMCalls: number,
+      _startAtQa = false,
+      _slotOpts?: { containerIndex?: number; worktreeCwd?: string },
+    ) {
+      concurrency.inFlight += 1;
+      concurrency.max = Math.max(concurrency.max, concurrency.inFlight);
+      // simulate work (longer to ensure overlap)
+      await new Promise((r) => setTimeout(r, 200));
+      concurrency.inFlight -= 1;
+      return { totalLLMCalls: _totalLLMCalls + 1 };
+    };
+
+    // Stub LLMCaller.call to avoid invoking docker-runner during plan phase
+    const llmMod = await import("./llm-caller.js");
+    vi.spyOn(llmMod.LLMCaller.prototype, "call").mockImplementation(async () => "OK");
+
+    // Start the loop
+    const startRes = await loop.start();
+    if (!startRes.ok) {
+      throw new Error(`start failed: ${startRes.error} -- logs: ${JSON.stringify(cb.logs)}`);
+    }
+    expect(startRes.ok).toBe(true);
+
+    // Wait for parallel work to start
+    await new Promise((r) => setTimeout(r, 300));
+    // Debug logs for diagnosing concurrency
+    // eslint-disable-next-line no-console
+    console.log('CB LOGS:', cb.logs);
+    // Ensure the loop reached the parallel dispatch path and used the Docker pool
+    expect(cb.logs.some((l) => l.includes("Parallel dispatch"))).toBe(true);
+    expect(dp.DockerPool.prototype.acquire).toHaveBeenCalled();
+    expect(concurrency.max).toBeGreaterThanOrEqual(1);
+
+    // Wait for loop to settle
+    await new Promise((r) => setTimeout(r, 200));
+
+    // Ensure pool initialization log present and pool releases called
+    expect(cb.logs.some((l) => l.includes("Docker pool ready"))).toBe(true);
+    expect(dp.DockerPool.prototype.release.mock.calls.length).toBeGreaterThan(0);
+
+    // Stop loop
+    loop.stop();
+    await new Promise((r) => setTimeout(r, 50));
   });
 });
