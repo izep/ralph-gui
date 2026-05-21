@@ -492,10 +492,24 @@ describe("LLMCaller.call with fleetMode", () => {
 });
 
 describe("LLMCaller.call with useDocker", () => {
-  it("uses docker compose exec argv when useDocker is true", async () => {
-    process.env.COPILOT_BIN = await makeExecutable("gh");
-    const caller = new LLMCaller(() => true);
+  it("uses docker compose exec with CLI resolved inside the container", async () => {
+    let execCalls = 0;
+    spawnMock.mockImplementation((_cmd: string, args: string[]) => {
+      const proc = new MockChildProcess();
+      queueMicrotask(() => {
+        if (args.some((a) => typeof a === "string" && a.includes("command -v"))) {
+          proc.stdout.emit("data", Buffer.from("/usr/local/bin/copilot\n"));
+          proc.emit("close", 0);
+          return;
+        }
+        execCalls++;
+        proc.stdout.emit("data", Buffer.from("done"));
+        proc.emit("close", 0);
+      });
+      return proc;
+    });
 
+    const caller = new LLMCaller(() => true);
     const resultPromise = caller.call("prompt", "gpt-5-mini", tmpDir, {
       agentBackend: "copilot",
       useDocker: true,
@@ -503,18 +517,33 @@ describe("LLMCaller.call with useDocker", () => {
       dockerComposeFile: "",
     });
 
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
-    const [cmd, args] = spawnMock.mock.calls[0] as [string, string[]];
-    expect(cmd).toBe("docker");
-    expect(args).toContain("compose");
-    expect(args).toContain("exec");
-    expect(args).toContain("-T");
-    expect(args).toContain("ralph-agent");
+    await vi.waitFor(() => expect(execCalls).toBeGreaterThan(0));
+    const agentCall = spawnMock.mock.calls.find((c) => {
+      const args = c[1] as string[];
+      return args.includes("ralph-agent") && args.includes("/usr/local/bin/copilot");
+    });
+    expect(agentCall).toBeDefined();
+    await expect(resultPromise).resolves.toBe("done");
+  });
 
+  it("streams stdout lines to onProgress while running", async () => {
+    process.env.COPILOT_BIN = await makeExecutable("gh");
+    const caller = new LLMCaller(() => true);
+    const progress: string[] = [];
+
+    const resultPromise = caller.call("prompt", "gpt-5-mini", tmpDir, {
+      agentBackend: "copilot",
+      onProgress: (line) => progress.push(line),
+    });
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
     const proc = spawnMock.mock.results[0].value as MockChildProcess;
+    proc.stdout.emit("data", Buffer.from("line one\nline two\n"));
     proc.stdout.emit("data", Buffer.from("done"));
     proc.emit("close", 0);
-    await expect(resultPromise).resolves.toBe("done");
+    await expect(resultPromise).resolves.toContain("line one");
+
+    expect(progress).toEqual(["line one", "line two", "done"]);
   });
 
   it("uses host CLI argv when useDocker is false", async () => {
@@ -537,3 +566,124 @@ describe("LLMCaller.call with useDocker", () => {
     await expect(resultPromise).resolves.toBe("done");
   });
 });
+
+// ---------------------------------------------------------------------------
+// LLMCaller — parallel Docker calls (Epic 004)
+// ---------------------------------------------------------------------------
+
+describe("LLMCaller parallel Docker calls", () => {
+  function makeDockerMock(responsesByExecCount: Array<{ stdout: string; code: number }>) {
+    let execCount = 0;
+    spawnMock.mockImplementation((_cmd: string, args: string[]) => {
+      const proc = new MockChildProcess();
+      queueMicrotask(() => {
+        if (args.some((a) => typeof a === "string" && a.includes("command -v"))) {
+          proc.stdout.emit("data", Buffer.from("/usr/local/bin/copilot\n"));
+          proc.emit("close", 0);
+          return;
+        }
+        const r = responsesByExecCount[execCount] ?? { stdout: "ok", code: 0 };
+        execCount++;
+        proc.stdout.emit("data", Buffer.from(r.stdout));
+        proc.emit("close", r.code);
+      });
+      return proc;
+    });
+  }
+
+  it("includes --index in spawn args when dockerContainerIndex is set", async () => {
+    makeDockerMock([{ stdout: "ok", code: 0 }]);
+    const caller = new LLMCaller(() => true);
+
+    const p = caller.call("prompt", "gpt-5-mini", tmpDir, {
+      agentBackend: "copilot",
+      useDocker: true,
+      dockerComposeFile: "",
+      dockerService: "ralph-agent",
+      dockerContainerIndex: 2,
+    });
+
+    await expect(p).resolves.toBe("ok");
+
+    const execCall = spawnMock.mock.calls.find(
+      (c) => (c[1] as string[]).includes("exec") && (c[1] as string[]).includes("/usr/local/bin/copilot"),
+    ) as [string, string[]];
+    expect(execCall).toBeTruthy();
+    expect(execCall[1]).toContain("--index");
+    const idxPos = execCall[1].indexOf("--index");
+    expect(execCall[1][idxPos + 1]).toBe("2");
+  });
+
+  it("uses worktreeCwd in -w arg when dockerWorktreeCwd is set", async () => {
+    makeDockerMock([{ stdout: "ok", code: 0 }]);
+    const caller = new LLMCaller(() => true);
+
+    const p = caller.call("prompt", "gpt-5-mini", tmpDir, {
+      agentBackend: "copilot",
+      useDocker: true,
+      dockerComposeFile: "",
+      dockerService: "ralph-agent",
+      dockerContainerIndex: 0,
+      dockerWorktreeCwd: "/workspace/.ralph/worktrees/slot-0",
+    });
+
+    await expect(p).resolves.toBe("ok");
+
+    const execCall = spawnMock.mock.calls.find(
+      (c) => (c[1] as string[]).includes("exec") && (c[1] as string[]).includes("/usr/local/bin/copilot"),
+    ) as [string, string[]];
+    expect(execCall).toBeTruthy();
+    const wIdx = execCall[1].indexOf("-w");
+    expect(wIdx).toBeGreaterThan(-1);
+    expect(execCall[1][wIdx + 1]).toBe("/workspace/.ralph/worktrees/slot-0");
+  });
+
+  it("stop() kills all active processes and rejects their promises", async () => {
+    const isRunning = { value: true };
+    const caller = new LLMCaller(() => isRunning.value);
+
+    // Proc that never closes on its own (simulates long-running container exec)
+    const holdingProc = new MockChildProcess();
+    spawnMock.mockImplementation((_cmd: string, args: string[]) => {
+      const proc = new MockChildProcess();
+      queueMicrotask(() => {
+        if (args.some((a) => typeof a === "string" && a.includes("command -v"))) {
+          proc.stdout.emit("data", Buffer.from("/usr/local/bin/copilot\n"));
+          proc.emit("close", 0);
+          return;
+        }
+        // Don't close — simulate a hanging process; return a stable ref
+        Object.assign(proc, holdingProc);
+      });
+      return proc;
+    });
+
+    const p0 = caller.call("p0", "gpt-5-mini", tmpDir, {
+      agentBackend: "copilot",
+      useDocker: true,
+      dockerComposeFile: "",
+      dockerService: "ralph-agent",
+      dockerContainerIndex: 0,
+    });
+
+    // Wait for CLI probe to complete (first exec spawned)
+    await vi.waitFor(() =>
+      expect(
+        spawnMock.mock.calls.some((c) =>
+          (c[1] as string[]).some((a) => typeof a === "string" && a.includes("command -v")),
+        ),
+      ).toBe(true),
+    );
+
+    // Mark stopped and call stop()
+    isRunning.value = false;
+    caller.stop();
+
+    // Simulate the process finally closing after being killed
+    const execProc = spawnMock.mock.results[spawnMock.mock.results.length - 1].value as MockChildProcess;
+    execProc.emit("close", 0);
+
+    await expect(p0).rejects.toThrow("Loop was stopped");
+  });
+});
+

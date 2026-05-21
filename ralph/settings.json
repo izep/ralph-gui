@@ -9,7 +9,7 @@
   "planFrequency": 1,
   "minBacklogSize": 3,
   "agentBackend": "copilot",
-  "epicFile": "docs/epics/epic-003-docker-container.plan.md",
+  "epicFile": "docs/epics/epic-004-parallel-docker-support.plan.md",
   "requirementsFile": "docs/requirements.md",
   "pauseAfterPlan": false,
   "taskColumnSort": "updatedAtDesc"

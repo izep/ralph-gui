@@ -6,7 +6,7 @@ import { fileURLToPath } from "url";
 import { RalphLoop } from "./ralph-loop.js";
 import { DEFAULT_SETTINGS } from "./templates.js";
 import { getArg, hasFlag, applyCliSettingsOverrides } from "./cli-args.js";
-import { checkDockerHost, resolveComposeFile } from "./docker-runner.js";
+import { checkDockerHost, ensureDockerAgentRunning, resolveComposeFile } from "./docker-runner.js";
 import { GitManager } from "./git-manager.js";
 
 // --- CLI args ---
@@ -222,7 +222,14 @@ app.get("/api/loop/status", (_req, res) => {
 app.post("/api/loop/start", async (_req, res) => {
   const activeLoop = requireRepoConfigured(res);
   if (!activeLoop) return;
-  res.json(await activeLoop.start());
+  const result = await activeLoop.start();
+  if (!result.ok) {
+    loopStatus = "idle";
+    loopError = result.error ?? "Failed to start loop";
+    addLog(`[system] Loop start failed: ${loopError}`);
+    broadcast(JSON.stringify({ type: "loopStatus", data: { status: loopStatus, error: loopError } }));
+  }
+  res.json(result);
 });
 app.post("/api/loop/stop", (_req, res) => {
   const activeLoop = requireRepoConfigured(res);
@@ -441,7 +448,24 @@ app.post("/api/docker/validate", async (_req, res) => {
         else resolve();
       });
     });
-    res.json({ ok: true, composeFile });
+
+    const service = settings.dockerService || "ralph-agent";
+    const ensure = await ensureDockerAgentRunning(
+      composeFile,
+      service,
+      activeLoop.repoRoot,
+      (line) => addLog(line),
+      settings.agentBackend,
+      {
+        installedBackends: settings.dockerInstalledBackends,
+        validateSocketMount: settings.dockerMountSocket,
+      },
+    );
+    if (!ensure.ok) {
+      return res.json({ ok: false, reason: "compose_missing", message: ensure.message });
+    }
+
+    res.json({ ok: true, composeFile, service, missingClis: ensure.missingClis ?? [] });
   } catch (err) {
     res.json({ ok: false, reason: "compose_missing", message: String(err) });
   }

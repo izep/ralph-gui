@@ -3,7 +3,11 @@ import { spawn, type ChildProcess } from "child_process";
 import { constants } from "fs";
 import { access } from "fs/promises";
 import path from "path";
-import { buildDockerSpawn, resolveComposeFile } from "./docker-runner.js";
+import {
+  buildDockerSpawn,
+  resolveAgentCliInDockerContainer,
+  resolveComposeFile,
+} from "./docker-runner.js";
 import type { Settings } from "./settings-manager.js";
 
 export const AGENT_BACKENDS = ["copilot", "cursor-agent", "claude", "gemini"] as const;
@@ -33,6 +37,12 @@ export interface LLMCallOpts {
   dockerComposeFile?: string;
   dockerService?: string;
   repoRoot?: string;
+  /** When useDocker is true, exec into this specific container index (--index N). */
+  dockerContainerIndex?: number;
+  /** When useDocker is true, use this container working directory instead of /workspace. */
+  dockerWorktreeCwd?: string;
+  /** Stream CLI stdout/stderr lines to the Ralph log (e.g. docker agent output). */
+  onProgress?: (line: string, stream: "stdout" | "stderr") => void;
 }
 
 /** @deprecated Use LLMCallOpts instead */
@@ -289,10 +299,11 @@ async function resolveCommandForBackend(
 
 export class LLMCaller {
   private isRunning: () => boolean;
-  private currentProcess: ChildProcess | null = null;
+  /** Keyed by slotKey: `docker:<containerIndex>` for Docker calls, `main` otherwise. */
+  private activeProcesses = new Map<string, ChildProcess>();
   private killTimer: NodeJS.Timeout | null = null;
-  /** Resolved executable path per backend id */
-  private cachedCommands = new Map<AgentBackendId, string>();
+  /** Resolved executable path per backend id (host) or `docker:<backend>` (container). */
+  private cachedCommands = new Map<string, string>();
 
   constructor(isRunning: () => boolean) {
     this.isRunning = isRunning;
@@ -317,10 +328,27 @@ export class LLMCaller {
 
         const backend = effectiveAgentBackend(opts);
         const useFleet = effectiveFleetMode(opts.fleetMode ?? false, backend);
-        let cached = this.cachedCommands.get(backend);
+        const useDocker = !!opts.useDocker;
+        const cacheKey = useDocker ? `docker:${backend}` : backend;
+
+        let cached = this.cachedCommands.get(cacheKey);
         if (!cached) {
-          cached = await resolveCommandForBackend(backend, process.env, process.platform);
-          this.cachedCommands.set(backend, cached);
+          if (useDocker) {
+            const dummySettings: Pick<Settings, "dockerComposeFile"> = {
+              dockerComposeFile: opts.dockerComposeFile ?? "",
+            };
+            const composeFile = resolveComposeFile(dummySettings, repoRoot);
+            const service = opts.dockerService ?? "ralph-agent";
+            cached = await resolveAgentCliInDockerContainer(
+              composeFile,
+              service,
+              repoRoot,
+              backend,
+            );
+          } else {
+            cached = await resolveCommandForBackend(backend, process.env, process.platform);
+          }
+          this.cachedCommands.set(cacheKey, cached);
         }
         const command = cached;
 
@@ -394,13 +422,16 @@ export class LLMCaller {
         let spawnArgs: string[];
         let spawnCwd: string;
 
-        if (opts.useDocker) {
+        if (useDocker) {
           const dummySettings: Pick<Settings, "dockerComposeFile"> = {
             dockerComposeFile: opts.dockerComposeFile ?? "",
           };
           const composeFile = resolveComposeFile(dummySettings, repoRoot);
           const service = opts.dockerService ?? "ralph-agent";
-          const spec = buildDockerSpawn(composeFile, service, command, args);
+          const spec = buildDockerSpawn(composeFile, service, command, args, {
+            containerIndex: opts.dockerContainerIndex,
+            worktreeCwd: opts.dockerWorktreeCwd,
+          });
           spawnCmd = spec.cmd;
           spawnArgs = spec.args;
           spawnCwd = repoRoot;
@@ -418,16 +449,53 @@ export class LLMCaller {
             ? { ...process.env, RALPH_REPO_ROOT: repoRoot }
             : process.env,
         });
-        this.currentProcess = proc;
+
+        // Track by slot key so parallel Docker calls coexist without clobbering each other.
+        const slotKey =
+          useDocker && opts.dockerContainerIndex != null
+            ? `docker:${opts.dockerContainerIndex}`
+            : "main";
+        this.activeProcesses.set(slotKey, proc);
 
         let stdout = "";
         let stderr = "";
+        const stdoutBuf = { partial: "" };
+        const stderrBuf = { partial: "" };
+
+        const flushProgress = (
+          buffer: { partial: string },
+          stream: "stdout" | "stderr",
+          final = false,
+        ) => {
+          if (!opts.onProgress) return;
+          if (final && buffer.partial.trim()) {
+            opts.onProgress(buffer.partial.trimEnd(), stream);
+            buffer.partial = "";
+            return;
+          }
+          const parts = buffer.partial.split(/\r?\n/);
+          buffer.partial = parts.pop() ?? "";
+          for (const line of parts) {
+            const trimmed = line.trimEnd();
+            if (trimmed) opts.onProgress(trimmed, stream);
+          }
+        };
 
         proc.stdout.on("data", (data: Buffer) => {
-          stdout += data.toString();
+          const chunk = data.toString();
+          stdout += chunk;
+          if (opts.onProgress) {
+            stdoutBuf.partial += chunk;
+            flushProgress(stdoutBuf, "stdout");
+          }
         });
         proc.stderr.on("data", (data: Buffer) => {
-          stderr += data.toString();
+          const chunk = data.toString();
+          stderr += chunk;
+          if (opts.onProgress) {
+            stderrBuf.partial += chunk;
+            flushProgress(stderrBuf, "stderr");
+          }
         });
 
         if (writeStdin !== null) {
@@ -436,17 +504,27 @@ export class LLMCaller {
         proc.stdin.end();
 
         proc.on("close", (code) => {
-          if (this.currentProcess === proc) {
-            this.currentProcess = null;
+          if (opts.onProgress) {
+            flushProgress(stdoutBuf, "stdout", true);
+            flushProgress(stderrBuf, "stderr", true);
           }
-          this.clearKillTimer();
+          if (this.activeProcesses.get(slotKey) === proc) {
+            this.activeProcesses.delete(slotKey);
+          }
+          if (this.activeProcesses.size === 0) {
+            this.clearKillTimer();
+          }
           if (!this.isRunning()) {
             reject(new Error("Loop was stopped"));
           } else if (code !== 0) {
+            const hint =
+              code === 127 && useDocker
+                ? ` (command not found in container — rebuild after installing the ${cli} CLI; see docker/README.md)`
+                : "";
             reject(
               new Error(
-                `${cli} exited with code ${code}${stderr ? ": " + stderr.slice(0, 300) : ""}`
-              )
+                `${cli} exited with code ${code}${hint}${stderr ? ": " + stderr.slice(0, 300) : ""}`,
+              ),
             );
           } else {
             resolve(stdout);
@@ -454,8 +532,8 @@ export class LLMCaller {
         });
 
         proc.on("error", (err) => {
-          if (this.currentProcess === proc) {
-            this.currentProcess = null;
+          if (this.activeProcesses.get(slotKey) === proc) {
+            this.activeProcesses.delete(slotKey);
           }
           this.clearKillTimer();
           reject(new Error(`Failed to run ${cli}: ${err.message}`));
@@ -468,16 +546,20 @@ export class LLMCaller {
   }
 
   stop(): void {
-    if (this.currentProcess) {
-      const proc = this.currentProcess;
-      this.currentProcess = null;
-      proc.kill("SIGTERM");
+    if (this.activeProcesses.size > 0) {
+      const procs = [...this.activeProcesses.values()];
+      this.activeProcesses.clear();
+      for (const proc of procs) {
+        proc.kill("SIGTERM");
+      }
       this.clearKillTimer();
       this.killTimer = setTimeout(() => {
-        try {
-          proc.kill("SIGKILL");
-        } catch {
-          // process may have already exited
+        for (const proc of procs) {
+          try {
+            proc.kill("SIGKILL");
+          } catch {
+            // process may have already exited
+          }
         }
       }, 5000);
       this.killTimer.unref?.();

@@ -113,3 +113,13 @@ If both pass and `agent-models.ts` exports match epic checklist → mark Task 12
 - `buildModelsReferenceHtml` falls back to copilot catalog AND copilot preferred models for unknown backend IDs.
 - Component tests added to `components.test.tsx`: LoopConfigSection renders copilot options, auto-applies preferred models on backend switch, View models link calls window.open with correct URL.
 - All 201 tests pass; typecheck passes.
+
+## 2026-05-21 Epic 004 Plan Survey
+
+- All Epic 003 tasks (IDs 1–15) are fully done. task-status.json max ID is 15; Epic 004 tasks use IDs 16–26.
+- Epic 004 starting state: Dockerfile is copilot-only (no INSTALL_* build args); docker-compose.agents.yml has no build args and no non-Copilot auth env vars; no docker-pool.ts; no dockerPoolSize/dockerParallelTasks/dockerMountSocket/dockerInstalledBackends in settings; LLMCaller has single currentProcess (no per-slot map); git-manager has no worktree helpers; ralph-loop is sequential.
+- buildDockerSpawn currently takes (composeFile, service, command, commandArgs) with no containerIndex/worktreeCwd params — extend with opts param in Task 20.
+- LLMCallOpts in llm-caller.ts currently has: fleetMode?, useDocker?, dockerComposeFile?, dockerService? — extend with dockerContainerIndex?, dockerWorktreeCwd? in Task 22.
+- Implementation order: 16 (Dockerfile/compose) → 17 (validate multi-CLI) → 18 (settings pool UI) → 19 (socket mount) → 20 (docker-pool.ts + --index) → 21 (git worktrees) → 22 (parallel LLMCaller) → 23 (parallel loop) → 24 (tests) → 25 (docs) → 26 (stretch plan parallel).
+- docker-compose.agents.yml socket mount: use DOCKER_SOCKET env var with /dev/null fallback to avoid compose failures when socket is disabled; alternatively use compose profiles.
+- Worktree host path: <repoRoot>/.ralph/worktrees/slot-<n>; container path: /workspace/.ralph/worktrees/slot-<n>.

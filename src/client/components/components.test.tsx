@@ -271,6 +271,10 @@ const defaultSettings: Settings = {
   epicBaseBranch: "",
   dockerWorkBranch: "",
   dockerIsolateBranch: true,
+  dockerPoolSize: 1,
+  dockerParallelTasks: false,
+  dockerInstalledBackends: [],
+  dockerMountSocket: false,
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,
@@ -437,6 +441,80 @@ describe("ControlPanel", () => {
 
     fireEvent.click(screen.getByText("Set Docker"));
     expect(await screen.findByText(/Daemon not running/)).toBeInTheDocument();
+  });
+
+  it("Pool size input is present when useDocker is true", () => {
+    render(
+      <ControlPanel
+        settings={{ ...defaultSettings, useDocker: true }}
+        epic=""
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={async () => { }}
+        onSaveEpic={async () => { }}
+        onSavePrompt={async () => { }}
+        onSetRepo={async () => ({ ok: true })}
+        onRefreshBacklog={async () => ({ ok: true })}
+        onSetEpicFile={async () => ({ ok: true, content: "" })}
+        onCreateEpicFile={async () => ({ ok: true, content: "" })}
+        onValidateDocker={async () => ({ ok: true })}
+        onMergeEpicWork={async () => ({ ok: true })}
+        isRunning={false}
+        onClose={() => { }}
+      />
+    );
+    expect(screen.getByText("Pool size")).toBeInTheDocument();
+  });
+
+  it("Run backlog tasks in parallel checkbox is disabled when dockerPoolSize is 1", () => {
+    render(
+      <ControlPanel
+        settings={{ ...defaultSettings, useDocker: true, dockerPoolSize: 1 }}
+        epic=""
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={async () => { }}
+        onSaveEpic={async () => { }}
+        onSavePrompt={async () => { }}
+        onSetRepo={async () => ({ ok: true })}
+        onRefreshBacklog={async () => ({ ok: true })}
+        onSetEpicFile={async () => ({ ok: true, content: "" })}
+        onCreateEpicFile={async () => ({ ok: true, content: "" })}
+        onValidateDocker={async () => ({ ok: true })}
+        onMergeEpicWork={async () => ({ ok: true })}
+        isRunning={false}
+        onClose={() => { }}
+      />
+    );
+    const parallel = screen.getByLabelText(/Run backlog tasks in parallel/i);
+    expect((parallel as HTMLInputElement).disabled).toBe(true);
+  });
+
+  it("Run backlog tasks in parallel checkbox is enabled when dockerPoolSize > 1", () => {
+    render(
+      <ControlPanel
+        settings={{ ...defaultSettings, useDocker: true, dockerPoolSize: 2 }}
+        epic=""
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={async () => { }}
+        onSaveEpic={async () => { }}
+        onSavePrompt={async () => { }}
+        onSetRepo={async () => ({ ok: true })}
+        onRefreshBacklog={async () => ({ ok: true })}
+        onSetEpicFile={async () => ({ ok: true, content: "" })}
+        onCreateEpicFile={async () => ({ ok: true, content: "" })}
+        onValidateDocker={async () => ({ ok: true })}
+        onMergeEpicWork={async () => ({ ok: true })}
+        isRunning={false}
+        onClose={() => { }}
+      />
+    );
+    const parallel = screen.getByLabelText(/Run backlog tasks in parallel/i);
+    expect((parallel as HTMLInputElement).disabled).toBe(false);
   });
 
   it("Epic Set button calls set-file API and loads content", async () => {

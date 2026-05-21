@@ -10,6 +10,7 @@ const DEFAULT_PROMPT_KEY = "plan-prompt.md";
 
 export function ControlPanel({
   settings,
+  onSettingsDraftChange,
   epic,
   prompts,
   repoRoot,
@@ -27,6 +28,7 @@ export function ControlPanel({
   onClose,
 }: {
   settings: Settings;
+  onSettingsDraftChange?: (s: Settings) => void;
   epic: string;
   prompts: Record<string, string>;
   repoRoot: string;
@@ -65,6 +67,10 @@ export function ControlPanel({
   useEffect(() => setLocalEpic(epic), [epic]);
   useEffect(() => setLocalRepo(repoRoot), [repoRoot]);
   useEffect(() => setLocalPrompt(prompts[activePrompt] ?? ""), [prompts, activePrompt]);
+
+  useEffect(() => {
+    onSettingsDraftChange?.(localSettings);
+  }, [localSettings, onSettingsDraftChange]);
 
   async function handleSaveSettings() {
     const toSave: Settings = {

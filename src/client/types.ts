@@ -80,6 +80,10 @@ export interface Settings {
   epicBaseBranch: string;
   dockerWorkBranch: string;
   dockerIsolateBranch: boolean;
+  dockerPoolSize: number;
+  dockerParallelTasks: boolean;
+  dockerInstalledBackends: AgentBackendId[];
+  dockerMountSocket: boolean;
   epicFile: string;
   requirementsFile: string;
   pauseAfterPlan: boolean;

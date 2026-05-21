@@ -2,6 +2,14 @@ services:
   ralph-agent:
     build:
       context: ./docker
+      args:
+        INSTALL_COPILOT: ${INSTALL_COPILOT:-true}
+        INSTALL_CLAUDE: ${INSTALL_CLAUDE:-false}
+        INSTALL_GEMINI: ${INSTALL_GEMINI:-false}
+        INSTALL_CURSOR: ${INSTALL_CURSOR:-false}
+        INSTALL_DOCKER_CLI: ${INSTALL_DOCKER_CLI:-false}
+    # Keep the container alive for `docker compose exec` (default Node image exits immediately).
+    command: [ "sleep", "infinity" ]
     working_dir: /workspace
     volumes:
       - ${RALPH_REPO_ROOT:-.}:/workspace
@@ -10,6 +18,17 @@ services:
       - GIT_AUTHOR_EMAIL=${GIT_AUTHOR_EMAIL:-ralph@localhost}
       - GIT_COMMITTER_NAME=${GIT_COMMITTER_NAME:-Ralph Agent}
       - GIT_COMMITTER_EMAIL=${GIT_COMMITTER_EMAIL:-ralph@localhost}
+      # Copilot CLI auth (fine-grained PAT or OAuth token — not classic ghp_ PATs)
+      - COPILOT_GITHUB_TOKEN=${COPILOT_GITHUB_TOKEN:-}
+      - GH_TOKEN=${GH_TOKEN:-}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      # Claude Code CLI auth
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # Gemini CLI auth
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      # Cursor agent auth
+      - CURSOR_API_KEY=${CURSOR_API_KEY:-}
+      - CURSOR_SESSION_TOKEN=${CURSOR_SESSION_TOKEN:-}
     env_file:
       - path: .env
         required: false

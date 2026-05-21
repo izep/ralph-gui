@@ -32,6 +32,12 @@ export interface Settings {
   epicBaseBranch: string;
   dockerWorkBranch: string;
   dockerIsolateBranch: boolean;
+  // Container pool — parallel dev/QA tasks in separate containers
+  dockerPoolSize: number;
+  dockerParallelTasks: boolean;
+  dockerInstalledBackends: AgentBackendId[];
+  // Socket mount — allow agents to run docker compose inside the container
+  dockerMountSocket: boolean;
   // Relative path to the epic file from the repo root (default: "ralph/epic.md")
   epicFile: string;
   // Relative path to the requirements file; empty string means auto-discover
@@ -60,6 +66,10 @@ export const DEFAULT_SETTINGS: Settings = {
   epicBaseBranch: "",
   dockerWorkBranch: "",
   dockerIsolateBranch: true,
+  dockerPoolSize: 1,
+  dockerParallelTasks: false,
+  dockerInstalledBackends: [],
+  dockerMountSocket: false,
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,

@@ -99,7 +99,8 @@ export function DockerSection({
         </label>
         <p className="cp-hint">
           Path to a docker-compose file, relative to the repo root. Leave blank to use the
-          bundled <code>docker-compose.agents.yml</code>.
+          bundled <code>docker-compose.agents.yml</code>. Validate the container before Start;
+          agent output streams to the log panel.
         </p>
 
         <label className="cp-field">
@@ -128,6 +129,62 @@ export function DockerSection({
           Creates a <code>ralph/epic-*</code> branch at loop start so agent commits are
           isolated from your base branch until you merge.
         </p>
+
+        <label className="cp-field">
+          <span>Pool size</span>
+          <input
+            type="number"
+            min={1}
+            max={8}
+            value={localSettings.dockerPoolSize ?? 1}
+            onChange={(e) =>
+              onChangeSettings({
+                ...localSettings,
+                dockerPoolSize: Math.max(1, Math.min(8, Number(e.target.value) || 1)),
+              })
+            }
+            disabled={!localSettings.useDocker}
+          />
+        </label>
+        <p className="cp-hint">
+          Number of agent containers to run in parallel (1–8). Increase to enable parallel
+          dev/QA tasks. Each extra container multiplies API usage.
+        </p>
+
+        <label className="cp-field cp-field--row">
+          <input
+            type="checkbox"
+            checked={localSettings.dockerParallelTasks ?? false}
+            onChange={(e) =>
+              onChangeSettings({ ...localSettings, dockerParallelTasks: e.target.checked })
+            }
+            disabled={!localSettings.useDocker || (localSettings.dockerPoolSize ?? 1) <= 1}
+          />
+          <span>Run backlog tasks in parallel</span>
+        </label>
+        {(localSettings.dockerPoolSize ?? 1) <= 1 && (
+          <p className="cp-hint">Increase pool size to enable parallel tasks.</p>
+        )}
+
+        <label className="cp-field cp-field--row">
+          <input
+            type="checkbox"
+            checked={localSettings.dockerMountSocket ?? false}
+            onChange={(e) =>
+              onChangeSettings({ ...localSettings, dockerMountSocket: e.target.checked })
+            }
+            disabled={!localSettings.useDocker}
+          />
+          <span>Allow agents to run Docker in the target repo</span>
+        </label>
+        {localSettings.dockerMountSocket && (
+          <p className="cp-hint cp-hint--warn">
+            ⚠ Mounts the host Docker socket into the agent container. Grants host-level Docker
+            access — only use on trusted machines. Requires{" "}
+            <code>INSTALL_DOCKER_CLI=true</code> in the image and{" "}
+            <code>DOCKER_SOCKET</code> in your <code>.env</code>.
+          </p>
+        )}
 
         {dockerError && <p className="cp-error">{dockerError}</p>}
         {dockerOk && <p className="cp-status--ok">Docker validated successfully</p>}
@@ -172,8 +229,8 @@ export function DockerSection({
             isRunning
               ? "Stop the loop before merging"
               : !hasBranchInfo
-              ? "Start the loop with Docker to capture branch info"
-              : undefined
+                ? "Start the loop with Docker to capture branch info"
+                : undefined
           }
         >
           {merging ? "Merging..." : "Merge work into epic branch"}

@@ -39,6 +39,10 @@ const DEFAULT_SETTINGS: Settings = {
   epicBaseBranch: "",
   dockerWorkBranch: "",
   dockerIsolateBranch: true,
+  dockerPoolSize: 1,
+  dockerParallelTasks: false,
+  dockerInstalledBackends: [],
+  dockerMountSocket: false,
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,
@@ -130,7 +134,30 @@ export function useRalph() {
   }, []);
 
   // --- Actions ---
-  const startLoop = useCallback(() => fetch("/api/loop/start", { method: "POST" }), []);
+  const startLoop = useCallback(async () => {
+    const res = await fetch("/api/loop/start", { method: "POST" });
+    const data = (await res.json()) as { ok: boolean; error?: string };
+    if (!data.ok) {
+      setLoopStatus({
+        status: "error",
+        error: data.error ?? "Failed to start loop",
+      });
+    }
+    return data;
+  }, []);
+
+  const saveSettingsAndStart = useCallback(
+    async (settingsToRun: Settings) => {
+      await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settingsToRun),
+      });
+      setSettings(settingsToRun);
+      return startLoop();
+    },
+    [startLoop],
+  );
   const stopLoop = useCallback(() => fetch("/api/loop/stop", { method: "POST" }), []);
   const restartLoop = useCallback(() => fetch("/api/loop/restart", { method: "POST" }), []);
 
@@ -212,6 +239,7 @@ export function useRalph() {
     readiness,
     connected,
     startLoop,
+    saveSettingsAndStart,
     stopLoop,
     restartLoop,
     saveSettings,

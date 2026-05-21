@@ -80,6 +80,113 @@ export class GitManager {
     }
   }
 
+  /**
+   * Create a git worktree for the given slot at `.ralph/worktrees/slot-<n>`.
+   * The worktree branch is named `<baseBranch>-slot-<n>`.
+   * Idempotent: if the worktree already exists at the expected path, returns the path without error.
+   * @returns Absolute path to the worktree directory.
+   */
+  async createWorktree(slot: number, baseBranch: string): Promise<string> {
+    const relPath = `.ralph/worktrees/slot-${slot}`;
+    const worktreePath = path.join(this.repoRoot, relPath);
+    const branchName = `${baseBranch}-slot-${slot}`;
+
+    // Check if worktree already exists.
+    try {
+      const list = await this.runGit(["worktree", "list", "--porcelain"]);
+      if (list.includes(worktreePath)) {
+        return worktreePath;
+      }
+    } catch {
+      // proceed to create
+    }
+
+    // Create the worktree directory hierarchy if needed.
+    await import("fs/promises").then((fsp) =>
+      fsp.mkdir(path.dirname(worktreePath), { recursive: true }),
+    );
+
+    // Create a new branch from baseBranch and check it out in the worktree.
+    try {
+      await this.runGit(["worktree", "add", "-b", branchName, worktreePath, baseBranch]);
+    } catch (err) {
+      // If the branch already exists (e.g. from a previous partial run), use it.
+      const msg = String(err);
+      if (msg.includes("already exists")) {
+        await this.runGit(["worktree", "add", worktreePath, branchName]);
+      } else {
+        throw err;
+      }
+    }
+    return worktreePath;
+  }
+
+  /**
+   * Remove the worktree for the given slot.
+   * No-op if the worktree directory does not exist.
+   */
+  async removeWorktree(slot: number): Promise<void> {
+    const relPath = `.ralph/worktrees/slot-${slot}`;
+    const worktreePath = path.join(this.repoRoot, relPath);
+    try {
+      await this.runGit(["worktree", "remove", "--force", worktreePath]);
+    } catch {
+      // Ignore errors — worktree may already be absent.
+    }
+  }
+
+  /** List all worktrees (main + any added), parsed from `git worktree list --porcelain`. */
+  async listWorktrees(): Promise<Array<{ path: string; branch: string; head: string }>> {
+    const raw = await this.runGit(["worktree", "list", "--porcelain"]);
+    const entries: Array<{ path: string; branch: string; head: string }> = [];
+    let current: Partial<{ path: string; branch: string; head: string }> = {};
+    for (const line of raw.split("\n")) {
+      if (line.startsWith("worktree ")) {
+        current = { path: line.slice("worktree ".length).trim() };
+      } else if (line.startsWith("HEAD ")) {
+        current.head = line.slice("HEAD ".length).trim();
+      } else if (line.startsWith("branch ")) {
+        current.branch = line.slice("branch ".length).trim();
+      } else if (line.trim() === "" && current.path) {
+        entries.push({
+          path: current.path,
+          branch: current.branch ?? "(detached)",
+          head: current.head ?? "",
+        });
+        current = {};
+      }
+    }
+    if (current.path) {
+      entries.push({
+        path: current.path,
+        branch: current.branch ?? "(detached)",
+        head: current.head ?? "",
+      });
+    }
+    return entries;
+  }
+
+  /**
+   * Merge the slot's branch into `targetBranch` (from the main repo root).
+   * Uses --no-ff to preserve history.
+   */
+  async mergeWorktreeBranch(
+    slot: number,
+    baseBranch: string,
+    _targetBranch: string,
+  ): Promise<{ ok: boolean; conflicts?: string[] }> {
+    const slotBranch = `${baseBranch}-slot-${slot}`;
+    return this.mergeWorkBranch(slotBranch, "no-ff");
+  }
+
+  /**
+   * Return the container-side working directory path for a given slot.
+   * The host bind-mount root is `/workspace`; worktrees live under `.ralph/worktrees/`.
+   */
+  static worktreeContainerCwd(slot: number): string {
+    return `/workspace/.ralph/worktrees/slot-${slot}`;
+  }
+
   async checkRequirements(): Promise<string | null> {
     const candidates = [
       "requirements.md",

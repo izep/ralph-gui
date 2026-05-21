@@ -8,7 +8,7 @@ import {
   DEFAULT_EPIC,
 } from "./templates.js";
 import { TaskManager, type StatusData } from "./task-manager.js";
-import { LLMCaller } from "./llm-caller.js";
+import { LLMCaller, type LLMCallOpts } from "./llm-caller.js";
 import {
   parseRemainingTasks,
   parseBlockedInfo,
@@ -17,7 +17,8 @@ import {
 import { RalphFileManager } from "./ralph-file-manager.js";
 import { SettingsManager, DEFAULT_SETTINGS, type Settings } from "./settings-manager.js";
 import { GitManager } from "./git-manager.js";
-import { checkDockerHost } from "./docker-runner.js";
+import { checkDockerHost, ensureDockerAgentRunning, resolveComposeFile } from "./docker-runner.js";
+import { DockerPool, ensureDockerPool } from "./docker-pool.js";
 
 const DEFAULT_EPIC_NORMALIZED = DEFAULT_EPIC.replace(/\r\n/g, "\n").trim();
 
@@ -43,6 +44,9 @@ export class RalphLoop {
   private gitManager: GitManager;
   private llmCaller: LLMCaller;
   private completedEpic = false;
+  private dockerPool: DockerPool | null = null;
+  /** Simple async mutex for TaskManager writes during parallel execution. */
+  private taskWriteLock: Promise<void> = Promise.resolve();
 
   constructor(repoRoot: string, callbacks: LoopCallbacks) {
     this.repoRoot = path.resolve(repoRoot);
@@ -74,6 +78,42 @@ export class RalphLoop {
 
   get didCompleteEpic() {
     return this.completedEpic;
+  }
+
+  private buildLlmCallOpts(s: Settings, phase: "plan" | "dev" | "qa" | "backlog", slot?: { containerIndex?: number; worktreeCwd?: string }): LLMCallOpts {
+    const tag = phase === "backlog" ? "plan" : phase;
+    return {
+      agentBackend: s.agentBackend,
+      reasoningEffort:
+        phase === "dev"
+          ? s.devReasoningEffort
+          : phase === "qa"
+            ? s.qaReasoningEffort
+            : undefined,
+      fleetMode: phase === "dev" || phase === "qa" ? s.fleetMode : false,
+      useDocker: s.useDocker,
+      dockerComposeFile: s.dockerComposeFile,
+      dockerService: s.dockerService,
+      dockerContainerIndex: slot?.containerIndex,
+      dockerWorktreeCwd: slot?.worktreeCwd,
+      onProgress: (line, stream) => {
+        const suffix = stream === "stderr" ? " (stderr)" : "";
+        const scope = s.useDocker
+          ? slot?.containerIndex != null ? `docker:slot${slot.containerIndex}` : "docker"
+          : s.agentBackend;
+        this.cb.onLog(`[${tag}/${scope}]${suffix} ${line}`);
+      },
+    };
+  }
+
+  /** Run `fn` exclusively — queued writes to TaskManager use this to avoid races. */
+  private withTaskLock<T>(fn: () => Promise<T>): Promise<T> {
+    const next = this.taskWriteLock.then(() => fn());
+    this.taskWriteLock = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
   }
 
   // --- Git helpers ---
@@ -149,6 +189,43 @@ export class RalphLoop {
         return { ok: false, error: dockerCheck.message };
       }
 
+      const composeFile = resolveComposeFile(settings, this.repoRoot);
+      const service = settings.dockerService || "ralph-agent";
+      const poolSize = settings.dockerPoolSize ?? 1;
+      const ensure = await ensureDockerAgentRunning(
+        composeFile,
+        service,
+        this.repoRoot,
+        (line) => this.cb.onLog(line),
+        settings.agentBackend,
+        {
+          installedBackends: settings.dockerInstalledBackends,
+          validateSocketMount: settings.dockerMountSocket,
+        },
+      );
+      if (!ensure.ok) {
+        this.cb.onLog(`[system] ${ensure.message}`);
+        return { ok: false, error: ensure.message };
+      }
+      if (ensure.missingClis?.length) {
+        this.cb.onLog(
+          `[system] Warning: the following CLIs are not installed in the image: ${ensure.missingClis.join(", ")}. Rebuild with the appropriate INSTALL_* build args.`,
+        );
+      }
+
+      // If pool > 1, scale the service and initialize the pool allocator.
+      if (poolSize > 1 && settings.dockerParallelTasks) {
+        this.cb.onLog(`[system] Scaling Docker pool to ${poolSize} containers…`);
+        try {
+          await ensureDockerPool(composeFile, service, poolSize, this.repoRoot);
+        } catch (err) {
+          return { ok: false, error: `Failed to scale Docker pool: ${String(err)}` };
+        }
+        this.dockerPool = new DockerPool(poolSize);
+        this.dockerPool.init();
+        this.cb.onLog(`[system] Docker pool ready (${poolSize} slots).`);
+      }
+
       // Capture epic base branch and optionally create work branch
       const currentBranch = await this.gitManager.getCurrentBranch();
       if (!currentBranch || currentBranch === "HEAD") {
@@ -218,6 +295,8 @@ export class RalphLoop {
     this.stopRequestedRunId = this.runGeneration;
     this.running = false;
     this.llmCaller.stop();
+    this.dockerPool?.stopAll();
+    this.dockerPool = null;
     this.cb.onLoopStatus("stopped", null);
     this.cb.onLog("[system] Ralph loop stopped by user");
     return { ok: true };
@@ -270,7 +349,7 @@ export class RalphLoop {
         fullPlanPrompt,
         settings.planModel,
         this.repoRoot,
-        { agentBackend: settings.agentBackend }
+        this.buildLlmCallOpts(settings, "backlog"),
       );
 
       if (output.includes("<status>complete</status>")) {
@@ -428,7 +507,7 @@ export class RalphLoop {
           planPrompt,
           settings.planModel,
           this.repoRoot,
-          { agentBackend: settings.agentBackend }
+          this.buildLlmCallOpts(settings, "plan"),
         );
       } catch (err) {
         throw new Error(`Plan phase failed: ${err}`);
@@ -480,6 +559,73 @@ export class RalphLoop {
         continue;
       }
 
+      // Pause after first planning phase if configured
+      if (iteration === 1 && settings.pauseAfterPlan) {
+        this.cb.onLog("[system] Paused after planning. Review the backlog and click Start to resume.");
+        break;
+      }
+
+      // --- Parallel dev/QA (when pool > 1 and parallel tasks enabled) ---
+      if (this.dockerPool && settings.dockerParallelTasks && (settings.dockerPoolSize ?? 1) > 1) {
+        const allBacklog = statusData.tasks.filter((t) => t.status === "backlog");
+        this.cb.onLog(
+          `[system] Parallel dispatch: ${allBacklog.length} backlog task(s), pool ${settings.dockerPoolSize}.`,
+        );
+
+        const inFlight: Promise<void>[] = [];
+        for (const bt of allBacklog) {
+          const pool = this.dockerPool;
+          if (!pool) break;
+          const slot = await pool.acquire();
+          if (slot === -1) break; // pool was stopped
+
+          const taskId = bt.id;
+          const taskTitle = bt.title;
+          const taskContent = `## Task: ${bt.title}\n\n${bt.description}`;
+          const worktreeCwd = GitManager.worktreeContainerCwd(slot);
+
+          // Create worktree for the slot (idempotent).
+          const epicBase = settings.epicBaseBranch || (await this.gitManager.getCurrentBranch());
+          try {
+            await this.gitManager.createWorktree(slot, epicBase);
+          } catch (err) {
+            this.cb.onLog(`[system] Warning: could not create worktree for slot ${slot}: ${err}`);
+          }
+
+          await this.withTaskLock(() =>
+            this.taskManager.setTaskStatus(taskId, "inProgress", totalLLMCalls, settings.maxLLMCalls),
+          );
+          await this.withTaskLock(() =>
+            this.taskManager.setNextTaskContent(taskId, taskContent),
+          );
+
+          const slotOpts = { containerIndex: slot, worktreeCwd };
+          const p = this.runDevQALoop(taskId, taskTitle, taskContent, totalLLMCalls, false, slotOpts)
+            .then(async (r) => {
+              totalLLMCalls = r.totalLLMCalls;
+              tasksSincePlan++;
+              // Merge slot branch back to work branch.
+              const workBranch = settings.dockerWorkBranch || epicBase;
+              try {
+                await this.withTaskLock(() =>
+                  this.gitManager.mergeWorktreeBranch(slot, epicBase, workBranch),
+                );
+              } catch (err) {
+                this.cb.onLog(
+                  `[system] Warning: merge-back for slot ${slot} failed: ${err}. Resolve manually.`,
+                );
+              }
+            })
+            .finally(() => pool.release(slot));
+
+          inFlight.push(p);
+        }
+
+        await Promise.all(inFlight);
+        continue;
+      }
+
+      // --- Sequential dev + QA (default path) ---
       const effectiveTaskId = taskEntry.id;
       const title = taskEntry.title;
       const effectiveTaskContent = `## Task: ${taskEntry.title}\n\n${taskEntry.description}`;
@@ -491,12 +637,6 @@ export class RalphLoop {
         settings.maxLLMCalls,
       );
       await this.taskManager.setNextTaskContent(effectiveTaskId, effectiveTaskContent);
-
-      // Pause after first planning phase if configured
-      if (iteration === 1 && settings.pauseAfterPlan) {
-        this.cb.onLog("[system] Paused after planning. Review the backlog and click Start to resume.");
-        break;
-      }
 
       // --- Dev + QA loop ---
       const devResult = await this.runDevQALoop(
@@ -516,6 +656,7 @@ export class RalphLoop {
     nextTaskContent: string,
     totalLLMCalls: number,
     startAtQa = false,
+    slotOpts?: { containerIndex?: number; worktreeCwd?: string },
   ): Promise<{ totalLLMCalls: number }> {
     let feedback = "";
     if (startAtQa) {
@@ -549,14 +690,7 @@ export class RalphLoop {
             devPrompt,
             s.devModel,
             this.repoRoot,
-            {
-              agentBackend: s.agentBackend,
-              reasoningEffort: s.devReasoningEffort,
-              fleetMode: s.fleetMode,
-              useDocker: s.useDocker,
-              dockerComposeFile: s.dockerComposeFile,
-              dockerService: s.dockerService,
-            }
+            this.buildLlmCallOpts(s, "dev", slotOpts),
           );
         } catch (err) {
           throw new Error(`Dev phase failed: ${err}`);
@@ -571,21 +705,23 @@ export class RalphLoop {
         if (devOutput.includes("<status>blocked</status>")) {
           const blockedInfo = parseBlockedInfo(devOutput);
           const capturedAt = new Date().toISOString();
-          await this.taskManager.setTaskStatus(
-            effectiveTaskId,
-            "blocked",
-            totalLLMCalls,
-            s.maxLLMCalls,
-            "",
-            "",
-            devIteration,
-            {
-              summary: blockedInfo.summary,
-              impact: blockedInfo.impact,
-              nextStep: blockedInfo.nextStep,
-              needs: blockedInfo.needs,
-              capturedAt,
-            }
+          await this.withTaskLock(() =>
+            this.taskManager.setTaskStatus(
+              effectiveTaskId,
+              "blocked",
+              totalLLMCalls,
+              s.maxLLMCalls,
+              "",
+              "",
+              devIteration,
+              {
+                summary: blockedInfo.summary,
+                impact: blockedInfo.impact,
+                nextStep: blockedInfo.nextStep,
+                needs: blockedInfo.needs,
+                capturedAt,
+              }
+            ),
           );
           this.cb.onLog(
             `Task #${effectiveTaskId} BLOCKED in iteration #${devIteration}`
@@ -604,14 +740,16 @@ export class RalphLoop {
       startAtQa = false;
 
       // QA phase
-      await this.taskManager.setTaskStatus(
-        effectiveTaskId,
-        "inQa",
-        totalLLMCalls,
-        s.maxLLMCalls,
-        "",
-        "",
-        devIteration
+      await this.withTaskLock(() =>
+        this.taskManager.setTaskStatus(
+          effectiveTaskId,
+          "inQa",
+          totalLLMCalls,
+          s.maxLLMCalls,
+          "",
+          "",
+          devIteration
+        ),
       );
 
       const qaPrompt = await this.buildPrompt("qa-prompt.md", s, { task: nextTaskContent });
@@ -622,43 +760,42 @@ export class RalphLoop {
           qaPrompt,
           s.qaModel,
           this.repoRoot,
-          {
-            agentBackend: s.agentBackend,
-            reasoningEffort: s.qaReasoningEffort,
-            fleetMode: s.fleetMode,
-            useDocker: s.useDocker,
-            dockerComposeFile: s.dockerComposeFile,
-            dockerService: s.dockerService,
-          }
+          this.buildLlmCallOpts(s, "qa", slotOpts),
         );
       } catch (err) {
         throw new Error(`QA phase failed: ${err}`);
       }
       totalLLMCalls++;
       this.cb.onLog(`[qa] QA agent finished in ${this.elapsed(qaStart)}`);
-      await this.taskManager.setFeedbackContent(effectiveTaskId, feedback);
+      await this.withTaskLock(() =>
+        this.taskManager.setFeedbackContent(effectiveTaskId, feedback),
+      );
 
       if (feedback.includes("<status>verified</status>")) {
-        await this.taskManager.setTaskStatus(
-          effectiveTaskId,
-          "done",
-          totalLLMCalls,
-          s.maxLLMCalls,
-          "",
-          "",
-          devIteration
+        await this.withTaskLock(() =>
+          this.taskManager.setTaskStatus(
+            effectiveTaskId,
+            "done",
+            totalLLMCalls,
+            s.maxLLMCalls,
+            "",
+            "",
+            devIteration
+          ),
         );
         this.cb.onLog(`Task #${effectiveTaskId} verified!`);
         await this.autoCommitTask(effectiveTaskId, title);
       } else {
-        await this.taskManager.setTaskStatus(
-          effectiveTaskId,
-          "inProgress",
-          totalLLMCalls,
-          s.maxLLMCalls,
-          "",
-          "",
-          devIteration
+        await this.withTaskLock(() =>
+          this.taskManager.setTaskStatus(
+            effectiveTaskId,
+            "inProgress",
+            totalLLMCalls,
+            s.maxLLMCalls,
+            "",
+            "",
+            devIteration
+          ),
         );
         const fbSummary = feedback.slice(0, 120).replace(/\n/g, " ");
         this.cb.onLog(`[qa] Feedback: ${fbSummary}...`);

@@ -183,8 +183,34 @@ Enable **Run agents in Docker** in Settings → Docker Agents. Configure:
 | Compose File | Path to docker-compose file (blank = bundled `docker-compose.agents.yml`) |
 | Service Name | Compose service to exec into (default: `ralph-agent`) |
 | Isolate on work branch | Create a `ralph/epic-*` branch so agent commits are isolated from your base branch |
+| Pool size | Number of containers to run in parallel (default `1`, max `8`) |
+| Run backlog tasks in parallel | When `dockerPoolSize > 1`, run dev+QA phases for multiple backlog tasks simultaneously using git worktrees. (Disabled when pool size is 1.) |
+| Allow agents to run Docker | Mount host Docker socket into agent containers so they can `docker compose` inside the target repo. **Grants host-level Docker control — only enable on trusted machines.** |
 
-Click **Set Docker** to validate. Ralph will check the Docker daemon is running and the compose file resolves.
+Click **Set Docker** to validate. Ralph checks the Docker daemon, compose file, basic tools (`node`, `pnpm`, `git`), the active backend CLI, and any additional CLIs listed in `dockerInstalledBackends`.
+
+### Authentication and environment variables
+
+Agents run **inside** the container. Host logins (for example `copilot login` on your machine) do not apply unless you pass credentials into the container.
+
+1. Create **`ralph-gui/.env`** next to `docker-compose.agents.yml` (see [`.gitignore`](.gitignore) — do not commit this file).
+2. Set the variable for the backend selected in Settings (`agentBackend`).
+3. Recreate the container after any change:
+
+```bash
+docker compose -f docker-compose.agents.yml up -d --force-recreate ralph-agent
+```
+
+| Backend | Env var(s) | Token / key requirements (summary) |
+|---------|------------|--------------------------------------|
+| **Copilot** (default; CLI preinstalled in image) | `COPILOT_GITHUB_TOKEN`, or `GH_TOKEN`, or `GITHUB_TOKEN` | Fine-grained PAT (`github_pat_…`) on **your user** with account permission **Copilot Requests**; or OAuth `gho_…`. Classic `ghp_…` PATs are **not** supported. Requires an active GitHub Copilot subscription. |
+| **Claude** | `ANTHROPIC_API_KEY` | Anthropic API key; install `claude` in the image first. |
+| **Gemini** | `GEMINI_API_KEY` | Google AI Studio API key; install `gemini` in the image first. |
+| **Cursor Agent** | `CURSOR_API_KEY` | Cursor API key from the dashboard; install `cursor-agent` in the image first. |
+
+Optional git identity overrides: `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL`.
+
+**Step-by-step setup** (`.env`, tokens, validate, troubleshoot): [`docker/README.md`](docker/README.md) — start at [Step 2 — Add authentication](docker/README.md#step-2--add-authentication-env).
 
 ### Branch workflow
 
@@ -194,6 +220,70 @@ When `useDocker` + `dockerIsolateBranch` is enabled:
 2. A work branch `ralph/epic-<slug>` is created from the base branch.
 3. All agent commits land on the work branch (host and container share the same `.git`).
 4. Click **Merge work into epic branch** in the Docker section to merge back.
+
+### Multi-CLI image (build args)
+
+The agent image can include multiple coding-agent CLIs. Install only what you need to keep the image small:
+
+| Build arg | Default | Installs |
+|-----------|---------|----------|
+| `INSTALL_COPILOT` | `true` | `@github/copilot` CLI |
+| `INSTALL_CLAUDE` | `false` | `@anthropic-ai/claude-code` CLI |
+| `INSTALL_GEMINI` | `false` | `@google/gemini-cli` CLI |
+| `INSTALL_CURSOR` | `false` | Cursor Agent CLI (see `docker/README.md` for manual steps) |
+| `INSTALL_DOCKER_CLI` | `false` | Docker CLI + Compose plugin (required for nested compose — see below) |
+
+Example: build an image with Copilot + Claude:
+
+```bash
+INSTALL_CLAUDE=true \
+  docker compose -f docker-compose.agents.yml up -d --build
+```
+
+Set args in `.env` or export them to the shell before running `compose`. See [`docker/README.md`](docker/README.md) for the full build matrix and pinned version details.
+
+### Container pool (parallel agents)
+
+Set `dockerPoolSize > 1` in Settings to run multiple agent containers simultaneously. Ralph scales the compose service automatically:
+
+```bash
+# Manual equivalent — Ralph does this automatically when pool size changes
+docker compose -f docker-compose.agents.yml up -d --scale ralph-agent=2
+```
+
+When **Run backlog tasks in parallel** is enabled and `dockerPoolSize > 1`:
+
+- Ralph picks up to N backlog tasks at once (where N = pool size).
+- Each task runs in its own git **worktree** under `.ralph/worktrees/slot-<n>` so changes don't collide.
+- All TaskManager writes are mutex-protected.
+- After each task completes, its worktree branch is merged back into the epic work branch.
+
+> **Resource warning:** N parallel agents multiply CPU, RAM, and API quota usage. Enforce a reasonable max in your environment.
+
+Requires a **recent Docker Compose plugin** that supports `compose exec --index N`. If the flag is unsupported, run `docker compose version` and upgrade.
+
+### Fleet vs pool
+
+These two parallelism features are complementary and independent:
+
+| Feature | What it parallelises |
+|---------|---------------------|
+| **Fleet mode** (`fleetMode`) | Copilot in-container subagents — one container, multiple Copilot threads |
+| **Pool** (`dockerPoolSize > 1`) | Multiple containers — different backlog tasks, each in its own worktree |
+
+### Nested Docker (target repo compose stacks)
+
+Some backlog tasks require running `docker compose` inside the agent (for example, starting a full stack then running E2E tests). Enable **Allow agents to run Docker** in Settings:
+
+1. The host Docker socket is mounted into the container at `/var/run/docker.sock`.
+2. The agent container must have Docker CLI + Compose plugin — build with `INSTALL_DOCKER_CLI=true`.
+3. Click **Set Docker** — validation runs `docker info` and `docker compose version` inside the container.
+
+**Security:** mounting the host socket gives the agent effective host-level Docker control. Never enable in multi-tenant or untrusted environments. Default is off.
+
+When enabled, Ralph injects context into dev/QA prompts so the agent knows it can run `docker compose` against files under `/workspace`.
+
+If the host forbids container creation (no socket, locked-down CI sandbox), the task remains blocked — document "run on a Docker-capable runner" in the task's `blocked.needs`.
 
 ### CLI flags
 
@@ -207,6 +297,17 @@ When `useDocker` + `dockerIsolateBranch` is enabled:
 ### Not installed vs daemon stopped
 
 Ralph distinguishes between "Docker not installed" and "Docker daemon not running" and surfaces distinct error messages for each case.
+
+### Troubleshooting
+
+| Symptom | What to check |
+|---------|----------------|
+| Wrong CLI in image | Rebuild: `INSTALL_CLAUDE=true docker compose -f ... up -d --build` |
+| `--index` flag unsupported | Upgrade Docker Compose plugin (`docker compose version` ≥ 2.24) |
+| Worktree merge conflict | Use **Merge work into epic branch** in the Docker section; resolve conflicts manually if needed |
+| Pool not scaling | Check `docker compose ps` — containers may be stopped; run `up -d --scale N` manually |
+| `docker info` fails inside agent | Ensure `INSTALL_DOCKER_CLI=true` image was built and socket mount is enabled |
+| `cannot create containers` in task | Enable **Allow agents to run Docker** or run Ralph with `useDocker: false` on the host |
 
 ## Settings Defaults
 
@@ -225,6 +326,10 @@ Default loop settings are:
 - `fleetMode: false`
 - `useDocker: false`
 - `dockerService: ralph-agent`
+- `dockerPoolSize: 1`
+- `dockerParallelTasks: false`
+- `dockerInstalledBackends: []`
+- `dockerMountSocket: false`
 
 Use your selected CLI's help output for supported models (for example `copilot --help`, `claude --help`, `cursor-agent --help`, or `gemini --help`).
 

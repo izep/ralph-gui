@@ -134,3 +134,66 @@ describe("GitManager.deleteLocalBranch", () => {
     expect(branches).not.toContain("to-delete");
   });
 });
+
+// ---------------------------------------------------------------------------
+// GitManager worktree helpers (Epic 004)
+// ---------------------------------------------------------------------------
+
+describe("GitManager worktree helpers", () => {
+  it("createWorktree creates directory and branch", async () => {
+    const baseBranch = await gitManager.getCurrentBranch();
+    const wtPath = await gitManager.createWorktree(0, baseBranch);
+
+    // Directory should exist
+    const { stat } = await import("fs/promises");
+    const stats = await stat(wtPath);
+    expect(stats.isDirectory()).toBe(true);
+    expect(wtPath).toContain("slot-0");
+  });
+
+  it("createWorktree is idempotent — calling twice does not throw", async () => {
+    const baseBranch = await gitManager.getCurrentBranch();
+    const p1 = await gitManager.createWorktree(1, baseBranch);
+    const p2 = await gitManager.createWorktree(1, baseBranch);
+    expect(p1).toBe(p2);
+  });
+
+  it("listWorktrees returns at least the main worktree", async () => {
+    const wts = await gitManager.listWorktrees();
+    expect(wts.length).toBeGreaterThanOrEqual(1);
+    expect(wts[0].path).toBe(tmpDir);
+  });
+
+  it("listWorktrees returns created worktree", async () => {
+    const baseBranch = await gitManager.getCurrentBranch();
+    await gitManager.createWorktree(3, baseBranch);
+    const wts = await gitManager.listWorktrees();
+    const found = wts.find((w) => w.path.includes("slot-3"));
+    expect(found).toBeTruthy();
+  });
+
+  it("removeWorktree removes the directory", async () => {
+    const baseBranch = await gitManager.getCurrentBranch();
+    const wtPath = await gitManager.createWorktree(4, baseBranch);
+
+    const { stat } = await import("fs/promises");
+    await stat(wtPath); // should not throw (exists)
+
+    await gitManager.removeWorktree(4);
+
+    await expect(stat(wtPath)).rejects.toThrow();
+  });
+
+  it("removeWorktree is a no-op when worktree does not exist", async () => {
+    await expect(gitManager.removeWorktree(99)).resolves.not.toThrow();
+  });
+
+  it("worktreeContainerCwd returns expected path for slot", () => {
+    expect(GitManager.worktreeContainerCwd(0)).toBe(
+      "/workspace/.ralph/worktrees/slot-0",
+    );
+    expect(GitManager.worktreeContainerCwd(2)).toBe(
+      "/workspace/.ralph/worktrees/slot-2",
+    );
+  });
+});
