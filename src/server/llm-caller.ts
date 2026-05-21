@@ -9,6 +9,7 @@ import {
   resolveComposeFile,
 } from "./docker-runner.js";
 import type { Settings } from "./settings-manager.js";
+import { runCopilotCall } from "./copilot-cli.js";
 
 export const AGENT_BACKENDS = ["copilot", "cursor-agent", "claude", "gemini", "opencode"] as const;
 export type AgentBackendId = (typeof AGENT_BACKENDS)[number];
@@ -43,6 +44,10 @@ export interface LLMCallOpts {
   dockerWorktreeCwd?: string;
   /** Stream CLI stdout/stderr lines to the Ralph log (e.g. docker agent output). */
   onProgress?: (line: string, stream: "stdout" | "stderr") => void;
+  /** Log tag phase when using Copilot JSONL (`[copilot:plan|dev|qa]`). */
+  phase?: "plan" | "dev" | "qa";
+  copilotOutputFormat?: "text" | "json" | "streaming";
+  mcpConfig?: string;
 }
 
 /** @deprecated Use LLMCallOpts instead */
@@ -324,14 +329,16 @@ async function resolveCommandForBackend(
 
 export class LLMCaller {
   private isRunning: () => boolean;
+  private onLog?: (line: string) => void;
   /** Keyed by slotKey: `docker:<containerIndex>` for Docker calls, `main` otherwise. */
   private activeProcesses = new Map<string, ChildProcess>();
   private killTimer: NodeJS.Timeout | null = null;
   /** Resolved executable path per backend id (host) or `docker:<backend>` (container). */
   private cachedCommands = new Map<string, string>();
 
-  constructor(isRunning: () => boolean) {
+  constructor(isRunning: () => boolean, onLog?: (line: string) => void) {
     this.isRunning = isRunning;
+    this.onLog = onLog;
   }
 
   clearCommandCache(): void {
@@ -384,11 +391,44 @@ export class LLMCaller {
 
         const cli = backendCliLabel(backend);
         const reasoningEffort = backendSupportsReasoningEffort(backend) ? opts.reasoningEffort : undefined;
+
+        if (backend === "copilot" && !useDocker) {
+          const output = await runCopilotCall(
+            {
+              phase: opts.phase ?? "dev",
+              model,
+              reasoningEffort,
+              outputFormat: opts.copilotOutputFormat ?? "streaming",
+              mcpConfig: opts.mcpConfig,
+            },
+            {
+              prompt: applyCopilotFleetPrefix(prompt, useFleet),
+              repoRoot,
+              command,
+              isRunning: this.isRunning,
+              onLog: this.onLog,
+              setCurrentProcess: (proc) => {
+                if (proc) {
+                  this.activeProcesses.set("main", proc);
+                } else {
+                  this.activeProcesses.delete("main");
+                  if (this.activeProcesses.size === 0) {
+                    this.clearKillTimer();
+                  }
+                }
+              },
+            },
+          );
+          resolve(output);
+          return;
+        }
+
         let args: string[];
         let writeStdin: string | null;
 
         switch (backend) {
           case "copilot": {
+            // Docker containers don't yet support the streaming/JSONL copilot path handled above.
             args = ["--model", model, "--autopilot", "-s", "--yolo", "--no-color"];
             if (reasoningEffort) {
               args.push("--reasoning-effort", reasoningEffort);

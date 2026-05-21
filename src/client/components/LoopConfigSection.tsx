@@ -8,6 +8,7 @@ import {
   withSavedModelsForBackend,
   type ModelRole,
 } from "../../shared/agent-models";
+import { normalizeCopilotOutputFormat } from "../../shared/copilotLogFormat";
 
 export function normalizeAgentBackend(value: string | undefined): AgentBackendId {
   const v = value?.trim().toLowerCase();
@@ -36,6 +37,8 @@ function syncCustomFlags(
     qaIsCustom: !isModelInCatalog(backend, qaModel),
   };
 }
+
+export { normalizeCopilotOutputFormat };
 
 export function LoopConfigSection({
   localSettings,
@@ -198,6 +201,25 @@ export function LoopConfigSection({
           </p>
         ) : (
           <p className="cp-hint">Uses Copilot /fleet on dev/QA; may increase premium request usage.</p>
+        )}
+
+        {localSettings.agentBackend === "copilot" && (
+          <label className="cp-field">
+            <span>Copilot Log Format</span>
+            <select
+              value={localSettings.copilotOutputFormat}
+              onChange={(e) =>
+                onChangeSettings({
+                  ...localSettings,
+                  copilotOutputFormat: normalizeCopilotOutputFormat(e.target.value),
+                })
+              }
+            >
+              <option value="streaming">Streaming JSONL (structured viewer)</option>
+              <option value="json">JSON batch (structured viewer)</option>
+              <option value="text">Plain text</option>
+            </select>
+          </label>
         )}
 
         <label className="cp-field">

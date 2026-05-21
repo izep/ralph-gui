@@ -58,6 +58,8 @@ export type AgentBackendId = "copilot" | "cursor-agent" | "claude" | "gemini" | 
 
 export type DockerMergeStrategy = "work-branch" | "epic-base-per-task";
 
+export type CopilotOutputFormat = "text" | "json" | "streaming";
+
 export type TaskColumnSort =
   | "updatedAtAsc"
   | "updatedAtDesc"
@@ -91,6 +93,8 @@ export interface Settings {
   dockerMountSocket: boolean;
   /** Auto-merge dockerWorkBranch into epicBaseBranch when loop finishes successfully */
   dockerAutoMergeEpicWork: boolean;
+  /** Copilot CLI log format when agentBackend is copilot. */
+  copilotOutputFormat: CopilotOutputFormat;
   epicFile: string;
   requirementsFile: string;
   pauseAfterPlan: boolean;

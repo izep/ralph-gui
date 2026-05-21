@@ -22,7 +22,6 @@
   },
   "include": [
     "./**/*",
-    "../shared/agent-models.ts",
-    "../shared/docker-merge-strategy.ts"
+    "../shared/**/*.ts"
   ]
 }
