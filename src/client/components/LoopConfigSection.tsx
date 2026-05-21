@@ -1,4 +1,5 @@
 import type { Settings, AgentBackendId, TaskColumnSort } from "../types";
+import { normalizeCopilotOutputFormat } from "../../shared/copilotLogFormat";
 
 export function normalizeAgentBackend(value: string | undefined): AgentBackendId {
   const v = value?.trim().toLowerCase();
@@ -7,6 +8,8 @@ export function normalizeAgentBackend(value: string | undefined): AgentBackendId
   if (v === "gemini") return "gemini";
   return "copilot";
 }
+
+export { normalizeCopilotOutputFormat };
 
 export function LoopConfigSection({
   localSettings,
@@ -44,6 +47,25 @@ export function LoopConfigSection({
           <option value="gemini">Google Gemini CLI</option>
         </select>
       </label>
+
+      {localSettings.agentBackend === "copilot" && (
+        <label className="cp-field">
+          <span>Copilot Log Format</span>
+          <select
+            value={localSettings.copilotOutputFormat}
+            onChange={(e) =>
+              onChangeSettings({
+                ...localSettings,
+                copilotOutputFormat: normalizeCopilotOutputFormat(e.target.value),
+              })
+            }
+          >
+            <option value="streaming">Streaming JSONL (structured viewer)</option>
+            <option value="json">JSON batch (structured viewer)</option>
+            <option value="text">Plain text</option>
+          </select>
+        </label>
+      )}
 
       <label className="cp-field">
         <span>Max LLM Calls</span>

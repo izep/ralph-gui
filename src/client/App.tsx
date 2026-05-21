@@ -196,7 +196,14 @@ export default function App() {
       </div>
 
       {showLog && (
-        <LogViewer lines={ralph.log} onClose={() => setShowLog(false)} />
+        <LogViewer
+          lines={ralph.log}
+          currentTaskNum={ralph.tasks.currentTaskNum}
+          currentTaskTitle={
+            ralph.tasks.tasks.find((t) => t.id === ralph.tasks.currentTaskNum)?.title
+          }
+          onClose={() => setShowLog(false)}
+        />
       )}
     </div>
   );

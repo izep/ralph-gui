@@ -2,6 +2,10 @@
 import { readFile, writeFile } from "fs/promises";
 import path from "path";
 import { normalizeAgentBackend, type AgentBackendId } from "./llm-caller.js";
+import {
+  normalizeCopilotOutputFormat,
+  type CopilotOutputFormat,
+} from "../shared/copilotLogFormat.js";
 
 export type TaskColumnSort =
   | "updatedAtAsc"
@@ -21,6 +25,8 @@ export interface Settings {
   minBacklogSize: number;
   // Supported values: "copilot" | "cursor-agent" | "claude" | "gemini"
   agentBackend: AgentBackendId;
+  /** Copilot CLI log format when agentBackend is copilot (JSONL + UI formatters). */
+  copilotOutputFormat: CopilotOutputFormat;
   // Relative path to the epic file from the repo root (default: "ralph/epic.md")
   epicFile: string;
   // Relative path to the requirements file; empty string means auto-discover
@@ -40,6 +46,7 @@ export const DEFAULT_SETTINGS: Settings = {
   planFrequency: 1,
   minBacklogSize: 3,
   agentBackend: "copilot",
+  copilotOutputFormat: "streaming",
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,
@@ -67,6 +74,7 @@ export class SettingsManager {
         ...DEFAULT_SETTINGS,
         ...parsed,
         agentBackend: normalizeAgentBackend(parsed.agentBackend),
+        copilotOutputFormat: normalizeCopilotOutputFormat(parsed.copilotOutputFormat),
       };
 
       // Backward compatibility for older settings.json files.
@@ -88,6 +96,9 @@ export class SettingsManager {
   async write(settings: Settings): Promise<void> {
     const normalized = { ...DEFAULT_SETTINGS, ...settings };
     normalized.agentBackend = normalizeAgentBackend(settings.agentBackend);
+    normalized.copilotOutputFormat = normalizeCopilotOutputFormat(
+      settings.copilotOutputFormat,
+    );
     await writeFile(
       path.join(this.ralphDir, "settings.json"),
       JSON.stringify(normalized, null, 2),

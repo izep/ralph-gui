@@ -3,6 +3,7 @@ import { spawn, type ChildProcess } from "child_process";
 import { constants } from "fs";
 import { access } from "fs/promises";
 import path from "path";
+import { runCopilotCall } from "./copilot-cli.js";
 
 export const AGENT_BACKENDS = ["copilot", "cursor-agent", "claude", "gemini"] as const;
 export type AgentBackendId = (typeof AGENT_BACKENDS)[number];
@@ -10,6 +11,10 @@ export type AgentBackendId = (typeof AGENT_BACKENDS)[number];
 export interface LLMCallOpts {
   agentBackend?: AgentBackendId;
   reasoningEffort?: string;
+  /** Log tag phase when using Copilot JSONL (`[copilot:plan|dev|qa]`). */
+  phase?: "plan" | "dev" | "qa";
+  copilotOutputFormat?: "text" | "json" | "streaming";
+  mcpConfig?: string;
 }
 
 /** @deprecated Use LLMCallOpts instead */
@@ -266,13 +271,15 @@ async function resolveCommandForBackend(
 
 export class LLMCaller {
   private isRunning: () => boolean;
+  private onLog?: (line: string) => void;
   private currentProcess: ChildProcess | null = null;
   private killTimer: NodeJS.Timeout | null = null;
   /** Resolved executable path per backend id */
   private cachedCommands = new Map<AgentBackendId, string>();
 
-  constructor(isRunning: () => boolean) {
+  constructor(isRunning: () => boolean, onLog?: (line: string) => void) {
     this.isRunning = isRunning;
+    this.onLog = onLog;
   }
 
   clearCommandCache(): void {
@@ -307,18 +314,35 @@ export class LLMCaller {
 
         const cli = backendCliLabel(backend);
         const reasoningEffort = backendSupportsReasoningEffort(backend) ? opts.reasoningEffort : undefined;
+
+        if (backend === "copilot") {
+          const output = await runCopilotCall(
+            {
+              phase: opts.phase ?? "dev",
+              model,
+              reasoningEffort,
+              outputFormat: opts.copilotOutputFormat ?? "streaming",
+              mcpConfig: opts.mcpConfig,
+            },
+            {
+              prompt,
+              repoRoot,
+              command,
+              isRunning: this.isRunning,
+              onLog: this.onLog,
+              setCurrentProcess: (proc) => {
+                this.currentProcess = proc;
+              },
+            },
+          );
+          resolve(output);
+          return;
+        }
+
         let args: string[];
         let writeStdin: string | null;
 
         switch (backend) {
-          case "copilot": {
-            args = ["--model", model, "--autopilot", "-s", "--yolo", "--no-color"];
-            if (reasoningEffort) {
-              args.push("--reasoning-effort", reasoningEffort);
-            }
-            writeStdin = prompt;
-            break;
-          }
           case "cursor-agent": {
             assertPromptFitsArgv(prompt, backend);
             args = [

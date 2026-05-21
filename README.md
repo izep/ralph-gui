@@ -161,6 +161,7 @@ Default loop settings are:
 - `planFrequency: 1`
 - `minBacklogSize: 3`
 - `agentBackend: copilot`
+- `copilotOutputFormat: streaming` — Copilot JSONL logs with `[copilot:plan|dev|qa]` tags and a structured log viewer (also `json` or `text`)
 
 Use your selected CLI’s help output for supported models (for example `copilot --help`, `claude --help`, `cursor-agent --help`, or `gemini --help`).
 

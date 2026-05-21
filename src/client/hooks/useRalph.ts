@@ -32,6 +32,7 @@ const DEFAULT_SETTINGS: Settings = {
   planFrequency: 1,
   minBacklogSize: 3,
   agentBackend: "copilot",
+  copilotOutputFormat: "streaming",
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,

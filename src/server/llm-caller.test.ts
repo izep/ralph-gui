@@ -229,13 +229,15 @@ describe("backendSupportsReasoningEffort", () => {
 });
 
 describe("LLMCaller.call", () => {
-  it("uses stdin for copilot and includes reasoning effort", async () => {
+  it("uses -p and JSONL streaming for copilot with reasoning effort", async () => {
     process.env.COPILOT_BIN = await makeExecutable("copilot");
     const caller = new LLMCaller(() => true);
 
     const resultPromise = caller.call("hello prompt", "gpt-5-mini", tmpDir, {
       agentBackend: "copilot",
+      phase: "dev",
       reasoningEffort: "high",
+      copilotOutputFormat: "streaming",
     });
 
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
@@ -244,11 +246,21 @@ describe("LLMCaller.call", () => {
 
     expect(command).toBe(process.env.COPILOT_BIN);
     expect(args).toEqual([
-      "--model", "gpt-5-mini",
-      "--autopilot", "-s", "--yolo", "--no-color",
-      "--reasoning-effort", "high",
+      "-p",
+      "hello prompt",
+      "--model",
+      "gpt-5-mini",
+      "--autopilot",
+      "--yolo",
+      "--no-color",
+      "--output-format",
+      "json",
+      "--stream",
+      "on",
+      "--reasoning-effort",
+      "high",
     ]);
-    expect(proc.stdin.write).toHaveBeenCalledWith("hello prompt");
+    expect(proc.stdin.write).not.toHaveBeenCalled();
 
     proc.stdout.emit("data", Buffer.from("ok"));
     proc.emit("close", 0);
