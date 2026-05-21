@@ -242,9 +242,9 @@ function deriveRunStateFromSlice(slice: string[]): RunStateFromLog | null {
     if (tag === "[qa]") {
       phase = "qa";
       if (/Running QA/i.test(body)) {
-        const prev = (iter?.match(/QA pass (\d+)/)?.[1] ?? "0");
-        const n = Number(prev) + 1;
-        iter = `QA pass ${n}`;
+        const prevPass: string | undefined = iter?.match(/QA pass (\d+)/)?.[1];
+        const passNum: number = Number(prevPass ?? "0") + 1;
+        iter = `QA pass ${passNum}`;
       }
     }
     if (tag === "[ralph]") {
