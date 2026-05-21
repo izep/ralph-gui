@@ -123,3 +123,7 @@ If both pass and `agent-models.ts` exports match epic checklist → mark Task 12
 - Implementation order: 16 (Dockerfile/compose) → 17 (validate multi-CLI) → 18 (settings pool UI) → 19 (socket mount) → 20 (docker-pool.ts + --index) → 21 (git worktrees) → 22 (parallel LLMCaller) → 23 (parallel loop) → 24 (tests) → 25 (docs) → 26 (stretch plan parallel).
 - docker-compose.agents.yml socket mount: use DOCKER_SOCKET env var with /dev/null fallback to avoid compose failures when socket is disabled; alternatively use compose profiles.
 - Worktree host path: <repoRoot>/.ralph/worktrees/slot-<n>; container path: /workspace/.ralph/worktrees/slot-<n>.
+
+- Discovery 2026-05-21: docker/Dockerfile and docker-compose.agents.yml already include INSTALL_* build args (INSTALL_COPILOT, INSTALL_CLAUDE, INSTALL_GEMINI, INSTALL_CURSOR, INSTALL_DOCKER_CLI) and the non-Copilot auth env vars (ANTHROPIC_API_KEY, GEMINI_API_KEY, CURSOR_API_KEY, CURSOR_SESSION_TOKEN). No edits were required for this task.
+- Validation tip: run `docker compose -f docker-compose.agents.yml config` to confirm build args and envs are present, and `npm run typecheck` to ensure TS unchanged.
+
