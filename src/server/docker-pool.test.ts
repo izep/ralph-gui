@@ -25,9 +25,10 @@ class MockProc {
 
   emitClose(code: number, stdoutData?: string) {
     if (stdoutData) {
-      this.stdout.on.mock.calls
-        .filter((c: [string, unknown]) => c[0] === "data")
-        .forEach((c: [string, (d: Buffer) => void]) => c[1](Buffer.from(stdoutData)));
+      const stdoutCalls = this.stdout.on.mock.calls as any[][];
+      stdoutCalls
+        .filter((c) => c[0] === "data")
+        .forEach((c) => (c[1] as (d: Buffer) => void)(Buffer.from(stdoutData)));
     }
     this.closeHandlers.forEach((h) => h(code));
   }
@@ -63,7 +64,7 @@ describe("ensureDockerPool", () => {
 
     await ensureDockerPool("/compose.yml", "ralph-agent", 2, "/repo");
 
-    const upCall = spawnMock.mock.calls.find((c: [string, string[]]) =>
+    const upCall = spawnMock.mock.calls.find((c: any[]) =>
       (c[1] as string[]).includes("up"),
     );
     expect(upCall).toBeTruthy();

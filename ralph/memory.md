@@ -126,4 +126,5 @@ If both pass and `agent-models.ts` exports match epic checklist → mark Task 12
 
 - Discovery 2026-05-21: docker/Dockerfile and docker-compose.agents.yml already include INSTALL_* build args (INSTALL_COPILOT, INSTALL_CLAUDE, INSTALL_GEMINI, INSTALL_CURSOR, INSTALL_DOCKER_CLI) and the non-Copilot auth env vars (ANTHROPIC_API_KEY, GEMINI_API_KEY, CURSOR_API_KEY, CURSOR_SESSION_TOKEN). No edits were required for this task.
 - Validation tip: run `docker compose -f docker-compose.agents.yml config` to confirm build args and envs are present, and `npm run typecheck` to ensure TS unchanged.
+- Note: Running `npm run typecheck` revealed three TS errors in `src/server/docker-pool.test.ts` related to overly-specific tuple typings on mock.calls; tests (not code) need typing fixes to pass CI. This is unrelated to the Dockerfile/compose changes but blocks a clean typecheck until addressed.
 
