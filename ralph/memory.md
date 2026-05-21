@@ -136,3 +136,12 @@ If both pass and `agent-models.ts` exports match epic checklist → mark Task 12
   1. `docker-runner.test.ts`: `validateSocketMount: true` path — needs `vi.spyOn(fs, 'existsSync')` (or `vi.mock('fs', ...)`) since `existsSync` is imported from `'fs'` in docker-runner.ts. Two cases: socket file missing → ok:false; docker info + compose version both succeed → ok:true.
   2. `ralph-loop.test.ts`: parallel dispatch when `dockerParallelTasks: true` + `dockerPoolSize: 2` — mock `ensureDockerPool` from `'./docker-pool.js'` to resolve, mock LLMCaller.call, assert both dev calls start concurrently before either resolves.
 - `fs.existsSync` in docker-runner.ts is already imported as a named import; mock it with `vi.spyOn(fsModule, 'existsSync')` after importing `* as fsModule from 'fs'` in the test.
+
+## 2026-05-21 QA update
+
+- Verified: both Epic 004 test scenarios are present and passing. Ran `npm run test:ci`; the full suite succeeded (245 tests).
+ - src/server/docker-runner.test.ts: `ensureDockerAgentRunning — validateSocketMount` exercises host-socket-missing and socket-present flows by mocking `fs.existsSync` and container `docker info` / `docker compose version` execs.
+ - src/server/ralph-loop.test.ts: `RalphLoop parallel dispatch` exercises parallel dev/QA runs with `useDocker: true`, `dockerPoolSize: 2`, and `dockerParallelTasks: true`; DockerPool and GitManager are mocked and concurrency is asserted.
+
+Note: Tests use mocked `child_process.spawn` and do not require a Docker daemon; CI remains Docker-free for these cases.
+
