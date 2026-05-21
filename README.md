@@ -185,6 +185,7 @@ Enable **Run agents in Docker** in Settings → Docker Agents. Configure:
 | Isolate on work branch | Create a `ralph/epic-*` branch so agent commits are isolated from your base branch |
 | Pool size | Number of containers to run in parallel (default `1`, max `8`) |
 | Run backlog tasks in parallel | When `dockerPoolSize > 1`, run dev+QA phases for multiple backlog tasks simultaneously using git worktrees. (Disabled when pool size is 1.) |
+| Parallel plan research | *(Stretch)* When the plan agent emits `<research-prompt>` blocks, dispatch them concurrently across pool slots and merge task results back into the backlog. Requires pool size > 1. Increases API usage proportionally. |
 | Allow agents to run Docker | Mount host Docker socket into agent containers so they can `docker compose` inside the target repo. **Grants host-level Docker control — only enable on trusted machines.** |
 
 Click **Set Docker** to validate. Ralph checks the Docker daemon, compose file, basic tools (`node`, `pnpm`, `git`), the active backend CLI, and any additional CLIs listed in `dockerInstalledBackends`.
@@ -258,6 +259,8 @@ When **Run backlog tasks in parallel** is enabled and `dockerPoolSize > 1`:
 - All TaskManager writes are mutex-protected.
 - After each task completes, its worktree branch is merged back into the epic work branch.
 
+When **Parallel plan research** is also enabled, the plan agent can additionally emit `<research-prompt>` blocks in its output. Ralph dispatches each block to a pool slot concurrently, aggregates the resulting task lists into the backlog, then continues with the normal dev/QA loop. This is a stretch feature — the plan prompt template must be extended to emit `<research-prompt>` output for it to have any effect.
+
 > **Resource warning:** N parallel agents multiply CPU, RAM, and API quota usage. Enforce a reasonable max in your environment.
 
 Requires a **recent Docker Compose plugin** that supports `compose exec --index N`. If the flag is unsupported, run `docker compose version` and upgrade.
@@ -328,6 +331,7 @@ Default loop settings are:
 - `dockerService: ralph-agent`
 - `dockerPoolSize: 1`
 - `dockerParallelTasks: false`
+- `dockerPlanParallel: false`
 - `dockerInstalledBackends: []`
 - `dockerMountSocket: false`
 

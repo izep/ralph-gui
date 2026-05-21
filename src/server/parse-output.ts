@@ -79,3 +79,19 @@ export function parseBlockedInfo(content: string): ParsedBlockedInfo {
     needs: readTag(content, "blocked-needs"),
   };
 }
+
+/**
+ * Parse `<research-prompt>...</research-prompt>` blocks from plan output.
+ * The plan agent can emit one or more of these to request parallel research
+ * sub-jobs when `dockerPlanParallel` is enabled.
+ */
+export function parseResearchPrompts(content: string): string[] {
+  const prompts: string[] = [];
+  const re = /<research-prompt>([\s\S]*?)<\/research-prompt>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(content)) !== null) {
+    const p = m[1].trim();
+    if (p) prompts.push(p);
+  }
+  return prompts;
+}

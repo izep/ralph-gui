@@ -41,6 +41,7 @@ const DEFAULT_SETTINGS: Settings = {
   dockerIsolateBranch: true,
   dockerPoolSize: 1,
   dockerParallelTasks: false,
+  dockerPlanParallel: false,
   dockerInstalledBackends: [],
   dockerMountSocket: false,
   epicFile: "ralph/epic.md",

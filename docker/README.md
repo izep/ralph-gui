@@ -232,6 +232,18 @@ Check **Run backlog tasks in parallel** in Settings (only available when Pool si
 - After completion, the worktree branch is merged back into the epic work branch automatically.
 - All task-status writes are mutex-protected to prevent race conditions.
 
+### Plan-phase parallel research (stretch)
+
+Check **Parallel plan research** in Settings (also requires Pool size > 1). When enabled alongside a plan prompt template that emits `<research-prompt>...</research-prompt>` blocks, Ralph:
+
+1. Runs the sequential plan phase as normal.
+2. Parses any `<research-prompt>` blocks from the plan output.
+3. Dispatches each block to a pool slot concurrently, each in its own worktree.
+4. Aggregates the resulting task lists (JSON) from all sub-job outputs into the backlog.
+5. Continues with the normal dev/QA loop against the enriched backlog.
+
+Each research sub-job sends one additional LLM call. Enable this only if your plan prompt is adapted to produce `<research-prompt>` output; without those tags the setting has no effect.
+
 ### Resource considerations
 
 N parallel agents multiply CPU, RAM, and API-token usage. A reasonable rule of thumb: start with `dockerPoolSize=2` and monitor system load before increasing.

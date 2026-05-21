@@ -35,6 +35,8 @@ export interface Settings {
   // Container pool — parallel dev/QA tasks in separate containers
   dockerPoolSize: number;
   dockerParallelTasks: boolean;
+  /** (Stretch) Dispatch parallel research sub-jobs during the plan phase */
+  dockerPlanParallel: boolean;
   dockerInstalledBackends: AgentBackendId[];
   // Socket mount — allow agents to run docker compose inside the container
   dockerMountSocket: boolean;
@@ -68,6 +70,7 @@ export const DEFAULT_SETTINGS: Settings = {
   dockerIsolateBranch: true,
   dockerPoolSize: 1,
   dockerParallelTasks: false,
+  dockerPlanParallel: false,
   dockerInstalledBackends: [],
   dockerMountSocket: false,
   epicFile: "ralph/epic.md",

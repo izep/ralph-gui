@@ -273,6 +273,7 @@ const defaultSettings: Settings = {
   dockerIsolateBranch: true,
   dockerPoolSize: 1,
   dockerParallelTasks: false,
+  dockerPlanParallel: false,
   dockerInstalledBackends: [],
   dockerMountSocket: false,
   epicFile: "ralph/epic.md",
@@ -516,6 +517,57 @@ describe("ControlPanel", () => {
     const parallel = screen.getByLabelText(/Run backlog tasks in parallel/i);
     expect((parallel as HTMLInputElement).disabled).toBe(false);
   });
+
+  it("Parallel plan research checkbox is disabled when dockerPoolSize is 1", () => {
+    render(
+      <ControlPanel
+        settings={{ ...defaultSettings, useDocker: true, dockerPoolSize: 1 }}
+        epic=""
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={async () => { }}
+        onSaveEpic={async () => { }}
+        onSavePrompt={async () => { }}
+        onSetRepo={async () => ({ ok: true })}
+        onRefreshBacklog={async () => ({ ok: true })}
+        onSetEpicFile={async () => ({ ok: true, content: "" })}
+        onCreateEpicFile={async () => ({ ok: true, content: "" })}
+        onValidateDocker={async () => ({ ok: true })}
+        onMergeEpicWork={async () => ({ ok: true })}
+        isRunning={false}
+        onClose={() => { }}
+      />
+    );
+    const planParallel = screen.getByLabelText(/Parallel plan research/i);
+    expect((planParallel as HTMLInputElement).disabled).toBe(true);
+  });
+
+  it("Parallel plan research checkbox is enabled when dockerPoolSize > 1", () => {
+    render(
+      <ControlPanel
+        settings={{ ...defaultSettings, useDocker: true, dockerPoolSize: 2 }}
+        epic=""
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={async () => { }}
+        onSaveEpic={async () => { }}
+        onSavePrompt={async () => { }}
+        onSetRepo={async () => ({ ok: true })}
+        onRefreshBacklog={async () => ({ ok: true })}
+        onSetEpicFile={async () => ({ ok: true, content: "" })}
+        onCreateEpicFile={async () => ({ ok: true, content: "" })}
+        onValidateDocker={async () => ({ ok: true })}
+        onMergeEpicWork={async () => ({ ok: true })}
+        isRunning={false}
+        onClose={() => { }}
+      />
+    );
+    const planParallel = screen.getByLabelText(/Parallel plan research/i);
+    expect((planParallel as HTMLInputElement).disabled).toBe(false);
+  });
+
 
   it("Epic Set button calls set-file API and loads content", async () => {
     const onSetEpicFile = vi.fn(async (_path: string) => ({ ok: true, content: "# Epic content" }));

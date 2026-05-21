@@ -82,6 +82,8 @@ export interface Settings {
   dockerIsolateBranch: boolean;
   dockerPoolSize: number;
   dockerParallelTasks: boolean;
+  /** Dispatch parallel research sub-jobs during the plan phase (stretch) */
+  dockerPlanParallel: boolean;
   dockerInstalledBackends: AgentBackendId[];
   dockerMountSocket: boolean;
   epicFile: string;

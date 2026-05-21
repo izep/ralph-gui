@@ -169,6 +169,23 @@ export function DockerSection({
         <label className="cp-field cp-field--row">
           <input
             type="checkbox"
+            checked={localSettings.dockerPlanParallel ?? false}
+            onChange={(e) =>
+              onChangeSettings({ ...localSettings, dockerPlanParallel: e.target.checked })
+            }
+            disabled={!localSettings.useDocker || (localSettings.dockerPoolSize ?? 1) <= 1}
+          />
+          <span>Parallel plan research (stretch)</span>
+        </label>
+        <p className="cp-hint">
+          When the plan agent emits <code>&lt;research-prompt&gt;</code> blocks, dispatch them
+          concurrently across pool slots and merge results into the backlog. Requires pool size
+          &gt; 1. Increases API usage proportionally.
+        </p>
+
+        <label className="cp-field cp-field--row">
+          <input
+            type="checkbox"
             checked={localSettings.dockerMountSocket ?? false}
             onChange={(e) =>
               onChangeSettings({ ...localSettings, dockerMountSocket: e.target.checked })

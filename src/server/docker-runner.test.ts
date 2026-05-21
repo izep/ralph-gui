@@ -470,17 +470,17 @@ describe("ensureDockerAgentRunning — missingClis", () => {
 describe("ensureDockerAgentRunning — validateSocketMount", () => {
   beforeEach(() => {
     // reset the mocked fs.existsSync (vi.mock provided earlier)
-    if (fs.existsSync?.mockReset) fs.existsSync.mockReset();
+  if ((fs.existsSync as any)?.mockReset) (fs.existsSync as any).mockReset();
     spawnMock.mockReset();
   });
 
   afterEach(() => {
-    if (fs.existsSync?.mockReset) fs.existsSync.mockReset();
+  if ((fs.existsSync as any)?.mockReset) (fs.existsSync as any).mockReset();
     spawnMock.mockReset();
   });
 
   it("returns error when docker socket does not exist on host", async () => {
-    if (fs.existsSync?.mockReturnValue) fs.existsSync.mockReturnValue(false);
+    if ((fs.existsSync as any)?.mockReturnValue) (fs.existsSync as any).mockReturnValue(false);
 
     // Basic spawn behavior: up, ps, exec for node probe
     spawnMock.mockImplementation((_cmd: string, args: string[]) => {
@@ -519,7 +519,7 @@ describe("ensureDockerAgentRunning — validateSocketMount", () => {
   });
 
   it("validates docker info and docker compose version inside container when socket present", async () => {
-    if (fs.existsSync?.mockReturnValue) fs.existsSync.mockReturnValue(true);
+    if ((fs.existsSync as any)?.mockReturnValue) (fs.existsSync as any).mockReturnValue(true);
 
     spawnMock.mockImplementation((_cmd: string, args: string[]) => {
       const proc = new MockProcess();

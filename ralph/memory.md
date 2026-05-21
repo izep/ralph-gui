@@ -128,6 +128,15 @@ If both pass and `agent-models.ts` exports match epic checklist → mark Task 12
 - Validation tip: run `docker compose -f docker-compose.agents.yml config` to confirm build args and envs are present, and `npm run typecheck` to ensure TS unchanged.
 - Note: Running `npm run typecheck` revealed three TS errors in `src/server/docker-pool.test.ts` related to overly-specific tuple typings on mock.calls; tests (not code) need typing fixes to pass CI. This is unrelated to the Dockerfile/compose changes but blocks a clean typecheck until addressed.
 
+## 2026-05-21 Test typing fixes
+
+- While enabling plan-phase parallel dispatch, several Vitest test files contained untyped mock usages that TypeScript flagged (e.g. accessing `.mock` on functions, implicit any parameters in mock classes). To keep CI green, tests were updated with minimal typing/casts:
+  - Added explicit types to the MockDockerPool class in `src/server/ralph-loop.test.ts`.
+  - Replaced bare `fs.existsSync?.mockReset`/`mockReturnValue` calls with `(fs.existsSync as any)?.mockReset()` casts in `src/server/docker-runner.test.ts`.
+  - Provided typed mockResolvedValue payloads where required by the mocked function signatures.
+
+These are test-only changes to satisfy the TypeScript compiler; production server code was not modified.
+
 
 ## 2026-05-21 Epic 004 Mid-Sprint Survey
 
@@ -145,3 +154,12 @@ If both pass and `agent-models.ts` exports match epic checklist → mark Task 12
 
 Note: Tests use mocked `child_process.spawn` and do not require a Docker daemon; CI remains Docker-free for these cases.
 
+
+## 2026-05-21 Epic 004 Task 26 (Plan Parallel) Implementation
+
+- `dockerPlanParallel: boolean` (default `false`) added to all three settings layers (settings-manager.ts, client/types.ts, useRalph.ts fallback). Mirrors the pattern for all other docker* settings.
+- Pool initialization in `ralph-loop.ts start()` now triggers on `poolSize > 1 && (dockerParallelTasks || dockerPlanParallel)` — previously only `dockerParallelTasks` triggered it; plan-parallel also needs the pool.
+- `parseResearchPrompts(content)` in `parse-output.ts` extracts `<research-prompt>...</research-prompt>` blocks; returns an empty array (no-op) when blocks are absent.
+- Plan parallel dispatch in `runLoop()` runs AFTER backlog sync, acquires a pool slot per prompt, dispatches each via `LLMCaller.call()` with `dockerContainerIndex` + `dockerWorktreeCwd`, then `Promise.all`s all sub-jobs and merges any JSON task lists from their outputs into the backlog.
+- Vitest mock accumulation gotcha: `vi.spyOn` on an already-spied method in a later `it()` block may return the same spy instance, preserving `mock.calls` from earlier tests. Use `spy.mockClear()` after creating the spy in tests that must start with a clean call history.
+- DockerSection.tsx: "Parallel plan research (stretch)" checkbox is disabled when `dockerPoolSize <= 1`, same pattern as "Run backlog tasks in parallel".

@@ -13,6 +13,7 @@ import {
   parseRemainingTasks,
   parseBlockedInfo,
   parseJsonTaskList,
+  parseResearchPrompts,
 } from "./parse-output.js";
 import { RalphFileManager } from "./ralph-file-manager.js";
 import { SettingsManager, DEFAULT_SETTINGS, type Settings } from "./settings-manager.js";
@@ -214,7 +215,7 @@ export class RalphLoop {
       }
 
       // If pool > 1, scale the service and initialize the pool allocator.
-      if (poolSize > 1 && settings.dockerParallelTasks) {
+      if (poolSize > 1 && (settings.dockerParallelTasks || settings.dockerPlanParallel)) {
         this.cb.onLog(`[system] Scaling Docker pool to ${poolSize} containers…`);
         try {
           await ensureDockerPool(composeFile, service, poolSize, this.repoRoot);
@@ -548,6 +549,57 @@ export class RalphLoop {
       } else if (remainingTasks.length > 0) {
         await this.taskManager.syncBacklogTasksByTitle(remainingTasks);
         this.cb.onLog(`[system] Synced ${remainingTasks.length} tasks from plan output`);
+      }
+
+      // --- Parallel plan research sub-jobs (stretch, gated by dockerPlanParallel) ---
+      if (
+        this.dockerPool &&
+        settings.dockerPlanParallel &&
+        (settings.dockerPoolSize ?? 1) > 1
+      ) {
+        const researchPrompts = parseResearchPrompts(nextTaskContent);
+        if (researchPrompts.length > 0) {
+          this.cb.onLog(
+            `[system] Plan parallel: dispatching ${researchPrompts.length} research sub-job(s)…`,
+          );
+          const pool = this.dockerPool;
+          const subJobs = researchPrompts.map(async (prompt) => {
+            const slot = await pool.acquire();
+            if (slot === -1) return "";
+            try {
+              const epicBase =
+                settings.epicBaseBranch || (await this.gitManager.getCurrentBranch());
+              try {
+                await this.gitManager.createWorktree(slot, epicBase);
+              } catch {
+                // worktree creation is best-effort; continue even if it fails
+              }
+              return await this.llmCaller.call(
+                prompt,
+                settings.planModel,
+                this.repoRoot,
+                this.buildLlmCallOpts(settings, "plan", {
+                  containerIndex: slot,
+                  worktreeCwd: GitManager.worktreeContainerCwd(slot),
+                }),
+              );
+            } finally {
+              pool.release(slot);
+            }
+          });
+          const subResults = await Promise.all(subJobs);
+          totalLLMCalls += subResults.filter(Boolean).length;
+          for (const subOutput of subResults) {
+            if (!subOutput) continue;
+            const subTasks = parseJsonTaskList(subOutput);
+            if (subTasks.length > 0) {
+              await this.taskManager.syncBacklogTasks(subTasks);
+              this.cb.onLog(
+                `[system] Plan parallel: merged ${subTasks.length} task(s) from research sub-job`,
+              );
+            }
+          }
+        }
       }
 
       // Re-read task-status.json and always pick the first backlog task.

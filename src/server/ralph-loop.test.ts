@@ -3,11 +3,14 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 // Mock docker-pool and docker-runner early so RalphLoop imports use the mocks.
 vi.mock("./docker-pool.js", () => {
   class MockDockerPool {
-    constructor(size) { this.size = size; this.counter = 0; this.released = []; }
-    init() {}
-    acquire() { return Promise.resolve(this.counter++); }
-    release(slot) { this.released.push(slot); }
-    stopAll() {}
+    size: number;
+    counter: number;
+    released: number[];
+    constructor(size: number) { this.size = size; this.counter = 0; this.released = []; }
+    init(): void {}
+    acquire(): Promise<number> { return Promise.resolve(this.counter++); }
+    release(slot: number): void { this.released.push(slot); }
+    stopAll(): void {}
   }
   return { ensureDockerPool: vi.fn(() => Promise.resolve()), DockerPool: MockDockerPool };
 });
@@ -26,6 +29,7 @@ import { constants } from "fs";
 import { RalphLoop } from "./ralph-loop.js";
 import type { LoopCallbacks } from "./ralph-loop.js";
 import { DEFAULT_SETTINGS } from "./templates.js";
+import type { LLMCallOpts } from "./llm-caller.js";
 
 function makeCallbacks(): LoopCallbacks & {
   logs: string[];
@@ -689,9 +693,9 @@ describe("RalphLoop parallel dispatch", () => {
     // Mock GitManager branch/worktree operations so start() succeeds
     const gitMod = await import("./git-manager.js");
     vi.spyOn(gitMod.GitManager.prototype, "getCurrentBranch").mockResolvedValue("main");
-    vi.spyOn(gitMod.GitManager.prototype, "createOrCheckoutBranch").mockResolvedValue();
-    vi.spyOn(gitMod.GitManager.prototype, "createWorktree").mockResolvedValue();
-    vi.spyOn(gitMod.GitManager.prototype, "mergeWorktreeBranch").mockResolvedValue();
+    vi.spyOn(gitMod.GitManager.prototype, "createOrCheckoutBranch").mockResolvedValue(undefined);
+    vi.spyOn(gitMod.GitManager.prototype, "createWorktree").mockResolvedValue("/workspace/.ralph/worktrees/slot-0");
+    vi.spyOn(gitMod.GitManager.prototype, "mergeWorktreeBranch").mockResolvedValue({ ok: true });
 
     // Replace runDevQALoop with a stub that records concurrent executions
     const dp = await import("./docker-pool.js");
@@ -740,7 +744,7 @@ describe("RalphLoop parallel dispatch", () => {
     expect(dp.DockerPool.prototype.acquire).toHaveBeenCalled();
     // Ensure LLMCaller was invoked for tasks and that at least two tasks ran concurrently
     expect(llmMod.LLMCaller.prototype.call).toHaveBeenCalled();
-    expect(llmMod.LLMCaller.prototype.call.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect((llmMod.LLMCaller.prototype.call as any).mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(concurrency.max).toBeGreaterThanOrEqual(2);
 
     // Wait for loop to settle
@@ -748,9 +752,168 @@ describe("RalphLoop parallel dispatch", () => {
 
     // Ensure pool initialization log present and pool releases called
     expect(cb.logs.some((l) => l.includes("Docker pool ready"))).toBe(true);
-    expect(dp.DockerPool.prototype.release.mock.calls.length).toBeGreaterThan(0);
+    expect((dp.DockerPool.prototype.release as any).mock.calls.length).toBeGreaterThan(0);
 
     // Stop loop
+    loop.stop();
+    await new Promise((r) => setTimeout(r, 50));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Plan-phase parallel research dispatch (dockerPlanParallel)
+// ---------------------------------------------------------------------------
+
+describe("RalphLoop plan-phase parallel dispatch", () => {
+  it("dispatches research sub-prompts concurrently when dockerPlanParallel is true", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic("# Epic\n\nPlan parallel test.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      useDocker: true,
+      dockerPoolSize: 2,
+      dockerParallelTasks: false,
+      dockerPlanParallel: true,
+    };
+    await writeFile(
+      path.join(tmpDir, "ralph", "settings.json"),
+      JSON.stringify(settings),
+      "utf-8",
+    );
+
+    // Mock GitManager operations
+    const gitMod = await import("./git-manager.js");
+    vi.spyOn(gitMod.GitManager.prototype, "getCurrentBranch").mockResolvedValue("main");
+    vi.spyOn(gitMod.GitManager.prototype, "createOrCheckoutBranch").mockResolvedValue(undefined);
+    vi.spyOn(gitMod.GitManager.prototype, "createWorktree").mockResolvedValue("/workspace/.ralph/worktrees/slot-0");
+    vi.spyOn(gitMod.GitManager.prototype, "mergeWorktreeBranch").mockResolvedValue({ ok: true });
+
+    const dp = await import("./docker-pool.js");
+    vi.spyOn(dp.DockerPool.prototype, "acquire");
+    vi.spyOn(dp.DockerPool.prototype, "release");
+
+    const sm = await import("./settings-manager.js");
+    vi.spyOn(sm.SettingsManager.prototype, "read").mockResolvedValue({
+      ...DEFAULT_SETTINGS,
+      useDocker: true,
+      dockerPoolSize: 2,
+      dockerParallelTasks: false,
+      dockerPlanParallel: true,
+      minBacklogSize: 3,
+    });
+
+    const llmMod = await import("./llm-caller.js");
+    const callSpy = vi.spyOn(llmMod.LLMCaller.prototype, "call").mockImplementation(
+      async (_prompt: string, _model: string, _cwd: string, opts: LLMCallOpts) => {
+        // Sub-jobs from research prompts return a task list
+        if (opts?.dockerContainerIndex != null) {
+          return `\`\`\`json\n[{"id":10,"title":"Sub task","description":"from sub-job","status":"backlog"}]\n\`\`\``;
+        }
+        // Plan call returns research prompts + a primary task
+        return (
+          `<research-prompt>Research sub-prompt A</research-prompt>\n` +
+          `<research-prompt>Research sub-prompt B</research-prompt>\n` +
+          `\`\`\`json\n[{"id":1,"title":"Primary task","description":"main task","status":"backlog"}]\n\`\`\``
+        );
+      },
+    );
+
+    const startRes = await loop.start();
+    if (!startRes.ok) {
+      throw new Error(`start failed: ${startRes.error} -- logs: ${JSON.stringify(cb.logs)}`);
+    }
+
+    // Allow plan phase + sub-jobs to run
+    await new Promise((r) => setTimeout(r, 400));
+
+    // Plan parallel log should appear
+    expect(cb.logs.some((l) => l.includes("Plan parallel: dispatching 2 research sub-job"))).toBe(true);
+    // Pool slots must have been acquired for the sub-jobs
+    expect(dp.DockerPool.prototype.acquire).toHaveBeenCalled();
+    expect(dp.DockerPool.prototype.release).toHaveBeenCalled();
+    // LLMCaller called for plan + 2 sub-jobs = at least 3 calls
+    expect(callSpy.mock.calls.length).toBeGreaterThanOrEqual(3);
+    // Two of those calls had a distinct dockerContainerIndex
+    const subJobCalls = callSpy.mock.calls.filter(
+      (c) => (c[3] as Record<string, unknown> | undefined)?.dockerContainerIndex != null,
+    );
+    expect(subJobCalls.length).toBe(2);
+    // The two sub-job calls had different container indices
+    const indices = subJobCalls.map(
+      (c) => (c[3] as Record<string, unknown>).dockerContainerIndex as number,
+    );
+    expect(new Set(indices).size).toBe(2);
+
+    loop.stop();
+    await new Promise((r) => setTimeout(r, 50));
+  });
+
+  it("keeps plan phase sequential when dockerPlanParallel is false", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic("# Epic\n\nSequential plan test.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      useDocker: true,
+      dockerPoolSize: 2,
+      dockerParallelTasks: false,
+      dockerPlanParallel: false,
+    };
+    await writeFile(
+      path.join(tmpDir, "ralph", "settings.json"),
+      JSON.stringify(settings),
+      "utf-8",
+    );
+
+    const gitMod = await import("./git-manager.js");
+    vi.spyOn(gitMod.GitManager.prototype, "getCurrentBranch").mockResolvedValue("main");
+    vi.spyOn(gitMod.GitManager.prototype, "createOrCheckoutBranch").mockResolvedValue(undefined);
+
+    const sm = await import("./settings-manager.js");
+    vi.spyOn(sm.SettingsManager.prototype, "read").mockResolvedValue({
+      ...DEFAULT_SETTINGS,
+      useDocker: true,
+      dockerPoolSize: 2,
+      dockerParallelTasks: false,
+      dockerPlanParallel: false,
+      minBacklogSize: 3,
+    });
+
+    const llmMod = await import("./llm-caller.js");
+    const callSpy = vi.spyOn(llmMod.LLMCaller.prototype, "call").mockImplementation(async () => {
+      return (
+        `<research-prompt>Research that should be ignored</research-prompt>\n` +
+        `\`\`\`json\n[{"id":1,"title":"Task","description":"desc","status":"backlog"}]\n\`\`\``
+      );
+    });
+    // Clear accumulated calls from any previous tests
+    callSpy.mockClear();
+
+    const dp = await import("./docker-pool.js");
+    const acquireSpy = vi.spyOn(dp.DockerPool.prototype, "acquire");
+    // Clear any calls accumulated from previous tests in this describe block
+    acquireSpy.mockClear();
+
+    await loop.start();
+    await new Promise((r) => setTimeout(r, 200));
+
+    // No parallel research log
+    expect(cb.logs.some((l) => l.includes("Plan parallel:"))).toBe(false);
+    // Pool acquire must NOT have been called (no pool is initialized since both flags are false)
+    expect(acquireSpy).not.toHaveBeenCalled();
+    // Only the plan LLM call ran (no extra sub-job calls with containerIndex)
+    const subJobCalls = callSpy.mock.calls.filter(
+      (c) => (c[3] as Record<string, unknown> | undefined)?.dockerContainerIndex != null,
+    );
+    expect(subJobCalls.length).toBe(0);
+
     loop.stop();
     await new Promise((r) => setTimeout(r, 50));
   });
