@@ -9,6 +9,9 @@ export function DockerSection({
   isRunning,
   onValidateDocker,
   onMergeEpicWork,
+  dockerDirty,
+  onSaveDocker,
+  onResetDocker,
   suppressHeader,
 }: {
   localSettings: Settings;
@@ -18,6 +21,9 @@ export function DockerSection({
   isRunning: boolean;
   onValidateDocker: () => Promise<{ ok: boolean; reason?: string; message?: string }>;
   onMergeEpicWork: () => Promise<{ ok: boolean; conflicts?: string[]; error?: string }>;
+  dockerDirty?: boolean;
+  onSaveDocker?: () => Promise<void>;
+  onResetDocker?: () => void;
   suppressHeader?: boolean;
 }) {
   const [dockerError, setDockerError] = useState("");
@@ -255,6 +261,27 @@ export function DockerSection({
           {merging ? "Merging..." : "Merge work into epic branch"}
         </button>
       </fieldset>
+
+      {(onSaveDocker || onResetDocker) && (
+        <div className="section-footer">
+          <button
+            className="cp-btn cp-btn--secondary"
+            onClick={onResetDocker}
+            disabled={!dockerDirty}
+            type="button"
+          >
+            Reset
+          </button>
+          <button
+            className="cp-btn"
+            onClick={onSaveDocker}
+            disabled={!dockerDirty}
+            type="button"
+          >
+            Save Docker
+          </button>
+        </div>
+      )}
     </section>
   );
 }

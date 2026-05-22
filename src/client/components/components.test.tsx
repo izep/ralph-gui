@@ -650,7 +650,6 @@ describe("LoopConfigSection model dropdowns", () => {
         localSettings={settings}
         onChangeSettings={() => { }}
         repoLocked={false}
-        settingsSaved={false}
         onSaveSettings={() => { }}
       />
     );
@@ -681,7 +680,6 @@ describe("LoopConfigSection model dropdowns", () => {
           settings = s;
         }}
         repoLocked={false}
-        settingsSaved={false}
         onSaveSettings={() => { }}
       />,
     );
@@ -699,7 +697,6 @@ describe("LoopConfigSection model dropdowns", () => {
           settings = s;
         }}
         repoLocked={false}
-        settingsSaved={false}
         onSaveSettings={() => { }}
       />,
     );
@@ -728,7 +725,6 @@ describe("LoopConfigSection model dropdowns", () => {
         localSettings={settings}
         onChangeSettings={() => { }}
         repoLocked={false}
-        settingsSaved={false}
         onSaveSettings={() => { }}
       />,
     );
@@ -752,7 +748,6 @@ describe("LoopConfigSection model dropdowns", () => {
         localSettings={settings}
         onChangeSettings={() => { }}
         repoLocked={false}
-        settingsSaved={false}
         onSaveSettings={() => { }}
       />,
     );
@@ -777,7 +772,6 @@ describe("LoopConfigSection model dropdowns", () => {
         localSettings={settings}
         onChangeSettings={() => { }}
         repoLocked={false}
-        settingsSaved={false}
         onSaveSettings={() => { }}
       />
     );
@@ -790,5 +784,189 @@ describe("LoopConfigSection model dropdowns", () => {
     );
 
     vi.unstubAllGlobals();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ControlPanel — Phase 5: collapsible sections, dirty detection, Save/Reset
+// ---------------------------------------------------------------------------
+
+describe("ControlPanel Phase 5: collapsible and dirty/save/reset UX", () => {
+  const noop = async () => { };
+  const noopResult = async () => ({ ok: true });
+  const noopContent = async () => ({ ok: true, content: "" });
+  const noopDocker = async () => ({ ok: true });
+  const noopMerge = async () => ({ ok: true });
+
+  function renderPanel(
+    overrideSettings: Partial<Settings> = {},
+    overrideProps: {
+      epic?: string;
+      prompts?: Record<string, string>;
+      onSaveSettings?: (s: Settings) => Promise<void>;
+    } = {},
+  ) {
+    const settings = { ...defaultSettings, ...overrideSettings };
+    return render(
+      <ControlPanel
+        settings={settings}
+        epic={overrideProps.epic ?? ""}
+        prompts={overrideProps.prompts ?? {}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={overrideProps.onSaveSettings ?? noop}
+        onSaveEpic={noop}
+        onSavePrompt={noop}
+        onSetRepo={noopResult}
+        onRefreshBacklog={noopResult}
+        onSetEpicFile={noopContent}
+        onCreateEpicFile={noopContent}
+        onValidateDocker={noopDocker}
+        onMergeEpicWork={noopMerge}
+        isRunning={false}
+        onClose={() => { }}
+      />
+    );
+  }
+
+  // --- Collapse / Expand ---
+
+  it("Collapse all hides Docker Agents, Loop Configuration, Current Epic, Prompts bodies", () => {
+    renderPanel();
+    fireEvent.click(screen.getByText("Collapse all"));
+    const headers = screen.getAllByRole("button", { name: /docker agents|loop configuration|current epic|prompts/i });
+    for (const header of headers) {
+      expect(header).toHaveAttribute("aria-expanded", "false");
+    }
+  });
+
+  it("Expand all restores all four sections after collapse", () => {
+    renderPanel();
+    fireEvent.click(screen.getByText("Collapse all"));
+    fireEvent.click(screen.getByText("Expand all"));
+    const headers = screen.getAllByRole("button", { name: /docker agents|loop configuration|current epic|prompts/i });
+    for (const header of headers) {
+      expect(header).toHaveAttribute("aria-expanded", "true");
+    }
+  });
+
+  it("clicking a section header toggles only that section", () => {
+    renderPanel();
+    const dockerHeader = screen.getByRole("button", { name: /docker agents/i });
+    fireEvent.click(dockerHeader);
+    expect(dockerHeader).toHaveAttribute("aria-expanded", "false");
+    const loopHeader = screen.getByRole("button", { name: /loop configuration/i });
+    expect(loopHeader).toHaveAttribute("aria-expanded", "true");
+  });
+
+  // --- Save buttons disabled when pristine ---
+
+  it("Save Docker is disabled when no docker changes made", () => {
+    renderPanel();
+    expect(screen.getByRole("button", { name: /save docker/i })).toBeDisabled();
+  });
+
+  it("Save loop settings is disabled when no loop changes made", () => {
+    renderPanel();
+    expect(screen.getByRole("button", { name: /save loop settings/i })).toBeDisabled();
+  });
+
+  it("Save epic is disabled when no epic changes made", () => {
+    renderPanel();
+    expect(screen.getByRole("button", { name: /save epic/i })).toBeDisabled();
+  });
+
+  it("Save Plan Prompt is disabled when no prompt changes made", () => {
+    renderPanel({}, { prompts: { "plan-prompt.md": "original plan prompt" } });
+    expect(screen.getByRole("button", { name: /save plan prompt/i })).toBeDisabled();
+  });
+
+  // --- Editing a docker field enables Save Docker only ---
+
+  it("editing dockerPoolSize enables Save Docker but not Save loop settings", () => {
+    renderPanel({ useDocker: true });
+    const poolInput = screen.getByLabelText(/pool size/i);
+    fireEvent.change(poolInput, { target: { value: "3" } });
+    expect(screen.getByRole("button", { name: /save docker/i })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: /save loop settings/i })).toBeDisabled();
+  });
+
+  // --- Editing a loop field enables Save loop settings only ---
+
+  it("editing maxLLMCalls enables Save loop settings but not Save Docker", () => {
+    renderPanel();
+    const maxCallsInput = screen.getByDisplayValue("100");
+    fireEvent.change(maxCallsInput, { target: { value: "50" } });
+    expect(screen.getByRole("button", { name: /save loop settings/i })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: /save docker/i })).toBeDisabled();
+  });
+
+  // --- Editing epic textarea enables Save epic ---
+
+  it("editing epic textarea enables Save epic", () => {
+    renderPanel({}, { epic: "initial epic" });
+    const textarea = screen.getAllByRole("textbox").find(
+      (el) => (el as HTMLTextAreaElement).value === "initial epic",
+    ) as HTMLTextAreaElement;
+    expect(textarea).toBeDefined();
+    fireEvent.change(textarea, { target: { value: "updated epic" } });
+    expect(screen.getByRole("button", { name: /save epic/i })).not.toBeDisabled();
+  });
+
+  // --- Reset docker reverts draft and disables Save Docker ---
+
+  it("Reset for Docker reverts docker draft and disables Save Docker", () => {
+    renderPanel({ useDocker: true });
+    const poolInput = screen.getByLabelText(/pool size/i);
+    fireEvent.change(poolInput, { target: { value: "3" } });
+    expect(screen.getByRole("button", { name: /save docker/i })).not.toBeDisabled();
+
+    // Find Docker Reset button
+    const resetButtons = screen.getAllByRole("button", { name: /^reset$/i });
+    // The docker reset is the first Reset button (in Docker section footer)
+    fireEvent.click(resetButtons[0]);
+    expect(screen.getByRole("button", { name: /save docker/i })).toBeDisabled();
+  });
+
+  // --- Reset loop reverts draft and disables Save loop settings ---
+
+  it("Reset for Loop reverts loop draft and disables Save loop settings", () => {
+    renderPanel();
+    const maxCallsInput = screen.getByDisplayValue("100");
+    fireEvent.change(maxCallsInput, { target: { value: "50" } });
+    expect(screen.getByRole("button", { name: /save loop settings/i })).not.toBeDisabled();
+
+    const resetButtons = screen.getAllByRole("button", { name: /^reset$/i });
+    // Loop reset is the second Reset button (in Loop section footer)
+    fireEvent.click(resetButtons[1]);
+    expect(screen.getByRole("button", { name: /save loop settings/i })).toBeDisabled();
+  });
+
+  // --- epicFile path change marks epic dirty ---
+
+  it("changing epicFile path marks epic dirty", () => {
+    renderPanel({ epicFile: "ralph/epic.md" });
+    const epicFileInput = screen.getByDisplayValue("ralph/epic.md");
+    fireEvent.change(epicFileInput, { target: { value: "ralph/new-epic.md" } });
+    expect(screen.getByRole("button", { name: /save epic/i })).not.toBeDisabled();
+  });
+
+  // --- Secondary actions not gated on dirty state ---
+
+  it("Set Docker button is enabled regardless of dirty state", () => {
+    renderPanel({ useDocker: true });
+    const setDockerBtn = screen.getByRole("button", { name: /^set docker$/i });
+    expect(setDockerBtn).not.toBeDisabled();
+  });
+
+  it("Refresh Tasks button is enabled regardless of dirty state", () => {
+    renderPanel();
+    expect(screen.getByRole("button", { name: /refresh tasks/i })).not.toBeDisabled();
+  });
+
+  it("Set epic file button is enabled regardless of dirty state", () => {
+    renderPanel();
+    const setButtons = screen.getAllByTitle(/load epic content/i);
+    expect(setButtons[0]).not.toBeDisabled();
   });
 });

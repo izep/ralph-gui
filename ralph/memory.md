@@ -184,3 +184,13 @@ Note: Tests use mocked `child_process.spawn` and do not require a Docker daemon;
 ## 2026-05-22 UI Updates
 
 - Added CollapsibleSection component (src/client/components/CollapsibleSection.tsx) and wired Collapse all / Expand all toolbar in ControlPanel.tsx. Wrapped Docker, Loop, Epic and Prompts sections and hid duplicate headers by adding a suppressHeader prop to each section component. Tests updated to expect single section headings; all tests and typecheck pass.
+
+## Control panel dirty detection (Phase 5)
+
+- `src/client/control-panel-dirty.ts` exports `pickDockerSettings`, `pickLoopSettings`, `isDockerDirty`, `isLoopDirty`. Uses `stableStringify` (sorted keys) for deep comparison — no lodash needed.
+- Docker fields: `useDocker`, `dockerComposeFile`, `dockerService`, `dockerIsolateBranch`, `dockerPoolSize`, `dockerParallelTasks`, `dockerMountSocket`, `dockerInstalledBackends`, `dockerPlanParallel`. Everything else is a loop field.
+- `ControlPanel.tsx` computes dirty booleans directly from props `settings` (server baseline) vs `localSettings` (draft). No saved-baseline state needed — WS broadcast updates `settings` prop after save, which clears dirty via `useEffect`.
+- `handleSaveDocker`: merges `pickDockerSettings(localSettings)` into server `settings` before calling `onSaveSettings` — prevents unsaved loop draft from being lost.
+- `handleSaveLoop`: same pattern with `pickLoopSettings`; updates `savedModelsByBackend` in the merge.
+- Section footer CSS: `.section-footer` in `App.css` — flex row, top border, 12px gap/padding.
+- Tests: `getByLabelText(/pool size/i)` is the correct query for the docker pool size input (label is "Pool size"); `getByDisplayValue("1")` is ambiguous because other number fields share value 1.

@@ -6,6 +6,7 @@ import { EpicSection } from "./EpicSection";
 import { PromptsSection } from "./PromptsSection";
 import { DockerSection } from "./DockerSection";
 import { CollapsibleSection } from "./CollapsibleSection";
+import { isDockerDirty, isLoopDirty, pickDockerSettings, pickLoopSettings } from "../control-panel-dirty";
 
 const DEFAULT_PROMPT_KEY = "plan-prompt.md";
 
@@ -49,12 +50,9 @@ export function ControlPanel({
   const [localSettings, setLocalSettings] = useState<Settings>(settings);
   const [localEpic, setLocalEpic] = useState(epic);
   const [localRepo, setLocalRepo] = useState(repoRoot);
-  const [settingsSaved, setSettingsSaved] = useState(false);
-  const [epicSaved, setEpicSaved] = useState(false);
   const [repoError, setRepoError] = useState("");
   const [activePrompt, setActivePrompt] = useState(DEFAULT_PROMPT_KEY);
   const [localPrompt, setLocalPrompt] = useState("");
-  const [promptSaved, setPromptSaved] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const repoLocked = !readiness.repoConfigured;
 
@@ -73,9 +71,20 @@ export function ControlPanel({
     onSettingsDraftChange?.(localSettings);
   }, [localSettings, onSettingsDraftChange]);
 
-  async function handleSaveSettings() {
-    const toSave: Settings = {
-      ...localSettings,
+  // Dirty detection: compare local draft to last-saved server state
+  const dockerDirty = isDockerDirty(localSettings, settings);
+  const loopDirty = isLoopDirty(localSettings, settings);
+  const epicDirty = localEpic !== epic || localSettings.epicFile !== settings.epicFile;
+  const promptDirty = localPrompt !== (prompts[activePrompt] ?? "");
+
+  async function handleSaveDocker() {
+    const merged: Settings = { ...settings, ...pickDockerSettings(localSettings) };
+    await onSaveSettings(merged);
+  }
+
+  async function handleSaveLoop() {
+    const withUpdatedModels: Partial<Settings> = {
+      ...pickLoopSettings(localSettings),
       savedModelsByBackend: {
         ...localSettings.savedModelsByBackend,
         [localSettings.agentBackend]: {
@@ -85,16 +94,40 @@ export function ControlPanel({
         },
       },
     };
-    setLocalSettings(toSave);
-    await onSaveSettings(toSave);
-    setSettingsSaved(true);
-    setTimeout(() => setSettingsSaved(false), 2000);
+    const merged: Settings = { ...settings, ...withUpdatedModels };
+    setLocalSettings((prev) => ({ ...prev, ...withUpdatedModels }));
+    await onSaveSettings(merged);
   }
 
   async function handleSaveEpic() {
+    // Persist epic markdown content
     await onSaveEpic(localEpic);
-    setEpicSaved(true);
-    setTimeout(() => setEpicSaved(false), 2000);
+    // Also persist epicFile path if it changed
+    if (localSettings.epicFile !== settings.epicFile) {
+      const merged: Settings = { ...settings, ...pickLoopSettings(localSettings) };
+      await onSaveSettings(merged);
+    }
+  }
+
+  function handleResetDocker() {
+    setLocalSettings((prev) => ({ ...prev, ...pickDockerSettings(settings) }));
+  }
+
+  function handleResetLoop() {
+    setLocalSettings((prev) => ({ ...prev, ...pickLoopSettings(settings) }));
+  }
+
+  function handleResetEpic() {
+    setLocalEpic(epic);
+    setLocalSettings((prev) => ({ ...prev, epicFile: settings.epicFile }));
+  }
+
+  function handleResetPrompt() {
+    setLocalPrompt(prompts[activePrompt] ?? "");
+  }
+
+  async function handleSavePrompt() {
+    await onSavePrompt(activePrompt, localPrompt);
   }
 
   async function handleRefreshBacklog() {
@@ -110,12 +143,6 @@ export function ControlPanel({
     setRepoError("");
     const result = await onSetRepo(localRepo);
     if (!result.ok) setRepoError(result.error ?? "Failed to set repository");
-  }
-
-  async function handleSavePrompt() {
-    await onSavePrompt(activePrompt, localPrompt);
-    setPromptSaved(true);
-    setTimeout(() => setPromptSaved(false), 2000);
   }
 
   const [expandedMap, setExpandedMap] = useState<Record<'docker'|'loop'|'epic'|'prompts', boolean>>({
@@ -174,6 +201,9 @@ export function ControlPanel({
           isRunning={isRunning}
           onValidateDocker={onValidateDocker}
           onMergeEpicWork={onMergeEpicWork}
+          dockerDirty={dockerDirty}
+          onSaveDocker={handleSaveDocker}
+          onResetDocker={handleResetDocker}
           suppressHeader
         />
       </CollapsibleSection>
@@ -183,8 +213,9 @@ export function ControlPanel({
           localSettings={localSettings}
           onChangeSettings={setLocalSettings}
           repoLocked={repoLocked}
-          settingsSaved={settingsSaved}
-          onSaveSettings={handleSaveSettings}
+          loopDirty={loopDirty}
+          onSaveSettings={handleSaveLoop}
+          onResetLoop={handleResetLoop}
           suppressHeader
         />
       </CollapsibleSection>
@@ -197,8 +228,9 @@ export function ControlPanel({
           onEpicFileChange={(v) => setLocalSettings({ ...localSettings, epicFile: v })}
           repoLocked={repoLocked}
           epicConfigured={readiness.epicConfigured}
-          epicSaved={epicSaved}
+          epicDirty={epicDirty}
           onSaveEpic={handleSaveEpic}
+          onResetEpic={handleResetEpic}
           onRefreshBacklog={handleRefreshBacklog}
           refreshing={refreshing}
           isRunning={isRunning}
@@ -215,8 +247,9 @@ export function ControlPanel({
           onActivePromptChange={setActivePrompt}
           localPrompt={localPrompt}
           onLocalPromptChange={setLocalPrompt}
-          promptSaved={promptSaved}
+          promptDirty={promptDirty}
           onSavePrompt={handleSavePrompt}
+          onResetPrompt={handleResetPrompt}
           suppressHeader
         />
       </CollapsibleSection>

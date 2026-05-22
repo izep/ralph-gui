@@ -10,8 +10,9 @@ export function PromptsSection({
   onActivePromptChange,
   localPrompt,
   onLocalPromptChange,
-  promptSaved,
+  promptDirty,
   onSavePrompt,
+  onResetPrompt,
   suppressHeader,
 }: {
   repoLocked: boolean;
@@ -19,8 +20,9 @@ export function PromptsSection({
   onActivePromptChange: (key: string) => void;
   localPrompt: string;
   onLocalPromptChange: (v: string) => void;
-  promptSaved: boolean;
+  promptDirty?: boolean;
   onSavePrompt: () => void;
+  onResetPrompt?: () => void;
   suppressHeader?: boolean;
 }) {
   return (
@@ -51,9 +53,24 @@ export function PromptsSection({
         value={localPrompt}
         onChange={(e) => onLocalPromptChange(e.target.value)}
       />
-      <button className="cp-btn" onClick={onSavePrompt}>
-        {promptSaved ? "Saved!" : `Save ${PROMPT_NAMES.find((p) => p.key === activePrompt)?.label} Prompt`}
-      </button>
+      <div className="section-footer">
+        <button
+          className="cp-btn cp-btn--secondary"
+          onClick={onResetPrompt}
+          disabled={!promptDirty}
+          type="button"
+        >
+          Reset
+        </button>
+        <button
+          className="cp-btn"
+          onClick={onSavePrompt}
+          disabled={!promptDirty}
+          type="button"
+        >
+          {`Save ${PROMPT_NAMES.find((p) => p.key === activePrompt)?.label} Prompt`}
+        </button>
+      </div>
       </fieldset>
     </section>
   );

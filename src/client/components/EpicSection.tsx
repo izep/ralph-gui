@@ -7,8 +7,9 @@ export function EpicSection({
   onEpicFileChange,
   repoLocked,
   epicConfigured,
-  epicSaved,
+  epicDirty,
   onSaveEpic,
+  onResetEpic,
   onRefreshBacklog,
   refreshing,
   isRunning,
@@ -22,8 +23,9 @@ export function EpicSection({
   onEpicFileChange: (v: string) => void;
   repoLocked: boolean;
   epicConfigured: boolean;
-  epicSaved: boolean;
+  epicDirty?: boolean;
   onSaveEpic: () => void;
+  onResetEpic?: () => void;
   onRefreshBacklog: () => void;
   refreshing: boolean;
   isRunning: boolean;
@@ -112,9 +114,19 @@ export function EpicSection({
         onChange={(e) => onLocalEpicChange(e.target.value)}
         placeholder="Describe the current epic, scope boundaries, and success criteria..."
       />
-      <button className="cp-btn" onClick={onSaveEpic}>
-        {epicSaved ? "Saved!" : "Save Epic"}
-      </button>
+      <div className="section-footer">
+        <button
+          className="cp-btn cp-btn--secondary"
+          onClick={onResetEpic}
+          disabled={!epicDirty}
+          type="button"
+        >
+          Reset
+        </button>
+        <button className="cp-btn" onClick={onSaveEpic} disabled={!epicDirty} type="button">
+          Save epic
+        </button>
+      </div>
       <button
         className="cp-btn cp-btn--secondary"
         onClick={onRefreshBacklog}

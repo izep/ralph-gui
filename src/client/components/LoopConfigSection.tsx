@@ -40,15 +40,17 @@ export function LoopConfigSection({
   localSettings,
   onChangeSettings,
   repoLocked,
-  settingsSaved,
+  loopDirty,
   onSaveSettings,
+  onResetLoop,
   suppressHeader,
 }: {
   localSettings: Settings;
   onChangeSettings: (s: Settings) => void;
   repoLocked: boolean;
-  settingsSaved: boolean;
+  loopDirty?: boolean;
   onSaveSettings: () => void;
+  onResetLoop?: () => void;
   suppressHeader?: boolean;
 }) {
   const BACKEND_DISPLAY_NAMES: Record<AgentBackendId, string> = {
@@ -330,9 +332,19 @@ export function LoopConfigSection({
           development begins.
         </p>
 
-        <button className="cp-btn" onClick={onSaveSettings}>
-          {settingsSaved ? "Saved!" : "Save Settings"}
-        </button>
+        <div className="section-footer">
+          <button
+            className="cp-btn cp-btn--secondary"
+            onClick={onResetLoop}
+            disabled={!loopDirty}
+            type="button"
+          >
+            Reset
+          </button>
+          <button className="cp-btn" onClick={onSaveSettings} disabled={!loopDirty} type="button">
+            Save loop settings
+          </button>
+        </div>
       </fieldset>
     </section>
   );

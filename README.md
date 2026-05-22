@@ -176,6 +176,8 @@ docker compose -f docker-compose.agents.yml up -d
 
 ### Settings
 
+The Settings panel is collapsible: **Docker Agents**, **Loop Configuration**, **Current Epic**, and **Prompts** sections can be individually expanded or collapsed, with **Collapse all / Expand all** controls at the top. Each section has its own **Save** button (enabled only when you have unsaved changes in that section) and a **Reset** button that reverts the draft to the last-saved server state without making an API call.
+
 Enable **Run agents in Docker** in Settings → Docker Agents. Configure:
 
 | Setting | Purpose |
