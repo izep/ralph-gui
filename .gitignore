@@ -46,3 +46,4 @@ Thumbs.db
 
 # Runtime state (local orchestrator artifacts)
 ralph/task-status.json
+ralph/epic.md
