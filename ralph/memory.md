@@ -163,3 +163,24 @@ Note: Tests use mocked `child_process.spawn` and do not require a Docker daemon;
 - Plan parallel dispatch in `runLoop()` runs AFTER backlog sync, acquires a pool slot per prompt, dispatches each via `LLMCaller.call()` with `dockerContainerIndex` + `dockerWorktreeCwd`, then `Promise.all`s all sub-jobs and merges any JSON task lists from their outputs into the backlog.
 - Vitest mock accumulation gotcha: `vi.spyOn` on an already-spied method in a later `it()` block may return the same spy instance, preserving `mock.calls` from earlier tests. Use `spy.mockClear()` after creating the spy in tests that must start with a clean call history.
 - DockerSection.tsx: "Parallel plan research (stretch)" checkbox is disabled when `dockerPoolSize <= 1`, same pattern as "Run backlog tasks in parallel".
+
+## 2026-05-21 Epic 004 Final Survey
+
+- All Epic 004 tasks (IDs 16–26) are fully implemented. npm run test:ci passes (249 tests); npm run typecheck passes.
+- task-status.json still shows tasks 17–23 and 25 as "backlog" (implemented outside the loop before it could mark them done) but the implementation is complete.
+- Optional: scripts/docker-pool-smoke.mjs was not created; manual Docker smoke steps are documented inline in docker/README.md (not as a standalone script). This is acceptable per the epic spec (optional).
+- Epic 004 is complete; no remaining backlog items.
+
+## 2026-05-22 Epic 004 Phase 5 Plan Survey
+
+- Phase 5 (Control Panel UX) is fully unimplemented: no CollapsibleSection.tsx, no control-panel-dirty.ts, no dirty detection, no per-section Save/Reset in any section component.
+- ControlPanel.tsx (186 lines) has a single `handleSaveSettings` that saves ALL settings (Docker + Loop) together via `onSaveSettings`; no dirty checks; Save button always enabled.
+- Task IDs 27–30 cover Phase 5: collapsible sections (27), dirty helpers + footers (28), split Docker/Loop save wiring (29), component tests + README note (30).
+- `pickDockerSettings` should include: useDocker, dockerComposeFile, dockerService, dockerIsolateBranch, dockerPoolSize, dockerParallelTasks, dockerMountSocket, dockerInstalledBackends. Exclude epicBaseBranch, dockerWorkBranch (read-only metadata).
+- Dirty comparison: JSON.stringify on sorted keys is sufficient (no lodash in package.json — check before importing).
+- After Save, the saved baseline must update (store returned/saved settings) so the dirty flag resets without requiring a server roundtrip.
+- epicFile path changes must be persisted on Save epic (currently handleSaveEpic only calls onSaveEpic for content; path goes through handleSaveSettings for Loop — after split, epic save handler must also call onSaveSettings for the epicFile field).
+
+## 2026-05-22 UI Updates
+
+- Added CollapsibleSection component (src/client/components/CollapsibleSection.tsx) and wired Collapse all / Expand all toolbar in ControlPanel.tsx. Wrapped Docker, Loop, Epic and Prompts sections and hid duplicate headers by adding a suppressHeader prop to each section component. Tests updated to expect single section headings; all tests and typecheck pass.

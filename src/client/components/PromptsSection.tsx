@@ -12,6 +12,7 @@ export function PromptsSection({
   onLocalPromptChange,
   promptSaved,
   onSavePrompt,
+  suppressHeader,
 }: {
   repoLocked: boolean;
   activePrompt: string;
@@ -20,10 +21,11 @@ export function PromptsSection({
   onLocalPromptChange: (v: string) => void;
   promptSaved: boolean;
   onSavePrompt: () => void;
+  suppressHeader?: boolean;
 }) {
   return (
     <section className="control-panel__section">
-      <h3>Prompts</h3>
+      {!suppressHeader && <h3>Prompts</h3>}
       {repoLocked && (
         <p className="cp-hint">Set Repository first to edit prompts.</p>
       )}

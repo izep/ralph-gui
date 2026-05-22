@@ -9,6 +9,7 @@ export function DockerSection({
   isRunning,
   onValidateDocker,
   onMergeEpicWork,
+  suppressHeader,
 }: {
   localSettings: Settings;
   onChangeSettings: (s: Settings) => void;
@@ -17,6 +18,7 @@ export function DockerSection({
   isRunning: boolean;
   onValidateDocker: () => Promise<{ ok: boolean; reason?: string; message?: string }>;
   onMergeEpicWork: () => Promise<{ ok: boolean; conflicts?: string[]; error?: string }>;
+  suppressHeader?: boolean;
 }) {
   const [dockerError, setDockerError] = useState("");
   const [dockerOk, setDockerOk] = useState(false);
@@ -65,7 +67,7 @@ export function DockerSection({
 
   return (
     <section className="control-panel__section">
-      <h3>Docker Agents</h3>
+      {!suppressHeader && <h3>Docker Agents</h3>}
       {repoLocked && (
         <p className="cp-hint">Set Repository first to configure Docker.</p>
       )}

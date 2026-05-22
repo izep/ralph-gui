@@ -655,6 +655,45 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+/* Collapsible section */
+.collapsible-section {
+  transition: background 0.15s;
+}
+.collapsible-section__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+}
+.collapsible-section__header h3 {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-dim);
+  margin: 0;
+}
+.collapsible-section__chevron {
+  display: inline-block;
+  transition: transform 0.18s ease;
+}
+.collapsible-section--expanded .collapsible-section__chevron {
+  transform: rotate(180deg);
+}
+.collapsible-section__body {
+  margin-top: 12px;
+}
+.collapsible-section--collapsed .collapsible-section__body {
+  display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .collapsible-section__chevron {
+    transition: none;
+  }
+}
+
 .control-panel__section h3 {
   font-size: 12px;
   font-weight: 600;

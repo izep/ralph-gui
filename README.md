@@ -213,6 +213,8 @@ Optional git identity overrides: `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COM
 
 **Step-by-step setup** (`.env`, tokens, validate, troubleshoot): [`docker/README.md`](docker/README.md) — start at [Step 2 — Add authentication](docker/README.md#step-2--add-authentication-env).
 
+**Custom image in the target repo** (override bundled compose/Dockerfile): [`docker/local-repo-image-override.md`](docker/local-repo-image-override.md).
+
 ### Branch workflow
 
 When `useDocker` + `dockerIsolateBranch` is enabled:

@@ -352,6 +352,14 @@ Compose also forwards `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, and `GITHUB_TOKEN` fro
 
 ## Advanced — custom images and compose
 
+### Per-repo Docker image override (tutorial)
+
+When the bundled image is not enough for your **target repository**, use a compose file and Dockerfile **in that repo** and point Ralph at it.
+
+**Full walkthrough:** [Local repo Docker image override](local-repo-image-override.md) — copy/customize compose, `.env` location, Settings, validation, and pool scaling.
+
+Quick pointer: leave **Compose file** blank for the default; set it to e.g. `docker-compose.agents.yml` (relative to repo root) to use your override.
+
 ### Mount your git config
 
 For the same user.name/email as your laptop, add to a compose override:
@@ -362,17 +370,6 @@ services:
     volumes:
       - ~/.gitconfig:/root/.gitconfig:ro
 ```
-
-### Per-repo compose override
-
-```yaml
-services:
-  ralph-agent:
-    build:
-      context: /absolute/path/to/your/docker
-```
-
-Set **Compose file** in Ralph Settings to that file (relative to target repo root or absolute).
 
 ---
 

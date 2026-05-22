@@ -14,6 +14,7 @@ export function EpicSection({
   isRunning,
   onSetEpicFile,
   onCreateEpicFile,
+  suppressHeader,
 }: {
   localEpic: string;
   onLocalEpicChange: (v: string) => void;
@@ -28,6 +29,7 @@ export function EpicSection({
   isRunning: boolean;
   onSetEpicFile?: (path: string) => Promise<{ ok: boolean; content?: string; notFound?: boolean }>;
   onCreateEpicFile?: (path: string) => Promise<{ ok: boolean; content?: string }>;
+  suppressHeader?: boolean;
 }) {
   const [epicFileError, setEpicFileError] = useState("");
   const [epicFileHint, setEpicFileHint] = useState("");
@@ -66,7 +68,7 @@ export function EpicSection({
 
   return (
     <section className="control-panel__section">
-      <h3>Current Epic</h3>
+      {!suppressHeader && <h3>Current Epic</h3>}
       {repoLocked && (
         <p className="cp-hint">Set Repository first to edit the epic.</p>
       )}

@@ -42,12 +42,14 @@ export function LoopConfigSection({
   repoLocked,
   settingsSaved,
   onSaveSettings,
+  suppressHeader,
 }: {
   localSettings: Settings;
   onChangeSettings: (s: Settings) => void;
   repoLocked: boolean;
   settingsSaved: boolean;
   onSaveSettings: () => void;
+  suppressHeader?: boolean;
 }) {
   const BACKEND_DISPLAY_NAMES: Record<AgentBackendId, string> = {
     copilot: "GitHub Copilot CLI",
@@ -155,7 +157,7 @@ export function LoopConfigSection({
 
   return (
     <section className="control-panel__section">
-      <h3>Loop Configuration</h3>
+      {!suppressHeader && <h3>Loop Configuration</h3>}
       {repoLocked && (
         <p className="cp-hint">Set Repository first to edit loop settings.</p>
       )}

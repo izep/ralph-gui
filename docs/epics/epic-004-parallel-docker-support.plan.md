@@ -1,6 +1,6 @@
 ---
-name: Epic 004 — Parallel Docker agents and multi-CLI image
-overview: Extend the Docker agent stack (multi-CLI build args, configurable container pool, parallel dev/QA via worktrees, optional Docker socket so agents can run target-project compose stacks), document in README files, and test the patterns (unit/integration + optional smoke).
+name: Epic 004 — Parallel Docker agents, control panel UX
+overview: Docker agent stack (multi-CLI build args, pool, worktrees, nested compose socket), control panel collapsible sections with dirty-aware Save/Reset, document and test all of the above.
 todos:
   - id: dockerfile-build-args
     content: Add INSTALL_* build args to docker/Dockerfile; wire args + all auth env vars in docker-compose.agents.yml
@@ -35,10 +35,22 @@ todos:
   - id: docker-socket-nested-compose
     content: Optional Docker socket mount + docker/compose CLI in agent image; validate nested docker info; settings + docs for target-project compose/E2E tasks
     status: pending
+  - id: collapsible-sections
+    content: CollapsibleSection wrapper; collapse/expand all in ControlPanel header; wrap Docker, Loop Config, Epic, Prompts
+    status: pending
+  - id: dirty-save-reset
+    content: Per-section dirty detection; Save disabled until dirty; Reset rolls back draft; Save/Reset footers below section fields
+    status: pending
+  - id: docker-section-save
+    content: Split Docker settings save from Loop Config (Save Docker + save handler for docker* fields only)
+    status: pending
+  - id: tests-control-panel-ux
+    content: components.test.tsx for collapse all, dirty Save disabled, Reset restores draft, save button placement
+    status: pending
 isProject: false
 ---
 
-# Epic 004 — Parallel Docker agents and multi-CLI image
+# Epic 004 — Parallel Docker agents and control panel UX
 
 **Canonical plan:** [docs/epics/epic-004-parallel-docker-support.plan.md](epic-004-parallel-docker-support.plan.md) — future updates for this epic belong in this file only.
 
@@ -53,6 +65,7 @@ isProject: false
 5. **Document** the new Docker patterns in project README files so operators can build images, size the pool, and troubleshoot without reading source.
 6. **Test** the Docker pool pattern end-to-end (automated unit/integration tests plus an optional real-Docker smoke path).
 7. Allow **agent containers to run Docker Compose inside the target repo** (nested compose / “Docker-outside-of-Docker” via host socket) so dev tasks like “start full stack + run E2E pytest” are not blocked when Ralph uses `useDocker`.
+8. Improve **Settings control panel UX**: collapsible sections (Docker Agents, Loop Configuration, Current Epic, Prompts), **Collapse all / Expand all**, per-section **Save** (disabled until dirty) and **Reset** (revert unsaved edits), with Save/Reset controls **below** the fields they affect.
 
 ## Motivation — blocked target-project tasks
 
@@ -96,6 +109,9 @@ flowchart TB
 | Nested compose (target repo) | **Opt-in** `dockerMountSocket` (default `false`); mount host `docker.sock`, install **Docker CLI + Compose plugin** in agent image when `INSTALL_DOCKER_CLI=true` |
 | Nested compose security | Document that socket mount grants effective **host Docker access**; never enable in untrusted multi-tenant images |
 | Sandboxed CI | If the **host** forbids container creation (no socket, no privileges), task stays blocked — document “run on Docker-capable runner” (same as current `blocked.needs`) |
+| Control panel sections | **Repository** stays always visible (not collapsible); **Docker Agents**, **Loop Configuration**, **Current Epic**, **Prompts** are collapsible |
+| Save granularity | **Docker** settings save separately from **Loop** settings (today both share one “Save Settings” in Loop Config) |
+| Dirty / Reset | Compare local draft to last **saved** server state per section; Reset restores draft from props, does not call API |
 
 ## Current state (after Epic 003)
 
@@ -104,6 +120,7 @@ flowchart TB
 - [`LLMCaller`](../../src/server/llm-caller.ts) routes by `agentBackend` inside the container; probes CLI via [`resolveAgentCliInDockerContainer`](../../src/server/docker-runner.ts).
 - [`ralph-loop.ts`](../../src/server/ralph-loop.ts) runs **one** LLM call at a time; `LLMCaller` keeps a single `currentProcess` (parallel calls would clobber stop/kill).
 - Non-Copilot auth vars are documented in [`docker/README.md`](../../docker/README.md); compose `environment` lists Copilot tokens explicitly; other keys rely on `env_file: .env`.
+- **Control panel** ([`ControlPanel.tsx`](../../src/client/components/ControlPanel.tsx)): four sections always expanded; single **Save Settings** in Loop Config persists **all** `localSettings` including Docker fields; Save buttons are always enabled (no dirty check); no Reset; no collapse-all.
 
 ```mermaid
 flowchart TB
@@ -114,6 +131,146 @@ flowchart TB
     CLI --> Mount["/workspace = repoRoot bind mount"]
   end
 ```
+
+```mermaid
+flowchart TB
+  subgraph panelToday [Control panel today]
+    Repo[Repository always open]
+    Docker[Docker Agents]
+    Loop[Loop Config + Save Settings for ALL settings]
+    Epic[Current Epic + Save Epic]
+    Prompts[Prompts + Save Prompt]
+  end
+```
+
+---
+
+## Phase 5 — Control panel UX (collapsible, dirty Save, Reset)
+
+Independent of Docker pool work; can ship early. Touches client only (no server API changes unless Epic save should also persist `epicFile` — see below).
+
+### Collapsible sections
+
+New shared component [`CollapsibleSection.tsx`](../../src/client/components/CollapsibleSection.tsx):
+
+| Prop | Purpose |
+|------|---------|
+| `id` | Stable key for expand/collapse-all map (`docker`, `loop`, `epic`, `prompts`) |
+| `title` | Section heading (replaces bare `<h3>`) |
+| `expanded` / `onToggle` | Controlled from parent, or internal state with parent override |
+| `children` | Section body |
+
+Wrap in [`ControlPanel.tsx`](../../src/client/components/ControlPanel.tsx):
+
+| Section | Collapsible? |
+|---------|----------------|
+| [`RepositorySection`](../../src/client/components/RepositorySection.tsx) | **No** (stays fixed at top) |
+| [`DockerSection`](../../src/client/components/DockerSection.tsx) | Yes — title **Docker Agents** |
+| [`LoopConfigSection`](../../src/client/components/LoopConfigSection.tsx) | Yes — **Loop Configuration** |
+| [`EpicSection`](../../src/client/components/EpicSection.tsx) | Yes — **Current Epic** |
+| [`PromptsSection`](../../src/client/components/PromptsSection.tsx) | Yes — **Prompts** |
+
+**Header toolbar** (below “Settings” title, above Repository):
+
+```text
+[ Collapse all ]  [ Expand all ]
+```
+
+- `collapseAll()` → set all four section ids to `expanded: false`
+- `expandAll()` → all `true`
+- Persist expanded state in `sessionStorage` optional (nice-to-have; default expanded)
+
+**CSS** ([`App.css`](../../src/client/App.css)): chevron on section header, `.collapsible-section--collapsed .collapsible-section__body { display: none }`, respect `prefers-reduced-motion` for toggle animation.
+
+### Dirty detection and Save / Reset
+
+Add [`control-panel-dirty.ts`](../../src/client/control-panel-dirty.ts) (or `src/client/utils/`) with stable comparators:
+
+| Section | Draft state | Saved baseline (from props) | `dirty` when |
+|---------|-------------|----------------------------|--------------|
+| Docker | `pickDockerSettings(localSettings)` | `pickDockerSettings(settings)` | deep unequal |
+| Loop | `pickLoopSettings(localSettings)` | `pickLoopSettings(settings)` | deep unequal |
+| Epic | `localEpic`, `localSettings.epicFile` | `epic`, `settings.epicFile` | content or path changed |
+| Prompts | `localPrompt` | `prompts[activePrompt]` | unequal |
+
+**`pickDockerSettings`** fields (extend as Epic 004 docker settings land):
+
+`useDocker`, `dockerComposeFile`, `dockerService`, `dockerIsolateBranch`, `dockerPoolSize`, `dockerParallelTasks`, `dockerMountSocket`, `dockerInstalledBackends` — exclude read-only branch metadata (`epicBaseBranch`, `dockerWorkBranch`) from dirty/save unless user-editable.
+
+**`pickLoopSettings`**: all other `Settings` keys (models, backend, fleet, frequencies, `requirementsFile`, sort, etc.).
+
+Per section **footer** (last element inside collapsible body, below all inputs):
+
+```text
+[ Reset ]  [ Save … ]
+```
+
+| Section | Primary button | Disabled when |
+|---------|----------------|---------------|
+| Docker | **Save Docker** | `!dockerDirty` |
+| Loop | **Save loop settings** (rename from “Save Settings”) | `!loopDirty` |
+| Epic | **Save epic** | `!epicDirty` |
+| Prompts | **Save {label} prompt** | `!promptDirty` |
+
+- **Reset**: restore section draft from saved baseline (re-run `setLocalSettings` merge for docker/loop slices, `setLocalEpic`, `setLocalPrompt` from props). Does **not** hit API.
+- After successful Save: baseline updates to new saved state → buttons disable until next edit.
+- Secondary actions (**Set Docker**, **Set** epic file, **Refresh Tasks**) stay separate; not gated on dirty (document in tests).
+
+**Epic save behavior:** `handleSaveEpic` should persist **both** epic markdown (`onSaveEpic`) and `epicFile` path (`onSaveSettings` with merged settings) so path edits are not orphaned outside Loop save.
+
+**Docker save behavior:** `handleSaveDocker` in ControlPanel — merge `pickDockerSettings(local)` into settings, call `onSaveSettings`, clear docker dirty.
+
+**Loop save behavior:** existing `handleSaveSettings` narrowed to `pickLoopSettings` + merge with current saved docker fields from server `settings` (not unsaved docker draft unless intentional — prefer merge from **saved** `settings` for docker keys when saving loop only).
+
+### Layout — Save below fields
+
+Audit and fix order in each section:
+
+| Section | Required order (top → bottom) |
+|---------|------------------------------|
+| Docker | all docker fields → errors/status → **Set Docker** / merge (if any) → footer **Reset \| Save Docker** |
+| Loop | all loop fields → **Reset \| Save loop settings** (remove save from middle of fieldset if duplicated) |
+| Epic | epic file + Set → hint → textarea → **Reset \| Save epic** → **Refresh Tasks** (secondary, below save) |
+| Prompts | prompt selector → textarea → **Reset \| Save prompt** |
+
+[`DockerSection`](../../src/client/components/DockerSection.tsx) today has **Set Docker** mid-section — move validate/merge buttons above footer; add Save/Reset footer at bottom.
+
+### Wiring in ControlPanel
+
+- Pass `dockerDirty`, `onSaveDocker`, `onResetDocker` into `DockerSection`
+- Pass `loopDirty`, `onResetLoop` into `LoopConfigSection`; disable save when `!loopDirty`
+- Pass `epicDirty`, `onResetEpic` into `EpicSection`
+- Pass `promptDirty`, `onResetPrompt` into `PromptsSection`
+- Keep `onSettingsDraftChange(localSettings)` for loop-start readiness (unchanged)
+
+```mermaid
+flowchart TB
+  Header[Collapse all / Expand all]
+  Repo[Repository]
+  Docker[Docker Agents collapsible]
+  Loop[Loop Configuration collapsible]
+  Epic[Current Epic collapsible]
+  Prompts[Prompts collapsible]
+
+  Header --> Repo --> Docker --> Loop --> Epic --> Prompts
+  Docker --> DF[fields]
+  DF --> DFooter[Reset / Save Docker]
+  Loop --> LF[fields]
+  LF --> LFooter[Reset / Save loop]
+```
+
+### Tests ([`components.test.tsx`](../../src/client/components/components.test.tsx))
+
+- Collapse all hides section bodies (or aria-expanded false); expand all restores
+- Save Docker / Save loop / Save epic / Save prompt disabled when pristine
+- Edit field → Save enabled → Save → disabled again
+- Edit → Reset → value matches server prop, Save disabled
+- Epic: change `epicFile` marks epic dirty; Save persists path
+- Docker pool fields (when added): included in docker dirty pick
+
+### Docs
+
+- Short note in [`README.md`](../../README.md) Settings section: collapsible panel, per-section save/reset (no docker/README change required unless nested compose section references panel).
 
 ---
 
@@ -345,6 +502,7 @@ Extend **Docker Agent Execution** (and **Settings Defaults** / **CLI flags** as 
 | CLI flags | `--docker-pool-size`, `--docker-parallel-tasks` (if added in [`cli-args.ts`](../../src/server/cli-args.ts)) |
 | Troubleshooting | Wrong CLI in image, `--index` unsupported (upgrade Compose), worktree merge conflicts |
 | Nested compose | `dockerMountSocket`, security warning, `INSTALL_DOCKER_CLI`, blocked-task “cannot create containers” |
+| Control panel | Collapsible Docker / Loop / Epic / Prompts; Collapse all / Expand all; per-section Save (dirty-only) and Reset |
 
 Add a one-line pointer under Epic/docs if useful: “Parallel Docker pool — see [Epic 004](docs/epics/epic-004-parallel-docker-support.plan.md).”
 
@@ -377,6 +535,7 @@ Keep [Step 2 — authentication](docker/README.md#step-2--add-authentication-env
 | Git | [`git-manager.ts`](../../src/server/git-manager.ts) |
 | Loop / LLM | [`ralph-loop.ts`](../../src/server/ralph-loop.ts), [`llm-caller.ts`](../../src/server/llm-caller.ts) |
 | API / UI | [`index.ts`](../../src/server/index.ts), [`DockerSection.tsx`](../../src/client/components/DockerSection.tsx) |
+| Control panel UX | [`ControlPanel.tsx`](../../src/client/components/ControlPanel.tsx), [`CollapsibleSection.tsx`](../../src/client/components/CollapsibleSection.tsx), [`control-panel-dirty.ts`](../../src/client/control-panel-dirty.ts), [`LoopConfigSection.tsx`](../../src/client/components/LoopConfigSection.tsx), [`EpicSection.tsx`](../../src/client/components/EpicSection.tsx), [`PromptsSection.tsx`](../../src/client/components/PromptsSection.tsx), [`App.css`](../../src/client/App.css) |
 | Docs | [`README.md`](../../README.md), [`docker/README.md`](../../docker/README.md) |
 | Tests | See [Testing](#testing) |
 
@@ -395,13 +554,19 @@ Keep [Step 2 — authentication](docker/README.md#step-2--add-authentication-env
 
 ## Implementation order
 
-1. Phase 1 — build-arg Dockerfile + compose env + multi-CLI validate + **README build-arg docs**
-2. **Phase 1b** — `INSTALL_DOCKER_CLI`, optional socket mount, `dockerMountSocket` setting, in-container `docker info` validate, nested-compose docs (unblocks target-repo E2E/compose tasks)
-3. Phase 2 — settings, `docker-pool.ts`, scale + `--index`, worktrees, multi-process `LLMCaller` + **unit tests for pool/spawn**
-4. Phase 3 — parallel `runDevQALoop` with task-manager lock + **ralph-loop / integration tests**
-5. **Documentation pass** — finalize [`README.md`](../../README.md) and [`docker/README.md`](../../docker/README.md) (pool, parallel, nested compose, troubleshooting)
-6. **Docker smoke** (optional script, local/CI when `DOCKER_SMOKE=1`) — scaled pool + nested `docker info` inside agent when socket enabled
-7. Phase 4 — plan-phase pool dispatch (stretch PR)
+**Track A — Control panel (can start immediately)**
+
+1. **Phase 5** — `CollapsibleSection`, collapse/expand all, dirty helpers, per-section Save/Reset footers, split Docker vs Loop save, epic path on Save epic, CSS, component tests
+
+**Track B — Docker stack**
+
+2. Phase 1 — build-arg Dockerfile + compose env + multi-CLI validate + **README build-arg docs**
+3. **Phase 1b** — `INSTALL_DOCKER_CLI`, optional socket mount, `dockerMountSocket` setting, in-container `docker info` validate, nested-compose docs (unblocks target-repo E2E/compose tasks)
+4. Phase 2 — settings, `docker-pool.ts`, scale + `--index`, worktrees, multi-process `LLMCaller` + **unit tests for pool/spawn** (wire new docker fields into `pickDockerSettings` / DockerSection footer)
+5. Phase 3 — parallel `runDevQALoop` with task-manager lock + **ralph-loop / integration tests**
+6. **Documentation pass** — finalize [`README.md`](../../README.md) and [`docker/README.md`](../../docker/README.md) (pool, parallel, nested compose, panel UX, troubleshooting)
+7. **Docker smoke** (optional script, local/CI when `DOCKER_SMOKE=1`) — scaled pool + nested `docker info` inside agent when socket enabled
+8. Phase 4 — plan-phase pool dispatch (stretch PR)
 
 ---
 
@@ -418,7 +583,7 @@ Tests must prove the **new Docker pattern works** without requiring every `npm t
 | [`llm-caller.test.ts`](../../src/server/llm-caller.test.ts) | Two parallel `call()` with different `dockerContainerIndex`; `stop()` kills all tracked processes; worktree cwd in spawn argv |
 | [`git-manager.test.ts`](../../src/server/git-manager.test.ts) | Create/remove worktree per slot (mocked `spawn` / temp git repo) |
 | [`ralph-loop.test.ts`](../../src/server/ralph-loop.test.ts) | When `dockerParallelTasks` + pool 2, dispatches at most two dev paths (mock `LLMCaller`) |
-| [`components.test.tsx`](../../src/client/components/components.test.tsx) | Pool size input; parallel checkbox disabled when `dockerPoolSize === 1` |
+| [`components.test.tsx`](../../src/client/components/components.test.tsx) | Pool size input; parallel checkbox disabled when `dockerPoolSize === 1`; **Phase 5** collapse all, dirty Save, Reset |
 | [`cli-args.test.ts`](../../src/server/cli-args.test.ts) or existing pattern | New flags map to settings if added |
 
 **Definition of done (automated):** `npm run test:ci` passes with zero Docker daemon dependency.
@@ -448,6 +613,7 @@ Document in README: “CI does not run Docker smoke by default; maintainers run 
 - [ ] README and docker/README steps reproduce setup on a clean machine
 - [ ] `dockerMountSocket` enabled: inside `ralph-agent`, `docker info` succeeds and target-repo `docker compose config` parses
 - [ ] Representative target task (compose up + pytest e2e) completes or fails with actionable errors, not “cannot create containers” inside agent
+- [ ] Control panel: Collapse all / Expand all; each section Save disabled until edit; Reset reverts; Save buttons below section fields
 
 ```mermaid
 flowchart LR

@@ -5,6 +5,7 @@ import { LoopConfigSection, normalizeAgentBackend } from "./LoopConfigSection";
 import { EpicSection } from "./EpicSection";
 import { PromptsSection } from "./PromptsSection";
 import { DockerSection } from "./DockerSection";
+import { CollapsibleSection } from "./CollapsibleSection";
 
 const DEFAULT_PROMPT_KEY = "plan-prompt.md";
 
@@ -117,6 +118,23 @@ export function ControlPanel({
     setTimeout(() => setPromptSaved(false), 2000);
   }
 
+  const [expandedMap, setExpandedMap] = useState<Record<'docker'|'loop'|'epic'|'prompts', boolean>>({
+    docker: true,
+    loop: true,
+    epic: true,
+    prompts: true,
+  });
+
+  function collapseAll() {
+    setExpandedMap({ docker: false, loop: false, epic: false, prompts: false });
+  }
+  function expandAll() {
+    setExpandedMap({ docker: true, loop: true, epic: true, prompts: true });
+  }
+  function toggle(id: 'docker'|'loop'|'epic'|'prompts') {
+    setExpandedMap((m) => ({ ...m, [id]: !m[id] }));
+  }
+
   return (
     <aside className="control-panel">
       <div className="control-panel__header">
@@ -126,6 +144,15 @@ export function ControlPanel({
             &times;
           </button>
         )}
+      </div>
+
+      <div className="control-panel__header-toolbar" style={{ padding: '8px 16px', display: 'flex', gap: 8 }}>
+        <button className="loop-btn" onClick={collapseAll} type="button">
+          Collapse all
+        </button>
+        <button className="loop-btn" onClick={expandAll} type="button">
+          Expand all
+        </button>
       </div>
 
       <RepositorySection
@@ -138,49 +165,61 @@ export function ControlPanel({
         onRequirementsFileChange={(v) => setLocalSettings({ ...localSettings, requirementsFile: v })}
       />
 
-      <DockerSection
-        localSettings={localSettings}
-        onChangeSettings={setLocalSettings}
-        readiness={readiness}
-        repoLocked={repoLocked}
-        isRunning={isRunning}
-        onValidateDocker={onValidateDocker}
-        onMergeEpicWork={onMergeEpicWork}
-      />
+      <CollapsibleSection id="docker" title="Docker Agents" expanded={expandedMap.docker} onToggle={() => toggle('docker')}>
+        <DockerSection
+          localSettings={localSettings}
+          onChangeSettings={setLocalSettings}
+          readiness={readiness}
+          repoLocked={repoLocked}
+          isRunning={isRunning}
+          onValidateDocker={onValidateDocker}
+          onMergeEpicWork={onMergeEpicWork}
+          suppressHeader
+        />
+      </CollapsibleSection>
 
-      <LoopConfigSection
-        localSettings={localSettings}
-        onChangeSettings={setLocalSettings}
-        repoLocked={repoLocked}
-        settingsSaved={settingsSaved}
-        onSaveSettings={handleSaveSettings}
-      />
+      <CollapsibleSection id="loop" title="Loop Configuration" expanded={expandedMap.loop} onToggle={() => toggle('loop')}>
+        <LoopConfigSection
+          localSettings={localSettings}
+          onChangeSettings={setLocalSettings}
+          repoLocked={repoLocked}
+          settingsSaved={settingsSaved}
+          onSaveSettings={handleSaveSettings}
+          suppressHeader
+        />
+      </CollapsibleSection>
 
-      <EpicSection
-        localEpic={localEpic}
-        onLocalEpicChange={setLocalEpic}
-        epicFile={localSettings.epicFile}
-        onEpicFileChange={(v) => setLocalSettings({ ...localSettings, epicFile: v })}
-        repoLocked={repoLocked}
-        epicConfigured={readiness.epicConfigured}
-        epicSaved={epicSaved}
-        onSaveEpic={handleSaveEpic}
-        onRefreshBacklog={handleRefreshBacklog}
-        refreshing={refreshing}
-        isRunning={isRunning}
-        onSetEpicFile={onSetEpicFile}
-        onCreateEpicFile={onCreateEpicFile}
-      />
+      <CollapsibleSection id="epic" title="Current Epic" expanded={expandedMap.epic} onToggle={() => toggle('epic')}>
+        <EpicSection
+          localEpic={localEpic}
+          onLocalEpicChange={setLocalEpic}
+          epicFile={localSettings.epicFile}
+          onEpicFileChange={(v) => setLocalSettings({ ...localSettings, epicFile: v })}
+          repoLocked={repoLocked}
+          epicConfigured={readiness.epicConfigured}
+          epicSaved={epicSaved}
+          onSaveEpic={handleSaveEpic}
+          onRefreshBacklog={handleRefreshBacklog}
+          refreshing={refreshing}
+          isRunning={isRunning}
+          onSetEpicFile={onSetEpicFile}
+          onCreateEpicFile={onCreateEpicFile}
+          suppressHeader
+        />
+      </CollapsibleSection>
 
-      <PromptsSection
-        repoLocked={repoLocked}
-        activePrompt={activePrompt}
-        onActivePromptChange={setActivePrompt}
-        localPrompt={localPrompt}
-        onLocalPromptChange={setLocalPrompt}
-        promptSaved={promptSaved}
-        onSavePrompt={handleSavePrompt}
-      />
+      <CollapsibleSection id="prompts" title="Prompts" expanded={expandedMap.prompts} onToggle={() => toggle('prompts')}>
+        <PromptsSection
+          repoLocked={repoLocked}
+          activePrompt={activePrompt}
+          onActivePromptChange={setActivePrompt}
+          localPrompt={localPrompt}
+          onLocalPromptChange={setLocalPrompt}
+          promptSaved={promptSaved}
+          onSavePrompt={handleSavePrompt}
+          suppressHeader
+        />
+      </CollapsibleSection>
     </aside>
   );
 }
