@@ -6,7 +6,12 @@ import { fileURLToPath } from "url";
 import { RalphLoop } from "./ralph-loop.js";
 import { DEFAULT_SETTINGS } from "./templates.js";
 import { getArg, hasFlag, applyCliSettingsOverrides } from "./cli-args.js";
-import { checkDockerHost, ensureDockerAgentRunning, resolveComposeFile } from "./docker-runner.js";
+import {
+  checkDockerHost,
+  ensureDockerAgentRunning,
+  resolveComposeFile,
+  resolveDockerSocketPath,
+} from "./docker-runner.js";
 import { GitManager } from "./git-manager.js";
 
 // --- CLI args ---
@@ -459,6 +464,7 @@ app.post("/api/docker/validate", async (_req, res) => {
       {
         installedBackends: settings.dockerInstalledBackends,
         validateSocketMount: settings.dockerMountSocket,
+        dockerSocketPath: resolveDockerSocketPath(),
       },
     );
     if (!ensure.ok) {

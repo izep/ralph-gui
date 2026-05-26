@@ -194,3 +194,16 @@ Note: Tests use mocked `child_process.spawn` and do not require a Docker daemon;
 - `handleSaveLoop`: same pattern with `pickLoopSettings`; updates `savedModelsByBackend` in the merge.
 - Section footer CSS: `.section-footer` in `App.css` — flex row, top border, 12px gap/padding.
 - Tests: `getByLabelText(/pool size/i)` is the correct query for the docker pool size input (label is "Pool size"); `getByDisplayValue("1")` is ambiguous because other number fields share value 1.
+
+## 2026-05-24 Epic 004 Final Verification
+
+- Full suite: 265 tests pass (npm run test:ci). All Phase 5 (Control Panel UX) items fully implemented and tested:
+  - CollapsibleSection.tsx, control-panel-dirty.ts, per-section Save/Reset footers in DockerSection, LoopConfigSection, EpicSection, PromptsSection, ControlPanel collapse/expand all wiring, App.css collapsible styles.
+  - README.md documents collapsible panel UX (line ~179).
+- Epic 004 is fully complete — all 14 epic-level todos and all task IDs 26 are done.16
+
+## 2026-05-24 Plan Survey
+
+- All Epic 004 tasks (IDs 16-30) are fully implemented: Dockerfile build args, compose auth env vars, dockerMountSocket + nested compose validation, docker-pool.ts, git worktrees, parallel LLMCaller, parallel ralph-loop, dockerPlanParallel stretch, CollapsibleSection, control-panel-dirty.ts, per-section Save/Reset footers, split Docker/Loop save, component tests, docs.
+- Fixed test gap: `ralph-loop.test.ts` docker-runner mock was missing `resolveDockerSocketPath` export (added after mock was written); caused 3 test failures. Fix: add `resolveDockerSocketPath: vi.fn(() => "/var/run/docker.sock")` to the `vi.mock("./docker-runner.js", ...)` factory.
+- npm run test:ci passes 265 tests; npm run typecheck passes. Epic 004 is complete.

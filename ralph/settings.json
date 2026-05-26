@@ -9,8 +9,32 @@
   "planFrequency": 1,
   "minBacklogSize": 3,
   "agentBackend": "copilot",
+  "fleetMode": true,
+  "useDocker": true,
+  "dockerComposeFile": "",
+  "dockerService": "ralph-agent",
+  "epicBaseBranch": "ralph/epic-epic-004-parallel-docker-support.plan-20260524",
+  "dockerWorkBranch": "ralph/epic-epic-004-parallel-docker-support.plan-20260524",
+  "dockerIsolateBranch": true,
+  "dockerPoolSize": 3,
+  "dockerParallelTasks": true,
+  "dockerPlanParallel": true,
+  "dockerInstalledBackends": [],
+  "dockerMountSocket": true,
   "epicFile": "docs/epics/epic-004-parallel-docker-support.plan.md",
   "requirementsFile": "docs/requirements.md",
   "pauseAfterPlan": false,
-  "taskColumnSort": "updatedAtDesc"
+  "taskColumnSort": "updatedAtDesc",
+  "savedModelsByBackend": {
+    "copilot": {
+      "planModel": "claude-sonnet-4.6",
+      "devModel": "gpt-5-mini",
+      "qaModel": "gpt-5-mini"
+    },
+    "cursor-agent": {
+      "planModel": "claude-4.6-sonnet-medium",
+      "devModel": "gpt-5-mini",
+      "qaModel": "gpt-5-mini"
+    }
+  }
 }
