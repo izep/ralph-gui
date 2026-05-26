@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim
+FROM node:24-bookworm-slim
 
 # Build args — set to "true" to install each coding-agent CLI.
 # Rebuild the image after changing these (docker compose build --no-cache).
@@ -15,7 +15,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Enable pnpm via Corepack (included with Node 22)
+# Enable pnpm via Corepack (included with Node 24)
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /workspace
@@ -26,9 +26,15 @@ RUN if [ "$INSTALL_COPILOT" = "true" ]; then npm install -g @github/copilot@1.0.
 RUN if [ "$INSTALL_CLAUDE" = "true" ]; then npm install -g @anthropic-ai/claude-code; fi
 RUN if [ "$INSTALL_GEMINI" = "true" ]; then npm install -g @google/gemini-cli; fi
 RUN if [ "$INSTALL_CURSOR" = "true" ]; then \
-    echo "ERROR: Cursor agent automated install is not yet supported. Set INSTALL_CURSOR=false and install manually." >&2; \
-    exit 1; \
+    apt-get update && apt-get install -y --no-install-recommends curl \
+    && curl -fsSL https://cursor.com/install | bash \
+    && ln -sf /root/.local/bin/cursor-agent /usr/local/bin/cursor-agent \
+    && ln -sf /root/.local/bin/agent /usr/local/bin/agent \
+    && rm -rf /var/lib/apt/lists/*; \
 fi
+
+# Cursor CLI installs to ~/.local/bin (root in this image).
+ENV PATH="/root/.local/bin:${PATH}"
 
 # Install Docker CLI + Compose plugin when INSTALL_DOCKER_CLI=true.
 # Required only when agents need to run `docker compose` inside the container

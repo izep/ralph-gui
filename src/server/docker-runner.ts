@@ -1,5 +1,6 @@
 // Docker host detection, compose file resolution, and spawn builder
 import { existsSync } from "fs";
+import { homedir } from "os";
 import { spawn } from "child_process";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -198,6 +199,22 @@ function dockerComposeEnv(repoRoot: string): NodeJS.ProcessEnv {
   return { ...process.env, RALPH_REPO_ROOT: repoRoot };
 }
 
+/** Host path to the Docker daemon socket (Docker Desktop on macOS uses ~/.docker/run/docker.sock). */
+export function resolveDockerSocketPath(override?: string): string {
+  const fromOverride = override?.trim();
+  if (fromOverride) return fromOverride;
+
+  const fromEnv = process.env.DOCKER_SOCKET?.trim();
+  if (fromEnv) return fromEnv;
+
+  if (existsSync("/var/run/docker.sock")) return "/var/run/docker.sock";
+
+  const desktopSock = path.join(homedir(), ".docker", "run", "docker.sock");
+  if (existsSync(desktopSock)) return desktopSock;
+
+  return "/var/run/docker.sock";
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -255,7 +272,7 @@ export async function resolveAgentCliInDockerContainer(
   const probeScript = names.map((n) => `command -v ${n}`).join(" 2>/dev/null || ");
   const result = await runCommand(
     "docker",
-    ["compose", "-f", composeFile, "exec", "-T", service, "sh", "-lc", `${probeScript} 2>/dev/null`],
+    ["compose", "-f", composeFile, "exec", "-T", service, "sh", "-c", `${probeScript} 2>/dev/null`],
     { cwd: repoRoot, env: dockerComposeEnv(repoRoot), timeoutMs: 30_000 },
   );
 
@@ -393,7 +410,7 @@ export async function ensureDockerAgentRunning(
 
   // Validate Docker socket mount if requested.
   if (options?.validateSocketMount) {
-    const socketPath = options.dockerSocketPath ?? "/var/run/docker.sock";
+    const socketPath = resolveDockerSocketPath(options.dockerSocketPath);
     if (!existsSync(socketPath)) {
       return {
         ok: false,

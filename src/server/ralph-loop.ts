@@ -18,7 +18,12 @@ import {
 import { RalphFileManager } from "./ralph-file-manager.js";
 import { SettingsManager, DEFAULT_SETTINGS, type Settings } from "./settings-manager.js";
 import { GitManager } from "./git-manager.js";
-import { checkDockerHost, ensureDockerAgentRunning, resolveComposeFile } from "./docker-runner.js";
+import {
+  checkDockerHost,
+  ensureDockerAgentRunning,
+  resolveComposeFile,
+  resolveDockerSocketPath,
+} from "./docker-runner.js";
 import { DockerPool, ensureDockerPool } from "./docker-pool.js";
 
 const DEFAULT_EPIC_NORMALIZED = DEFAULT_EPIC.replace(/\r\n/g, "\n").trim();
@@ -202,6 +207,7 @@ export class RalphLoop {
         {
           installedBackends: settings.dockerInstalledBackends,
           validateSocketMount: settings.dockerMountSocket,
+          dockerSocketPath: resolveDockerSocketPath(),
         },
       );
       if (!ensure.ok) {

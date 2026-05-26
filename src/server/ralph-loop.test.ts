@@ -20,6 +20,7 @@ vi.mock("./docker-runner.js", () => ({
   ensureDockerAgentRunning: vi.fn(() => Promise.resolve({ ok: true })),
   resolveComposeFile: vi.fn(() => "/compose.yml"),
   resolveAgentCliInDockerContainer: vi.fn(() => Promise.resolve('/usr/local/bin/copilot')),
+  resolveDockerSocketPath: vi.fn(() => "/var/run/docker.sock"),
 }));
 
 import { mkdtemp, rm, readFile, writeFile, mkdir, access } from "fs/promises";

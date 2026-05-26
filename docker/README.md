@@ -198,7 +198,7 @@ INSTALL_CLAUDE=true docker compose -f docker-compose.agents.yml up -d --build
 
 After rebuilding, click **Set Docker** in Ralph — it probes each CLI listed in `dockerInstalledBackends` and reports which ones are missing.
 
-**Cursor note:** Cursor Agent may not be installable via a single `npm install`. If `INSTALL_CURSOR=true` fails, follow the [Cursor CLI installation docs](https://docs.cursor.com/more/cursor-agent-cli) and add the manual install steps to a custom Dockerfile that extends `ralph-agent`.
+**Cursor:** Set `INSTALL_CURSOR=true` in `.env`, then rebuild. The image runs the [official installer](https://cursor.com/docs/cli/installation) (`curl https://cursor.com/install | bash`) and adds `/root/.local/bin` to `PATH`. You also need `CURSOR_API_KEY` in `.env` (see Step 2).
 
 ---
 
