@@ -7,6 +7,7 @@ services:
         INSTALL_CLAUDE: ${INSTALL_CLAUDE:-false}
         INSTALL_GEMINI: ${INSTALL_GEMINI:-false}
         INSTALL_CURSOR: ${INSTALL_CURSOR:-false}
+        INSTALL_OPENCODE: ${INSTALL_OPENCODE:-false}
         INSTALL_DOCKER_CLI: ${INSTALL_DOCKER_CLI:-false}
     # Keep the container alive for `docker compose exec` (default Node image exits immediately).
     command: [ "sleep", "infinity" ]
@@ -31,6 +32,8 @@ services:
       # Cursor agent auth
       - CURSOR_API_KEY=${CURSOR_API_KEY:-}
       - CURSOR_SESSION_TOKEN=${CURSOR_SESSION_TOKEN:-}
+      # OpenCode Zen auth (free opencode/* models)
+      - OPENCODE_API_KEY=${OPENCODE_API_KEY:-}
       # In-container docker CLI (when socket is mounted)
       - DOCKER_HOST=unix:///var/run/docker.sock
     env_file:

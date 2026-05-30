@@ -2,7 +2,7 @@
 // Shared catalog between client and server. Duplicates AgentBackendId here to avoid circular imports.
 // Model IDs must match each CLI's --model / -m flags (verified via cursor-agent models, Claude --help, Gemini CLI).
 
-export type AgentBackendId = 'copilot' | 'cursor-agent' | 'claude' | 'gemini';
+export type AgentBackendId = 'copilot' | 'cursor-agent' | 'claude' | 'gemini' | 'opencode';
 
 export type ModelRole = 'Planning' | 'Dev' | 'QA';
 
@@ -101,6 +101,13 @@ export const AGENT_MODEL_CATALOG: Record<AgentBackendId, AgentModelEntry[]> = {
     { id: 'gemini-3-flash-preview', label: 'Gemini 3 Flash (preview)', strength: 'Fast operations (Gemini 3 family)', tier: 'fast/cheap', multiplier: 'low', yoloMode: 'Yes', fleetMode: 'No', preferredFor: [] },
     { id: 'gemini-3-pro-preview', label: 'Gemini 3 Pro (preview)', strength: 'Complex reasoning (Gemini 3 family)', tier: 'premium', multiplier: 'high', yoloMode: 'Yes', fleetMode: 'No', preferredFor: [] },
   ],
+
+  opencode: [
+    { id: 'opencode/big-pickle', label: 'Big Pickle', strength: 'Stealth coding-agent model (GLM-4.6 class)', tier: 'Free', multiplier: 'Free', yoloMode: 'Yes (`--dangerously-skip-permissions`)', fleetMode: 'Partial (subagents)', preferredFor: ['Dev', 'Planning'] },
+    { id: 'opencode/deepseek-v4-flash-free', label: 'DeepSeek V4 Flash Free', strength: 'Fast DeepSeek V4 Flash, lightweight tasks', tier: 'Free', multiplier: 'Free', yoloMode: 'Yes (`--dangerously-skip-permissions`)', fleetMode: 'Partial (subagents)', preferredFor: ['Dev', 'QA'] },
+    { id: 'opencode/mimo-v2.5-free', label: 'MiMo-V2.5 Free', strength: 'Fast Xiaomi MiMo coding model', tier: 'Free', multiplier: 'Free', yoloMode: 'Yes (`--dangerously-skip-permissions`)', fleetMode: 'Partial (subagents)', preferredFor: ['Dev', 'QA'] },
+    { id: 'opencode/nemotron-3-super-free', label: 'Nemotron 3 Super Free', strength: 'NVIDIA Nemotron 3 Super (trial endpoints)', tier: 'Free', multiplier: 'Free', yoloMode: 'Yes (`--dangerously-skip-permissions`)', fleetMode: 'Partial (subagents)', preferredFor: ['Dev', 'QA'] },
+  ],
 };
 
 export const PREFERRED_MODELS_BY_BACKEND: Record<AgentBackendId, SavedModelsTriple> = {
@@ -108,6 +115,7 @@ export const PREFERRED_MODELS_BY_BACKEND: Record<AgentBackendId, SavedModelsTrip
   'cursor-agent': { planModel: 'claude-4.6-sonnet-medium', devModel: 'gpt-5-mini', qaModel: 'gpt-5-mini' },
   claude: { planModel: 'claude-sonnet-4-6', devModel: 'claude-haiku-4-5', qaModel: 'claude-haiku-4-5' },
   gemini: { planModel: 'gemini-2.5-pro', devModel: 'gemini-2.5-flash', qaModel: 'gemini-2.5-flash' },
+  opencode: { planModel: 'opencode/big-pickle', devModel: 'opencode/deepseek-v4-flash-free', qaModel: 'opencode/deepseek-v4-flash-free' },
 };
 
 export function getPreferredModels(backend: AgentBackendId): SavedModelsTriple {

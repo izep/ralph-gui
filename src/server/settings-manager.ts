@@ -20,7 +20,7 @@ export interface Settings {
   autoCommit: boolean;
   planFrequency: number;
   minBacklogSize: number;
-  // Supported values: "copilot" | "cursor-agent" | "claude" | "gemini"
+  // Supported values: "copilot" | "cursor-agent" | "claude" | "gemini" | "opencode"
   agentBackend: AgentBackendId;
   // Enable fleet mode (persisted even if backend is not fleet-capable; UI grays it out)
   fleetMode: boolean;

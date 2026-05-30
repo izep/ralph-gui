@@ -56,6 +56,16 @@ describe('agent-models catalog', () => {
     expect(isModelInCatalog('gemini', 'gemini-2.5-flash')).toBe(true);
   });
 
+  it('opencode catalog uses OpenCode Zen free model IDs', () => {
+    expect(getPreferredModels('opencode')).toEqual({
+      planModel: 'opencode/big-pickle',
+      devModel: 'opencode/deepseek-v4-flash-free',
+      qaModel: 'opencode/deepseek-v4-flash-free',
+    });
+    expect(isModelInCatalog('opencode', 'opencode/big-pickle')).toBe(true);
+    expect(isModelInCatalog('opencode', 'openai/gpt-5-mini')).toBe(false);
+  });
+
   it('normalizeModelId maps legacy IDs to current catalog entries', () => {
     expect(normalizeModelId('cursor-agent', 'claude-sonnet-4.6')).toBe('claude-4.6-sonnet-medium');
     expect(normalizeModelId('claude', 'claude-sonnet-4.6')).toBe('claude-sonnet-4-6');

@@ -22,6 +22,7 @@ import {
   resolveCopilotCommand,
   resolveCursorAgentCommand,
   resolveGeminiCommand,
+  resolveOpencodeCommand,
   shouldUseShellForCommand,
 } from "./llm-caller.js";
 
@@ -191,6 +192,34 @@ describe("resolveGeminiCommand", () => {
   });
 });
 
+describe("resolveOpencodeCommand", () => {
+  it("prefers OPENCODE_BIN when explicitly configured", async () => {
+    const executable = path.join(tmpDir, process.platform === "win32" ? "opencode.cmd" : "opencode");
+    await writeFile(executable, "echo test", "utf-8");
+    if (process.platform !== "win32") {
+      await chmod(executable, 0o755);
+    }
+
+    const resolved = await resolveOpencodeCommand({ OPENCODE_BIN: executable }, process.platform);
+    expect(resolved).toBe(executable);
+  });
+
+  it("resolves opencode from PATH on Unix-like platforms", async () => {
+    const executable = path.join(tmpDir, "opencode");
+    await writeFile(executable, "#!/bin/sh\nexit 0\n", "utf-8");
+    await chmod(executable, 0o755);
+
+    const resolved = await resolveOpencodeCommand({ PATH: tmpDir }, "linux");
+    expect(resolved).toBe(executable);
+  });
+
+  it("throws a helpful error when the CLI cannot be found", async () => {
+    await expect(resolveOpencodeCommand({ PATH: tmpDir }, "linux")).rejects.toThrow(
+      "OpenCode CLI not found in PATH",
+    );
+  });
+});
+
 describe("normalizeAgentBackend", () => {
   it("defaults unknown values to copilot", () => {
     expect(normalizeAgentBackend(undefined)).toBe("copilot");
@@ -205,6 +234,8 @@ describe("normalizeAgentBackend", () => {
     expect(normalizeAgentBackend("Claude")).toBe("claude");
     expect(normalizeAgentBackend("gemini")).toBe("gemini");
     expect(normalizeAgentBackend("Gemini")).toBe("gemini");
+    expect(normalizeAgentBackend("opencode")).toBe("opencode");
+    expect(normalizeAgentBackend("OpenCode")).toBe("opencode");
   });
 });
 
@@ -228,6 +259,7 @@ describe("backendSupportsReasoningEffort", () => {
   it("returns false for backends without reasoning effort support", () => {
     expect(backendSupportsReasoningEffort("cursor-agent")).toBe(false);
     expect(backendSupportsReasoningEffort("gemini")).toBe(false);
+    expect(backendSupportsReasoningEffort("opencode")).toBe(false);
   });
 });
 
@@ -373,6 +405,33 @@ describe("LLMCaller.call", () => {
 
     expect(args).not.toContain("--reasoning-effort");
     expect(args).not.toContain("--effort");
+
+    proc.stdout.emit("data", Buffer.from("ok"));
+    proc.emit("close", 0);
+    await expect(resultPromise).resolves.toBe("ok");
+  });
+
+  it("uses opencode run with dangerously-skip-permissions for opencode backend", async () => {
+    process.env.OPENCODE_BIN = await makeExecutable("opencode");
+    const caller = new LLMCaller(() => true);
+
+    const resultPromise = caller.call("opencode prompt", "opencode/big-pickle", tmpDir, {
+      agentBackend: "opencode",
+    });
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
+    const [command, args] = spawnMock.mock.calls[0] as [string, string[]];
+    const proc = spawnMock.mock.results[0].value as MockChildProcess;
+
+    expect(command).toBe(process.env.OPENCODE_BIN);
+    expect(args).toEqual([
+      "run",
+      "--prompt", "opencode prompt",
+      "-m", "opencode/big-pickle",
+      "--dangerously-skip-permissions",
+      "--format", "default",
+    ]);
+    expect(proc.stdin.write).not.toHaveBeenCalled();
 
     proc.stdout.emit("data", Buffer.from("ok"));
     proc.emit("close", 0);

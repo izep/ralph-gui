@@ -7,6 +7,7 @@ export const BACKEND_DISPLAY_NAMES: Record<AgentBackendId, string> = {
   "cursor-agent": "Cursor Agent",
   claude: "Claude Code CLI",
   gemini: "Gemini CLI",
+  opencode: "OpenCode CLI",
 };
 
 export function buildModelsReferenceHtml(backend: AgentBackendId): string {

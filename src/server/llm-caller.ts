@@ -1,4 +1,4 @@
-// LLM CLI invocation supporting copilot, cursor-agent, claude, and gemini backends
+// LLM CLI invocation supporting copilot, cursor-agent, claude, gemini, and opencode backends
 import { spawn, type ChildProcess } from "child_process";
 import { constants } from "fs";
 import { access } from "fs/promises";
@@ -10,7 +10,7 @@ import {
 } from "./docker-runner.js";
 import type { Settings } from "./settings-manager.js";
 
-export const AGENT_BACKENDS = ["copilot", "cursor-agent", "claude", "gemini"] as const;
+export const AGENT_BACKENDS = ["copilot", "cursor-agent", "claude", "gemini", "opencode"] as const;
 export type AgentBackendId = (typeof AGENT_BACKENDS)[number];
 
 export const FLEET_CAPABLE_BACKENDS = ["copilot"] as const satisfies readonly AgentBackendId[];
@@ -53,6 +53,7 @@ export function normalizeAgentBackend(value: string | undefined): AgentBackendId
   if (v === "cursor-agent") return "cursor-agent";
   if (v === "claude") return "claude";
   if (v === "gemini") return "gemini";
+  if (v === "opencode") return "opencode";
   return "copilot";
 }
 
@@ -239,6 +240,25 @@ export async function resolveGeminiCommand(
   );
 }
 
+export async function resolveOpencodeCommand(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+): Promise<string> {
+  const configuredCommand = env.OPENCODE_BIN?.trim();
+  const candidates = configuredCommand
+    ? [configuredCommand]
+    : platform === "win32"
+      ? ["opencode", "opencode.cmd", "opencode.bat", "opencode.exe"]
+      : ["opencode"];
+
+  return resolveFirstExecutable(
+    candidates,
+    env,
+    platform,
+    "OpenCode CLI not found in PATH. Install OpenCode so `opencode` is available, or set OPENCODE_BIN to the executable path.",
+  );
+}
+
 export function shouldUseShellForCommand(
   command: string,
   platform: NodeJS.Platform = process.platform,
@@ -259,6 +279,8 @@ function backendCliLabel(backend: AgentBackendId): string {
       return "claude";
     case "gemini":
       return "gemini";
+    case "opencode":
+      return "opencode";
     default:
       return "copilot";
   }
@@ -268,6 +290,7 @@ const ARG_PROMPT_MAX_CHARS = 16_000;
 const CURSOR_AGENT_NON_INTERACTIVE_FLAGS = ["--yolo"] as const;
 const CLAUDE_NON_INTERACTIVE_FLAGS = ["--permission-mode", "bypassPermissions"] as const;
 const GEMINI_NON_INTERACTIVE_FLAGS = ["--yolo"] as const;
+const OPENCODE_NON_INTERACTIVE_FLAGS = ["--dangerously-skip-permissions"] as const;
 
 function assertPromptFitsArgv(prompt: string, backend: AgentBackendId): void {
   if (prompt.length <= ARG_PROMPT_MAX_CHARS) {
@@ -292,6 +315,8 @@ async function resolveCommandForBackend(
       return resolveClaudeCommand(env, platform);
     case "gemini":
       return resolveGeminiCommand(env, platform);
+    case "opencode":
+      return resolveOpencodeCommand(env, platform);
     default:
       return resolveCopilotCommand(env, platform);
   }
@@ -412,6 +437,21 @@ export class LLMCaller {
               ...GEMINI_NON_INTERACTIVE_FLAGS,
               "--output-format",
               "text",
+            ];
+            writeStdin = null;
+            break;
+          }
+          case "opencode": {
+            assertPromptFitsArgv(prompt, backend);
+            args = [
+              "run",
+              "--prompt",
+              normalizePromptForArgv(prompt),
+              "-m",
+              model,
+              ...OPENCODE_NON_INTERACTIVE_FLAGS,
+              "--format",
+              "default",
             ];
             writeStdin = null;
             break;

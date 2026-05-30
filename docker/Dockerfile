@@ -6,6 +6,7 @@ ARG INSTALL_COPILOT=true
 ARG INSTALL_CLAUDE=false
 ARG INSTALL_GEMINI=false
 ARG INSTALL_CURSOR=false
+ARG INSTALL_OPENCODE=false
 # Set to "true" to install Docker CLI + Compose plugin (needed for nested compose / target-repo E2E tasks).
 ARG INSTALL_DOCKER_CLI=false
 
@@ -30,6 +31,12 @@ RUN if [ "$INSTALL_CURSOR" = "true" ]; then \
     && curl -fsSL https://cursor.com/install | bash \
     && ln -sf /root/.local/bin/cursor-agent /usr/local/bin/cursor-agent \
     && ln -sf /root/.local/bin/agent /usr/local/bin/agent \
+    && rm -rf /var/lib/apt/lists/*; \
+fi
+RUN if [ "$INSTALL_OPENCODE" = "true" ]; then \
+    apt-get update && apt-get install -y --no-install-recommends curl \
+    && curl -fsSL https://opencode.ai/install | bash \
+    && ln -sf /root/.local/bin/opencode /usr/local/bin/opencode \
     && rm -rf /var/lib/apt/lists/*; \
 fi
 

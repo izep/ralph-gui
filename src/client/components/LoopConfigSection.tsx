@@ -14,6 +14,7 @@ export function normalizeAgentBackend(value: string | undefined): AgentBackendId
   if (v === "cursor-agent") return "cursor-agent";
   if (v === "claude") return "claude";
   if (v === "gemini") return "gemini";
+  if (v === "opencode") return "opencode";
   return "copilot";
 }
 
@@ -58,6 +59,7 @@ export function LoopConfigSection({
     "cursor-agent": "Cursor",
     claude: "Claude Code CLI",
     gemini: "Gemini CLI",
+    opencode: "OpenCode CLI",
   };
 
   const [{ planIsCustom, devIsCustom, qaIsCustom }, setCustomFlags] = useState(() =>
@@ -175,6 +177,7 @@ export function LoopConfigSection({
             <option value="cursor-agent">Cursor Agent</option>
             <option value="claude">Claude Code (claude CLI)</option>
             <option value="gemini">Google Gemini CLI</option>
+            <option value="opencode">OpenCode CLI</option>
           </select>
         </label>
 

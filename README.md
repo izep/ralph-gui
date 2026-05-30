@@ -10,7 +10,7 @@ Remove `ralph/task-status.json` to start a clean loop, otherwise it will try to 
 
 ## Core Concepts
 
-RUN THIS IN A SANDBOX. With the **GitHub Copilot** backend (default), the loop calls `copilot` in "yolo" mode. Other backends are also launched with backend-specific non-interactive/permissive flags so the loop can proceed unattended: Cursor Agent is run with `--output-format text`, Claude is run with `--permission-mode bypassPermissions --output-format text`, and Gemini is run with `--yolo --output-format text`. These modes can reduce or bypass interactive safety prompts, so backend selection has real safety implications and should only be used in isolated environments.
+RUN THIS IN A SANDBOX. With the **GitHub Copilot** backend (default), the loop calls `copilot` in "yolo" mode. Other backends are also launched with backend-specific non-interactive/permissive flags so the loop can proceed unattended: Cursor Agent is run with `--output-format text`, Claude is run with `--permission-mode bypassPermissions --output-format text`, Gemini is run with `--yolo --output-format text`, and OpenCode is run with `--dangerously-skip-permissions`. These modes can reduce or bypass interactive safety prompts, so backend selection has real safety implications and should only be used in isolated environments.
 
 - `requirements.md`:
   The authoritative product requirements document for the overall project. If this is defined elsewhere, just reference those documents in requirements.md. 
@@ -72,8 +72,9 @@ Planning populates and refreshes backlog. Modifying the epic requirements, the a
 | Cursor Agent | `cursor-agent` | `CURSOR_AGENT_BIN` |
 | Claude Code | `claude` | `CLAUDE_BIN` |
 | Google Gemini CLI | `gemini` | `GEMINI_BIN` |
+| OpenCode | `opencode` | `OPENCODE_BIN` |
 
-Plan, dev, and QA **model names are backend-specific**: what works for Copilot may not apply to Claude Code, Cursor Agent, or Gemini CLI—see each vendor’s CLI documentation.
+Plan, dev, and QA **model names are backend-specific**: what works for Copilot may not apply to Claude Code, Cursor Agent, Gemini CLI, or OpenCode—see each vendor’s CLI documentation.
 
 Reasoning effort support is backend-specific:
 
@@ -83,6 +84,7 @@ Reasoning effort support is backend-specific:
 | Claude Code | Supported (`--effort`) |
 | Cursor Agent | Not supported (setting is ignored) |
 | Google Gemini CLI | Not supported (setting is ignored) |
+| OpenCode | Not supported (setting is ignored) |
 
 If a CLI is not on `PATH`, set the matching `*_BIN` variable to the full executable path (especially on Windows when the command is `copilot.cmd`, `cursor-agent.cmd`, etc.).
 
@@ -210,6 +212,7 @@ docker compose -f docker-compose.agents.yml up -d --force-recreate ralph-agent
 | **Claude** | `ANTHROPIC_API_KEY` | Anthropic API key; install `claude` in the image first. |
 | **Gemini** | `GEMINI_API_KEY` | Google AI Studio API key; install `gemini` in the image first. |
 | **Cursor Agent** | `CURSOR_API_KEY` | Cursor API key from the dashboard; install `cursor-agent` in the image first. |
+| **OpenCode** | `OPENCODE_API_KEY` | OpenCode Zen API key from [opencode.ai/auth](https://opencode.ai/auth); install `opencode` in the image first. Free `opencode/*` models do not need separate provider keys. |
 
 Optional git identity overrides: `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME`, `GIT_COMMITTER_EMAIL`.
 
@@ -236,6 +239,7 @@ The agent image can include multiple coding-agent CLIs. Install only what you ne
 | `INSTALL_CLAUDE` | `false` | `@anthropic-ai/claude-code` CLI |
 | `INSTALL_GEMINI` | `false` | `@google/gemini-cli` CLI |
 | `INSTALL_CURSOR` | `false` | Cursor Agent CLI (see `docker/README.md` for manual steps) |
+| `INSTALL_OPENCODE` | `false` | OpenCode CLI (see `docker/README.md`) |
 | `INSTALL_DOCKER_CLI` | `false` | Docker CLI + Compose plugin (required for nested compose — see below) |
 
 Example: build an image with Copilot + Claude:

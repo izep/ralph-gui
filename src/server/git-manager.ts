@@ -1,8 +1,22 @@
 // Git and repository operations
 import { spawn } from "child_process";
-import { access } from "fs/promises";
+import { access, realpath } from "fs/promises";
 import { constants } from "fs";
 import path from "path";
+
+/** Resolve symlinks (e.g. macOS /var → /private/var) so git-reported paths compare reliably. */
+async function resolveRealPath(filePath: string): Promise<string> {
+  try {
+    return await realpath(filePath);
+  } catch {
+    return path.resolve(filePath);
+  }
+}
+
+async function pathsEqual(a: string, b: string): Promise<boolean> {
+  const [resolvedA, resolvedB] = await Promise.all([resolveRealPath(a), resolveRealPath(b)]);
+  return resolvedA === resolvedB;
+}
 
 export class GitManager {
   private repoRoot: string;
@@ -93,9 +107,11 @@ export class GitManager {
 
     // Check if worktree already exists.
     try {
-      const list = await this.runGit(["worktree", "list", "--porcelain"]);
-      if (list.includes(worktreePath)) {
-        return worktreePath;
+      const existing = await this.listWorktrees();
+      for (const wt of existing) {
+        if (await pathsEqual(wt.path, worktreePath)) {
+          return worktreePath;
+        }
       }
     } catch {
       // proceed to create
@@ -140,28 +156,31 @@ export class GitManager {
     const raw = await this.runGit(["worktree", "list", "--porcelain"]);
     const entries: Array<{ path: string; branch: string; head: string }> = [];
     let current: Partial<{ path: string; branch: string; head: string }> = {};
+    const pushCurrent = async () => {
+      if (!current.path) return;
+      entries.push({
+        path: await resolveRealPath(current.path),
+        branch: current.branch ?? "(detached)",
+        head: current.head ?? "",
+      });
+      current = {};
+    };
     for (const line of raw.split("\n")) {
       if (line.startsWith("worktree ")) {
+        if (current.path) {
+          await pushCurrent();
+        }
         current = { path: line.slice("worktree ".length).trim() };
       } else if (line.startsWith("HEAD ")) {
         current.head = line.slice("HEAD ".length).trim();
       } else if (line.startsWith("branch ")) {
         current.branch = line.slice("branch ".length).trim();
       } else if (line.trim() === "" && current.path) {
-        entries.push({
-          path: current.path,
-          branch: current.branch ?? "(detached)",
-          head: current.head ?? "",
-        });
-        current = {};
+        await pushCurrent();
       }
     }
     if (current.path) {
-      entries.push({
-        path: current.path,
-        branch: current.branch ?? "(detached)",
-        head: current.head ?? "",
-      });
+      await pushCurrent();
     }
     return entries;
   }

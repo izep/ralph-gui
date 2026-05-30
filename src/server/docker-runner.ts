@@ -12,6 +12,7 @@ const AGENT_CLI_CANDIDATES: Record<AgentBackendId, string[]> = {
   "cursor-agent": ["cursor-agent", "cursor"],
   claude: ["claude"],
   gemini: ["gemini"],
+  opencode: ["opencode"],
 };
 
 const AGENT_CLI_INSTALL_HINT: Record<AgentBackendId, string> = {
@@ -19,6 +20,7 @@ const AGENT_CLI_INSTALL_HINT: Record<AgentBackendId, string> = {
   "cursor-agent": "install Cursor CLI so `cursor-agent` is on PATH in the container",
   claude: "npm install -g @anthropic-ai/claude-code",
   gemini: "npm install -g @google/gemini-cli",
+  opencode: "install OpenCode CLI so `opencode` is on PATH in the container (see docker/README.md)",
 };
 
 export type DockerHostCheck =

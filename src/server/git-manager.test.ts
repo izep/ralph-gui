@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import os from "os";
 import path from "path";
-import { mkdtemp, rm, writeFile } from "fs/promises";
+import { mkdtemp, rm, writeFile, realpath } from "fs/promises";
 import { execSync } from "child_process";
 import { GitManager } from "./git-manager.js";
 
@@ -161,7 +161,7 @@ describe("GitManager worktree helpers", () => {
   it("listWorktrees returns at least the main worktree", async () => {
     const wts = await gitManager.listWorktrees();
     expect(wts.length).toBeGreaterThanOrEqual(1);
-    expect(wts[0].path).toBe(tmpDir);
+    expect(wts[0].path).toBe(await realpath(tmpDir));
   });
 
   it("listWorktrees returns created worktree", async () => {

@@ -33,7 +33,7 @@ describe("buildModelsReferenceHtml", () => {
   });
 
   it("includes preferred plan/dev/qa model IDs in the metadata line", () => {
-    const backends: AgentBackendId[] = ["copilot", "claude", "gemini", "cursor-agent"];
+    const backends: AgentBackendId[] = ["copilot", "claude", "gemini", "cursor-agent", "opencode"];
     for (const backend of backends) {
       const html = buildModelsReferenceHtml(backend);
       const pref = PREFERRED_MODELS_BY_BACKEND[backend];

@@ -756,6 +756,27 @@ describe("LoopConfigSection model dropdowns", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows opencode Zen free model options when agentBackend is opencode", () => {
+    const settings: Settings = {
+      ...defaultSettings,
+      agentBackend: "opencode",
+      planModel: "opencode/big-pickle",
+      devModel: "opencode/deepseek-v4-flash-free",
+      qaModel: "opencode/deepseek-v4-flash-free",
+    };
+    render(
+      <LoopConfigSection
+        localSettings={settings}
+        onChangeSettings={() => { }}
+        repoLocked={false}
+        onSaveSettings={() => { }}
+      />,
+    );
+    expect(
+      screen.getByText(/\(opencode\/big-pickle\) Big Pickle -- recommended for planning/),
+    ).toBeInTheDocument();
+  });
+
   it("View models link uses current backend in URL", () => {
     const openSpy = vi.fn();
     vi.stubGlobal("open", openSpy);

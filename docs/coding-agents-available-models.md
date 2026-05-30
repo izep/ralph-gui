@@ -59,3 +59,14 @@ Use `-m` / `--model` with these IDs (`gemini-2.0-*` returns 404 on current CLI).
 | Claude Opus 4.5   | claude-opus-4.5   | Anthropic flagship, deep reasoning      | Premium             | ~5×          | Yes       | Yes (`/fleet`) |
 | Claude Opus 4.6   | claude-opus-4.6   | Improved Opus reasoning                 | Premium             | ~5×          | Yes       | Yes (`/fleet`) |
 | Claude Opus 4.7   | claude-opus-4.7   | Most powerful Anthropic model           | Premium             | ~5×          | Yes       | Yes (`/fleet`) |
+
+## OpenCode CLI
+
+IDs from `opencode models opencode` (OpenCode Zen free tier). Use exact `-m` / `--model` values (`provider/model` format). No separate provider API key required — auth via OpenCode Zen (`/connect`).
+
+| Model                  | ID                              | Strength                                   | Tier | Multiplier | YOLO Mode                              | Fleet Mode          | Preferred For |
+| ---------------------- | ------------------------------- | ------------------------------------------ | ---- | ---------- | -------------------------------------- | ------------------- | ------------- |
+| Big Pickle             | opencode/big-pickle             | Stealth coding-agent model (GLM-4.6 class) | Free | Free       | Yes (`--dangerously-skip-permissions`) | Partial (subagents) | Planning      |
+| DeepSeek V4 Flash Free | opencode/deepseek-v4-flash-free | Fast DeepSeek V4 Flash, lightweight tasks  | Free | Free       | Yes (`--dangerously-skip-permissions`) | Partial (subagents) | Dev, QA       |
+| MiMo-V2.5 Free         | opencode/mimo-v2.5-free         | Fast Xiaomi MiMo coding model              | Free | Free       | Yes (`--dangerously-skip-permissions`) | Partial (subagents) |               |
+| Nemotron 3 Super Free  | opencode/nemotron-3-super-free  | NVIDIA Nemotron 3 Super (trial endpoints)  | Free | Free       | Yes (`--dangerously-skip-permissions`) | Partial (subagents) |               |

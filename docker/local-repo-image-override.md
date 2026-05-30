@@ -8,18 +8,27 @@ Use this guide when the **bundled** Ralph agent image (`ralph-gui/docker-compose
 
 Ralph supports this through **Settings → Docker Agents → Compose file**: point at a `docker-compose` file **inside the target repo** (or an absolute path). Ralph still bind-mounts that repo to `/workspace`; only the **container image and compose stack** change.
 
-```
-  ralph-gui (orchestrator)              Target repo (your project)
-  ┌────────────────────┐               ┌─────────────────────────────┐
-  │  Ralph GUI / loop  │               │  docker-compose.agents.yml  │  ← override
-  │  resolveComposeFile│─── -f ───────►│  docker/Dockerfile          │
-  └─────────┬──────────┘               │  .env (auth keys)           │
-            │                          └──────────────┬──────────────┘
-            │  docker compose exec                     │
-            │  cwd = repo root                         │  build + up
-            │  RALPH_REPO_ROOT = repo path             ▼
-            └──────────────────────────────►  ralph-agent container
-                                              /workspace ← same repo files
+```mermaid
+flowchart LR
+  subgraph orch [ralph-gui orchestrator]
+    Loop["Ralph GUI / loop"]
+    Resolve["resolveComposeFile"]
+    Loop --> Resolve
+  end
+  subgraph target [Target repo]
+    Compose["docker-compose.agents.yml override"]
+    DF["docker/Dockerfile"]
+    Env[".env auth keys"]
+    Compose --> DF
+    Compose --> Env
+  end
+  Agent["ralph-agent container"]
+  WS["/workspace — same repo files"]
+  Resolve -->|"-f compose file"| Compose
+  Resolve -->|"docker compose exec, cwd = repo root"| Agent
+  Resolve -->|"RALPH_REPO_ROOT"| Agent
+  Compose -->|"build + up"| Agent
+  Agent --> WS
 ```
 
 The main setup guide ([README.md](README.md)) covers the default bundled image. This document is only for **per-repo overrides**.

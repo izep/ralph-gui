@@ -54,7 +54,7 @@ export interface LoopStatus {
   error: string | null;
 }
 
-export type AgentBackendId = "copilot" | "cursor-agent" | "claude" | "gemini";
+export type AgentBackendId = "copilot" | "cursor-agent" | "claude" | "gemini" | "opencode";
 
 export type TaskColumnSort =
   | "updatedAtAsc"

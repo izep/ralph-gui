@@ -2,17 +2,21 @@
 
 Ralph can run coding agents **inside a Docker container** instead of on your host. The target repo is bind-mounted to `/workspace`, so file edits and git history stay on your machine—the container only provides the toolchain and agent CLI.
 
-```
-  Your machine                         Docker container (ralph-agent)
-  ┌─────────────────┐                 ┌──────────────────────────────┐
-  │  Ralph GUI      │  docker exec    │  copilot / claude / …        │
-  │  (or start.sh)  │ ──────────────► │  node, pnpm, git             │
-  └────────┬────────┘                 └──────────────┬───────────────┘
-           │                                         │
-           │         same files, same .git           │
-           └─────────────────┬───────────────────────┘
-                             ▼
-                    /workspace  ←  your target repo
+```mermaid
+flowchart TB
+  subgraph host [Your machine]
+    Ralph["Ralph GUI or start.sh"]
+  end
+  subgraph container [Docker ralph-agent]
+    CLI["copilot / claude / …"]
+    Tools["node, pnpm, git"]
+  end
+  Workspace["/workspace — target repo bind mount"]
+  Ralph -->|"docker compose exec"| CLI
+  Ralph --> Tools
+  Ralph --> Workspace
+  CLI --> Workspace
+  Tools --> Workspace
 ```
 
 **Important:** Logins on your host (for example `copilot login`) do **not** carry into the container. You must pass API keys or tokens via `.env` (see Step 2).
@@ -98,6 +102,7 @@ Add the matching line to the same `.env` file. You must also install that CLI in
 | `claude` | `ANTHROPIC_API_KEY=sk-ant-...` | [console.anthropic.com](https://console.anthropic.com/) |
 | `gemini` | `GEMINI_API_KEY=...` | [Google AI Studio](https://aistudio.google.com/app/apikey) |
 | `cursor-agent` | `CURSOR_API_KEY=...` | [Cursor Dashboard → Integrations](https://cursor.com/dashboard) |
+| `opencode` | `OPENCODE_API_KEY=...` | [OpenCode Zen](https://opencode.ai/auth) (Create API Key) |
 
 Example `.env` with several backends (only set what you use):
 
@@ -106,6 +111,7 @@ COPILOT_GITHUB_TOKEN=github_pat_...
 # ANTHROPIC_API_KEY=sk-ant-...
 # GEMINI_API_KEY=...
 # CURSOR_API_KEY=...
+# OPENCODE_API_KEY=...
 
 # Optional: name/email on agent commits
 # GIT_AUTHOR_NAME=Ralph Agent
@@ -172,6 +178,7 @@ The bundled `docker/Dockerfile` uses **build args** to install only the CLIs you
 | `INSTALL_CLAUDE` | `false` | `@anthropic-ai/claude-code` |
 | `INSTALL_GEMINI` | `false` | `@google/gemini-cli` |
 | `INSTALL_CURSOR` | `false` | Cursor Agent (see note below) |
+| `INSTALL_OPENCODE` | `false` | OpenCode CLI (see note below) |
 | `INSTALL_DOCKER_CLI` | `false` | Docker CLI + Compose v2 plugin (for nested compose) |
 
 ### Build examples
@@ -199,6 +206,8 @@ INSTALL_CLAUDE=true docker compose -f docker-compose.agents.yml up -d --build
 After rebuilding, click **Set Docker** in Ralph — it probes each CLI listed in `dockerInstalledBackends` and reports which ones are missing.
 
 **Cursor:** Set `INSTALL_CURSOR=true` in `.env`, then rebuild. The image runs the [official installer](https://cursor.com/docs/cli/installation) (`curl https://cursor.com/install | bash`) and adds `/root/.local/bin` to `PATH`. You also need `CURSOR_API_KEY` in `.env` (see Step 2).
+
+**OpenCode:** Set `INSTALL_OPENCODE=true` in `.env`, then rebuild. The image runs the [official installer](https://opencode.ai/docs/cli/) (`curl https://opencode.ai/install | bash`) and adds `/root/.local/bin` to `PATH`. Set `OPENCODE_API_KEY` in `.env` for OpenCode Zen free models (`opencode/*` IDs in Settings).
 
 ---
 
@@ -342,6 +351,7 @@ docker compose -f docker-compose.agents.yml exec -T ralph-agent sh -lc \
 | `GEMINI_API_KEY` | Gemini | Google AI Studio |
 | `CURSOR_API_KEY` | Cursor Agent | Cursor API key |
 | `CURSOR_SESSION_TOKEN` | Cursor Agent | Session token (if required by Cursor) |
+| `OPENCODE_API_KEY` | OpenCode | OpenCode Zen API key (free `opencode/*` models) |
 | `DOCKER_SOCKET` | Nested Docker | Host socket path (default `/var/run/docker.sock`) |
 | `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` | git commits | Optional override (defaults in compose) |
 | `GIT_COMMITTER_NAME` / `GIT_COMMITTER_EMAIL` | git commits | Optional override |
