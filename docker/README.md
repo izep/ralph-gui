@@ -207,7 +207,7 @@ After rebuilding, click **Set Docker** in Ralph — it probes each CLI listed in
 
 **Cursor:** Set `INSTALL_CURSOR=true` in `.env`, then rebuild. The image runs the [official installer](https://cursor.com/docs/cli/installation) (`curl https://cursor.com/install | bash`) and adds `/root/.local/bin` to `PATH`. You also need `CURSOR_API_KEY` in `.env` (see Step 2).
 
-**OpenCode:** Set `INSTALL_OPENCODE=true` in `.env`, then rebuild. The image runs the [official installer](https://opencode.ai/docs/cli/) (`curl https://opencode.ai/install | bash`) and adds `/root/.local/bin` to `PATH`. Set `OPENCODE_API_KEY` in `.env` for OpenCode Zen free models (`opencode/*` IDs in Settings).
+**OpenCode:** Set `INSTALL_OPENCODE=true` in `.env`, then rebuild. The image runs the [official installer](https://opencode.ai/docs/cli/) (`curl https://opencode.ai/install | bash`), symlinks `/root/.opencode/bin/opencode` onto `PATH`, and adds `/root/.opencode/bin` to `PATH`. Set `OPENCODE_API_KEY` in `.env` for OpenCode Zen free models (`opencode/*` IDs in Settings).
 
 ---
 

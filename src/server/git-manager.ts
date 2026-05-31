@@ -27,9 +27,28 @@ export class GitManager {
 
   async getCurrentBranch(): Promise<string> {
     try {
-      return (await this.runGit(["rev-parse", "--abbrev-ref", "HEAD"])).trim();
+      const abbrev = (await this.runGit(["rev-parse", "--abbrev-ref", "HEAD"])).trim();
+      if (abbrev && abbrev !== "HEAD") {
+        return abbrev;
+      }
+    } catch {
+      // Unborn branch or detached HEAD — fall back to symbolic-ref.
+    }
+
+    try {
+      return (await this.runGit(["symbolic-ref", "--short", "HEAD"])).trim();
     } catch {
       return "";
+    }
+  }
+
+  /** False when the repo has no commits yet (unborn branch). */
+  async hasAnyCommits(): Promise<boolean> {
+    try {
+      await this.runGit(["rev-parse", "--verify", "HEAD"]);
+      return true;
+    } catch {
+      return false;
     }
   }
 

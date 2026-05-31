@@ -34,6 +34,18 @@ describe("GitManager.getCurrentBranch", () => {
     // git init uses 'main' or 'master' depending on config
     expect(branch).toMatch(/^(main|master)$/);
   });
+
+  it("returns symbolic branch name before the first commit", async () => {
+    const unbornDir = await mkdtemp(path.join(os.tmpdir(), "ralph-git-unborn-"));
+    try {
+      git("init -b bootstrap", unbornDir);
+      const unbornGit = new GitManager(unbornDir);
+      expect(await unbornGit.getCurrentBranch()).toBe("bootstrap");
+      expect(await unbornGit.hasAnyCommits()).toBe(false);
+    } finally {
+      await rm(unbornDir, { recursive: true, force: true });
+    }
+  });
 });
 
 describe("GitManager.createOrCheckoutBranch", () => {

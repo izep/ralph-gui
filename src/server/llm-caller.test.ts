@@ -411,7 +411,7 @@ describe("LLMCaller.call", () => {
     await expect(resultPromise).resolves.toBe("ok");
   });
 
-  it("uses opencode run with dangerously-skip-permissions for opencode backend", async () => {
+  it("uses opencode run with stdin and dangerously-skip-permissions for opencode backend", async () => {
     process.env.OPENCODE_BIN = await makeExecutable("opencode");
     const caller = new LLMCaller(() => true);
 
@@ -426,12 +426,29 @@ describe("LLMCaller.call", () => {
     expect(command).toBe(process.env.OPENCODE_BIN);
     expect(args).toEqual([
       "run",
-      "--prompt", "opencode prompt",
       "-m", "opencode/big-pickle",
       "--dangerously-skip-permissions",
       "--format", "default",
     ]);
-    expect(proc.stdin.write).not.toHaveBeenCalled();
+    expect(proc.stdin.write).toHaveBeenCalledWith("opencode prompt");
+
+    proc.stdout.emit("data", Buffer.from("ok"));
+    proc.emit("close", 0);
+    await expect(resultPromise).resolves.toBe("ok");
+  });
+
+  it("writes oversized opencode prompts to stdin instead of failing argv limits", async () => {
+    process.env.OPENCODE_BIN = await makeExecutable("opencode");
+    const caller = new LLMCaller(() => true);
+
+    const hugePrompt = "x".repeat(50_000);
+    const resultPromise = caller.call(hugePrompt, "opencode/big-pickle", tmpDir, {
+      agentBackend: "opencode",
+    });
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
+    const proc = spawnMock.mock.results[0].value as MockChildProcess;
+    expect(proc.stdin.write).toHaveBeenCalledWith(hugePrompt);
 
     proc.stdout.emit("data", Buffer.from("ok"));
     proc.emit("close", 0);

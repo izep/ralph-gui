@@ -235,6 +235,16 @@ export class RalphLoop {
 
       // Capture epic base branch and optionally create work branch
       const currentBranch = await this.gitManager.getCurrentBranch();
+      const hasCommits = await this.gitManager.hasAnyCommits();
+      if (!hasCommits) {
+        const branchHint = currentBranch ? ` on branch '${currentBranch}'` : "";
+        return {
+          ok: false,
+          error:
+            `Repository has no commits yet${branchHint}. ` +
+            "Create an initial commit before starting with Docker.",
+        };
+      }
       if (!currentBranch || currentBranch === "HEAD") {
         return {
           ok: false,

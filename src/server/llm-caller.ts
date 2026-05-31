@@ -442,18 +442,15 @@ export class LLMCaller {
             break;
           }
           case "opencode": {
-            assertPromptFitsArgv(prompt, backend);
             args = [
               "run",
-              "--prompt",
-              normalizePromptForArgv(prompt),
               "-m",
               model,
               ...OPENCODE_NON_INTERACTIVE_FLAGS,
               "--format",
               "default",
             ];
-            writeStdin = null;
+            writeStdin = prompt;
             break;
           }
         }

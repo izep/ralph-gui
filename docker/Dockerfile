@@ -36,12 +36,12 @@ fi
 RUN if [ "$INSTALL_OPENCODE" = "true" ]; then \
     apt-get update && apt-get install -y --no-install-recommends curl \
     && curl -fsSL https://opencode.ai/install | bash \
-    && ln -sf /root/.local/bin/opencode /usr/local/bin/opencode \
+    && ln -sf /root/.opencode/bin/opencode /usr/local/bin/opencode \
     && rm -rf /var/lib/apt/lists/*; \
 fi
 
-# Cursor CLI installs to ~/.local/bin (root in this image).
-ENV PATH="/root/.local/bin:${PATH}"
+# Cursor CLI installs to ~/.local/bin; OpenCode installs to ~/.opencode/bin (root in this image).
+ENV PATH="/root/.opencode/bin:/root/.local/bin:${PATH}"
 
 # Install Docker CLI + Compose plugin when INSTALL_DOCKER_CLI=true.
 # Required only when agents need to run `docker compose` inside the container
