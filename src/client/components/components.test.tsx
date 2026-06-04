@@ -276,6 +276,7 @@ const defaultSettings: Settings = {
   dockerPlanParallel: false,
   dockerInstalledBackends: [],
   dockerMountSocket: false,
+  dockerAutoMergeEpicWork: true,
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,
@@ -989,5 +990,25 @@ describe("ControlPanel Phase 5: collapsible and dirty/save/reset UX", () => {
     renderPanel();
     const setButtons = screen.getAllByTitle(/load epic content/i);
     expect(setButtons[0]).not.toBeDisabled();
+  });
+
+  // --- dockerAutoMergeEpicWork dirty detection and visibility ---
+
+  it("dockerAutoMergeEpicWork checkbox hidden when isolation is off", () => {
+    renderPanel({ dockerIsolateBranch: false });
+    expect(screen.queryByLabelText(/automatically merge work into epic branch/i)).toBeNull();
+  });
+
+  it("dockerAutoMergeEpicWork checkbox visible when isolation is on", () => {
+    renderPanel({ useDocker: true, dockerIsolateBranch: true });
+    expect(screen.getByLabelText(/automatically merge work into epic branch/i)).toBeInTheDocument();
+  });
+
+  it("toggling dockerAutoMergeEpicWork enables Save Docker but not Save loop settings", () => {
+    renderPanel({ useDocker: true, dockerIsolateBranch: true, dockerAutoMergeEpicWork: true });
+    const checkbox = screen.getByLabelText(/automatically merge work into epic branch/i);
+    fireEvent.click(checkbox);
+    expect(screen.getByRole("button", { name: /save docker/i })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: /save loop settings/i })).toBeDisabled();
   });
 });

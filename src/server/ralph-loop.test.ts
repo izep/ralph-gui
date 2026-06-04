@@ -921,3 +921,181 @@ describe("RalphLoop plan-phase parallel dispatch", () => {
     await new Promise((r) => setTimeout(r, 50));
   });
 });
+
+// ---------------------------------------------------------------------------
+// RalphLoop auto-merge on successful loop end (dockerAutoMergeEpicWork)
+// ---------------------------------------------------------------------------
+
+describe("RalphLoop auto-merge on loop end", () => {
+  it("merges work branch into epicBaseBranch when dockerAutoMergeEpicWork is true", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic("# Epic\n\nAuto-merge test.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+
+    const autoMergeSettings = {
+      ...DEFAULT_SETTINGS,
+      useDocker: true,
+      dockerIsolateBranch: true,
+      dockerAutoMergeEpicWork: true,
+      epicBaseBranch: "main",
+      dockerWorkBranch: "ralph/work-branch",
+    };
+    await writeFile(
+      path.join(tmpDir, "ralph", "settings.json"),
+      JSON.stringify(autoMergeSettings),
+      "utf-8",
+    );
+
+    // Mock git operations so start() and autoMergeOnFinish succeed
+    const gitMod = await import("./git-manager.js");
+    vi.spyOn(gitMod.GitManager.prototype, "getCurrentBranch").mockResolvedValue("ralph/work-branch");
+    vi.spyOn(gitMod.GitManager.prototype, "hasAnyCommits").mockResolvedValue(true);
+    vi.spyOn(gitMod.GitManager.prototype, "createOrCheckoutBranch").mockResolvedValue(undefined);
+    const mergeWorkSpy = vi.spyOn(gitMod.GitManager.prototype, "mergeWorkBranch").mockResolvedValue({ ok: true });
+
+    // Mock settings read to return autoMergeSettings
+    const sm = await import("./settings-manager.js");
+    vi.spyOn(sm.SettingsManager.prototype, "read").mockResolvedValue(autoMergeSettings);
+
+    // Stub runLoop to complete immediately
+    (loop as any).runLoop = async () => {};
+
+    const startRes = await loop.start();
+    expect(startRes.ok).toBe(true);
+
+    // Wait for the async .then() chain (autoMergeOnFinish -> finishRun)
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(mergeWorkSpy).toHaveBeenCalledWith("ralph/work-branch", "no-ff");
+    expect(cb.logs.some((l) => l.includes("Merged work branch into epic base"))).toBe(true);
+  });
+
+  it("skips auto-merge when dockerAutoMergeEpicWork is false", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic("# Epic\n\nAuto-merge skipped test.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+
+    const noMergeSettings = {
+      ...DEFAULT_SETTINGS,
+      useDocker: true,
+      dockerIsolateBranch: true,
+      dockerAutoMergeEpicWork: false,
+      epicBaseBranch: "main",
+      dockerWorkBranch: "ralph/work-branch",
+    };
+    await writeFile(
+      path.join(tmpDir, "ralph", "settings.json"),
+      JSON.stringify(noMergeSettings),
+      "utf-8",
+    );
+
+    const gitMod = await import("./git-manager.js");
+    vi.spyOn(gitMod.GitManager.prototype, "getCurrentBranch").mockResolvedValue("ralph/work-branch");
+    vi.spyOn(gitMod.GitManager.prototype, "hasAnyCommits").mockResolvedValue(true);
+    vi.spyOn(gitMod.GitManager.prototype, "createOrCheckoutBranch").mockResolvedValue(undefined);
+    const mergeWorkSpy = vi.spyOn(gitMod.GitManager.prototype, "mergeWorkBranch").mockResolvedValue({ ok: true });
+    mergeWorkSpy.mockClear();
+
+    const sm = await import("./settings-manager.js");
+    vi.spyOn(sm.SettingsManager.prototype, "read").mockResolvedValue(noMergeSettings);
+
+    (loop as any).runLoop = async () => {};
+
+    await loop.start();
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(mergeWorkSpy).not.toHaveBeenCalled();
+  });
+
+  it("skips auto-merge when loop was stopped", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic("# Epic\n\nStopped auto-merge test.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+
+    const autoMergeSettings = {
+      ...DEFAULT_SETTINGS,
+      useDocker: true,
+      dockerIsolateBranch: true,
+      dockerAutoMergeEpicWork: true,
+      epicBaseBranch: "main",
+      dockerWorkBranch: "ralph/work-branch",
+    };
+    await writeFile(
+      path.join(tmpDir, "ralph", "settings.json"),
+      JSON.stringify(autoMergeSettings),
+      "utf-8",
+    );
+
+    const gitMod = await import("./git-manager.js");
+    vi.spyOn(gitMod.GitManager.prototype, "getCurrentBranch").mockResolvedValue("ralph/work-branch");
+    vi.spyOn(gitMod.GitManager.prototype, "hasAnyCommits").mockResolvedValue(true);
+    vi.spyOn(gitMod.GitManager.prototype, "createOrCheckoutBranch").mockResolvedValue(undefined);
+    const mergeWorkSpy = vi.spyOn(gitMod.GitManager.prototype, "mergeWorkBranch").mockResolvedValue({ ok: true });
+    mergeWorkSpy.mockClear();
+
+    const sm = await import("./settings-manager.js");
+    vi.spyOn(sm.SettingsManager.prototype, "read").mockResolvedValue(autoMergeSettings);
+
+    // runLoop hangs until we resolve it manually
+    let resolveRun!: () => void;
+    (loop as any).runLoop = () => new Promise<void>((r) => { resolveRun = r; });
+
+    await loop.start();
+    loop.stop();
+    resolveRun();
+
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(mergeWorkSpy).not.toHaveBeenCalled();
+  });
+
+  it("logs conflict message and does not throw when merge has conflicts", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic("# Epic\n\nConflict test.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+
+    const autoMergeSettings = {
+      ...DEFAULT_SETTINGS,
+      useDocker: true,
+      dockerIsolateBranch: true,
+      dockerAutoMergeEpicWork: true,
+      epicBaseBranch: "main",
+      dockerWorkBranch: "ralph/work-branch",
+    };
+    await writeFile(
+      path.join(tmpDir, "ralph", "settings.json"),
+      JSON.stringify(autoMergeSettings),
+      "utf-8",
+    );
+
+    const gitMod = await import("./git-manager.js");
+    vi.spyOn(gitMod.GitManager.prototype, "getCurrentBranch").mockResolvedValue("ralph/work-branch");
+    vi.spyOn(gitMod.GitManager.prototype, "hasAnyCommits").mockResolvedValue(true);
+    vi.spyOn(gitMod.GitManager.prototype, "createOrCheckoutBranch").mockResolvedValue(undefined);
+    vi.spyOn(gitMod.GitManager.prototype, "mergeWorkBranch").mockResolvedValue({
+      ok: false,
+      conflicts: ["src/foo.ts"],
+    });
+
+    const sm = await import("./settings-manager.js");
+    vi.spyOn(sm.SettingsManager.prototype, "read").mockResolvedValue(autoMergeSettings);
+
+    (loop as any).runLoop = async () => {};
+
+    await loop.start();
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(cb.logs.some((l) => l.includes("Auto-merge conflicts"))).toBe(true);
+    expect(cb.logs.some((l) => l.includes("src/foo.ts"))).toBe(true);
+    // Loop should still finish as idle (not error)
+    expect(cb.statuses.some((s) => s.status === "idle")).toBe(true);
+  });
+});

@@ -40,6 +40,8 @@ export interface Settings {
   dockerInstalledBackends: AgentBackendId[];
   // Socket mount — allow agents to run docker compose inside the container
   dockerMountSocket: boolean;
+  /** Auto-merge dockerWorkBranch into epicBaseBranch when loop finishes successfully */
+  dockerAutoMergeEpicWork: boolean;
   // Relative path to the epic file from the repo root (default: "ralph/epic.md")
   epicFile: string;
   // Relative path to the requirements file; empty string means auto-discover
@@ -73,6 +75,7 @@ export const DEFAULT_SETTINGS: Settings = {
   dockerPlanParallel: false,
   dockerInstalledBackends: [],
   dockerMountSocket: false,
+  dockerAutoMergeEpicWork: true,
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,

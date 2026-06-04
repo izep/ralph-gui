@@ -209,3 +209,67 @@ describe("GitManager worktree helpers", () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// GitManager.autoCommit with cwd (worktree-aware)
+// ---------------------------------------------------------------------------
+
+describe("GitManager.autoCommit with cwd", () => {
+  it("commits in the worktree directory when cwd is provided", async () => {
+    const baseBranch = await gitManager.getCurrentBranch();
+    const worktreePath = await gitManager.createWorktree(0, baseBranch);
+
+    // Write a file inside the worktree
+    await writeFile(path.join(worktreePath, "wt-file.txt"), "hello", "utf-8");
+
+    // autoCommit with worktree cwd
+    await gitManager.autoCommit(1, "worktree task", worktreePath);
+
+    // Verify commit appears on the slot branch
+    const log = git(`log --oneline`, worktreePath);
+    expect(log).toContain("ralph: Task #1 - worktree task");
+  });
+
+  it("commits on main repo when no cwd is provided", async () => {
+    await writeFile(path.join(tmpDir, "main-file.txt"), "world", "utf-8");
+    await gitManager.autoCommit(2, "main task");
+    const log = git("log --oneline");
+    expect(log).toContain("ralph: Task #2 - main task");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GitManager.mergeWorktreeBranch checks out targetBranch before merging
+// ---------------------------------------------------------------------------
+
+describe("GitManager.mergeWorktreeBranch checkout behavior", () => {
+  it("checks out targetBranch before merging slot branch", async () => {
+    const baseBranch = await gitManager.getCurrentBranch();
+
+    // Create a target branch from base
+    git(`checkout -b target-branch`);
+    git(`checkout ${baseBranch}`);
+
+    // Create a worktree slot from baseBranch
+    const worktreePath = await gitManager.createWorktree(0, baseBranch);
+
+    // Commit something in the worktree
+    await writeFile(path.join(worktreePath, "slot-file.txt"), "slot change", "utf-8");
+    git("add .", worktreePath);
+    git(`commit -m "slot commit"`, worktreePath);
+
+    // Start on baseBranch (not target-branch)
+    expect(git("rev-parse --abbrev-ref HEAD")).toBe(baseBranch);
+
+    // mergeWorktreeBranch should checkout target-branch then merge
+    const result = await gitManager.mergeWorktreeBranch(0, baseBranch, "target-branch");
+    expect(result.ok).toBe(true);
+
+    // Main worktree HEAD should now be on target-branch
+    expect(git("rev-parse --abbrev-ref HEAD")).toBe("target-branch");
+
+    // The slot commit should be present on target-branch
+    const log = git("log --oneline");
+    expect(log).toContain("slot commit");
+  });
+});

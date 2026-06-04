@@ -44,6 +44,7 @@ const DEFAULT_SETTINGS: Settings = {
   dockerPlanParallel: false,
   dockerInstalledBackends: [],
   dockerMountSocket: false,
+  dockerAutoMergeEpicWork: true,
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,

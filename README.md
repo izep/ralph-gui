@@ -229,6 +229,16 @@ When `useDocker` + `dockerIsolateBranch` is enabled:
 3. All agent commits land on the work branch (host and container share the same `.git`).
 4. Click **Merge work into epic branch** in the Docker section to merge back.
 
+### Merge-back
+
+When `dockerIsolateBranch` is on, branch changes flow through three layers:
+
+- **Slot branch** (`worktreeBase-slot-N`) — per parallel task, merged into the work branch after each task completes.
+- **Work branch** (`ralph/epic-*`) — accumulates all task commits during the loop.
+- **Epic base branch** — the branch you were on when the loop started.
+
+When the loop finishes successfully and **`dockerAutoMergeEpicWork`** is `true` (default), Ralph automatically merges the work branch into the epic base branch. On conflict, Ralph logs the conflicting file paths and leaves the merge for manual resolution — use the **Merge work into epic branch** button in the Docker section to retry after resolving.
+
 ### Multi-CLI image (build args)
 
 The agent image can include multiple coding-agent CLIs. Install only what you need to keep the image small:
@@ -342,6 +352,7 @@ Default loop settings are:
 - `dockerPlanParallel: false`
 - `dockerInstalledBackends: []`
 - `dockerMountSocket: false`
+- `dockerAutoMergeEpicWork: true` — When `dockerIsolateBranch` is on, automatically merge the work branch into the epic base branch at successful loop end. Set to `false` to merge manually.
 
 Use your selected CLI's help output for supported models (for example `copilot --help`, `claude --help`, `cursor-agent --help`, or `gemini --help`).
 

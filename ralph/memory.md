@@ -231,3 +231,19 @@ Note: Tests use mocked `child_process.spawn` and do not require a Docker daemon;
 - `RalphLoop.autoCommitTask` updated to accept `worktreeCwd?: string` (container path). When `worktreeCwd` is provided and starts with `/workspace`, it is mapped to the host path under `repoRoot` (e.g. `/workspace/.ralph/worktrees/slot-0` -> `<repoRoot>/.ralph/worktrees/slot-0`) and passed to `gitManager.autoCommit`.
 - `runDevQALoop` now forwards `slotOpts?.worktreeCwd` into `autoCommitTask` so parallel Docker tasks auto-commit inside their slot worktree.
 - Validation: `npm run typecheck` passed locally after changes.
+
+## 2026-06-04 Epic 004 Phase 2c — dockerAutoMergeEpicWork implemented
+
+- `dockerAutoMergeEpicWork: boolean` (default `true`) added to all three settings layers (settings-manager.ts, client/types.ts, useRalph.ts fallback).
+- `DOCKER_KEYS` in `control-panel-dirty.ts` includes `'dockerAutoMergeEpicWork'` so it is included in docker dirty detection and saved with Save Docker.
+- `autoMergeOnFinish(runId)` is a private async method on RalphLoop; it is called from the `runPromise.then()` chain (between runLoop completing and finishRun). Kept finishRun synchronous to avoid callers needing to await it.
+- Auto-merge guard conditions: `useDocker && dockerIsolateBranch && dockerAutoMergeEpicWork && epicBaseBranch && dockerWorkBranch && epicBaseBranch !== dockerWorkBranch`. Also checks `stopRequestedRunId === runId` to skip on stop.
+- DockerSection.tsx: auto-merge checkbox shown only when `dockerIsolateBranch` is true (same visibility gate pattern as other isolation-dependent fields).
+- git-manager.test.ts uses the same real-git-in-tmpDir pattern for autoCommit+cwd and mergeWorktreeBranch checkout tests.
+- ralph-loop.test.ts auto-merge tests: spy accumulation gotcha — call `mergeWorkSpy.mockClear()` after spying in "skips" tests, since vi.spyOn on a prototype may return the same spy instance with call count preserved from earlier tests in the same describe block.
+- Full suite: 284 tests pass; typecheck passes. Epic 004 is complete.
+
+## 2026-06-04 — Auto-merge setting implemented
+
+- Added `dockerAutoMergeEpicWork` setting (default: true) and `autoMergeOnFinish` helper in `src/server/ralph-loop.ts`.
+- On successful loop completion (not stopped, no error) and when `useDocker && dockerIsolateBranch` are true, the loop now checks out `epicBaseBranch` and attempts a `--no-ff` merge of `dockerWorkBranch` into it. Conflicts are logged and do not throw.

@@ -292,7 +292,8 @@ export class RalphLoop {
     const runPromise = this.runLoop();
     this.activeRunPromise = runPromise;
     runPromise
-      .then(() => {
+      .then(async () => {
+        await this.autoMergeOnFinish(runId);
         this.finishRun(runId);
       })
       .catch((err: Error) => {
@@ -965,6 +966,39 @@ export class RalphLoop {
     parts.push(await this.fileManager.read(templateName));
 
     return parts.join(SEP);
+  }
+
+  private async autoMergeOnFinish(runId: number): Promise<void> {
+    // Skip if a stop was requested for this run
+    if (this.stopRequestedRunId === runId || runId !== this.runGeneration) {
+      return;
+    }
+    const settings = await this.settingsManager.read();
+    const { useDocker, dockerIsolateBranch, dockerAutoMergeEpicWork, epicBaseBranch, dockerWorkBranch } = settings;
+    if (
+      !useDocker ||
+      !dockerIsolateBranch ||
+      !dockerAutoMergeEpicWork ||
+      !epicBaseBranch ||
+      !dockerWorkBranch ||
+      epicBaseBranch === dockerWorkBranch
+    ) {
+      return;
+    }
+    try {
+      await this.gitManager.createOrCheckoutBranch(epicBaseBranch, epicBaseBranch);
+      const result = await this.gitManager.mergeWorkBranch(dockerWorkBranch, "no-ff");
+      if (result.ok) {
+        this.cb.onLog(`[system] Merged work branch into epic base: ${dockerWorkBranch} -> ${epicBaseBranch}`);
+      } else {
+        const conflictList = (result.conflicts ?? []).join(", ") || "(unknown)";
+        this.cb.onLog(
+          `[system] Auto-merge conflicts — resolve manually and use Merge work into epic branch. Conflicting files: ${conflictList}`,
+        );
+      }
+    } catch (err) {
+      this.cb.onLog(`[system] Auto-merge failed: ${String(err)}`);
+    }
   }
 
   private finishRun(runId: number, err?: Error): void {

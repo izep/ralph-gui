@@ -138,6 +138,26 @@ export function DockerSection({
           isolated from your base branch until you merge.
         </p>
 
+        {localSettings.dockerIsolateBranch && (
+          <>
+            <label className="cp-field cp-field--row">
+              <input
+                type="checkbox"
+                checked={localSettings.dockerAutoMergeEpicWork ?? true}
+                onChange={(e) =>
+                  onChangeSettings({ ...localSettings, dockerAutoMergeEpicWork: e.target.checked })
+                }
+                disabled={!localSettings.useDocker}
+              />
+              <span>Automatically merge work into epic branch when loop finishes</span>
+            </label>
+            <p className="cp-hint">
+              When enabled, the work branch is merged into the epic base branch at loop end.
+              Disable to merge manually after reviewing changes.
+            </p>
+          </>
+        )}
+
         <label className="cp-field">
           <span>Pool size</span>
           <input

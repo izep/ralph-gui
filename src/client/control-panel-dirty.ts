@@ -10,6 +10,7 @@ const DOCKER_KEYS: ReadonlyArray<keyof Settings> = [
   "dockerMountSocket",
   "dockerInstalledBackends",
   "dockerPlanParallel",
+  "dockerAutoMergeEpicWork",
 ];
 
 export function pickDockerSettings(s: Settings): Partial<Settings> {

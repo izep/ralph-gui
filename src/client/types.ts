@@ -86,6 +86,8 @@ export interface Settings {
   dockerPlanParallel: boolean;
   dockerInstalledBackends: AgentBackendId[];
   dockerMountSocket: boolean;
+  /** Auto-merge dockerWorkBranch into epicBaseBranch when loop finishes successfully */
+  dockerAutoMergeEpicWork: boolean;
   epicFile: string;
   requirementsFile: string;
   pauseAfterPlan: boolean;

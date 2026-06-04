@@ -241,6 +241,8 @@ Check **Run backlog tasks in parallel** in Settings (only available when Pool si
 - After completion, the worktree branch is merged back into the epic work branch automatically.
 - All task-status writes are mutex-protected to prevent race conditions.
 
+When the loop finishes successfully, Ralph auto-merges the work branch into the epic base branch (the branch you were on at loop start) if **`dockerAutoMergeEpicWork`** is `true` (default). On conflict, Ralph logs the paths and leaves the merge for manual resolution — use **Merge work into epic branch** in the Docker section to retry.
+
 ### Plan-phase parallel research (stretch)
 
 Check **Parallel plan research** in Settings (also requires Pool size > 1). When enabled alongside a plan prompt template that emits `<research-prompt>...</research-prompt>` blocks, Ralph:
@@ -331,6 +333,7 @@ Mounting the host socket gives the agent **effective host-level Docker control**
 | Exec lands on wrong index | Compose assigns `--index` in container-start order; remove and recreate the pool if indices drift. |
 | Worktree already exists | Run `git worktree remove .ralph/worktrees/slot-N` (or `--force`) from the target repo, then restart the loop. |
 | Parallel task file conflicts | Two slots modified the same file; Ralph's merge-back will stop at the conflict; resolve manually with `git mergetool`. |
+| Auto-merge failed at loop end | Check `git status` for conflicts; resolve them, then use **Merge work into epic branch** in the UI. Or set `dockerAutoMergeEpicWork: false` in Settings to always merge manually. |
 
 Verify auth inside the container (replace the variable name if needed):
 
