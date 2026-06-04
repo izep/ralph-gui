@@ -854,7 +854,7 @@ export class RalphLoop {
           ),
         );
         this.cb.onLog(`Task #${effectiveTaskId} verified!`);
-        await this.autoCommitTask(effectiveTaskId, title);
+        await this.autoCommitTask(effectiveTaskId, title, slotOpts?.worktreeCwd);
       } else {
         await this.withTaskLock(() =>
           this.taskManager.setTaskStatus(
@@ -878,12 +878,21 @@ export class RalphLoop {
     return { totalLLMCalls };
   }
 
-  private async autoCommitTask(taskNum: number, title: string): Promise<void> {
+  private async autoCommitTask(taskNum: number, title: string, worktreeCwd?: string): Promise<void> {
     const settings = await this.settingsManager.read();
     if (!settings.autoCommit) return;
 
     try {
-      await this.gitManager.autoCommit(taskNum, title);
+      let hostCwd: string | undefined = undefined;
+      if (worktreeCwd) {
+        if (worktreeCwd.startsWith("/workspace")) {
+          // Map container-side /workspace path to host repoRoot path
+          hostCwd = path.join(this.repoRoot, worktreeCwd.replace(/^\/workspace\/?/, ""));
+        } else {
+          hostCwd = worktreeCwd;
+        }
+      }
+      await this.gitManager.autoCommit(taskNum, title, hostCwd);
       this.cb.onLog(`[system] Committed: Task #${taskNum} - ${title}`);
     } catch (err) {
       this.cb.onLog(`[system] Auto-commit failed: ${err}`);

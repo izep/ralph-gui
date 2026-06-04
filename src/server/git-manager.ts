@@ -102,11 +102,11 @@ export class GitManager {
     await this.runGit(["branch", "-d", branch]);
   }
 
-  async autoCommit(taskNum: number, title: string): Promise<void> {
+  async autoCommit(taskNum: number, title: string, cwd?: string): Promise<void> {
     try {
-      await this.runGit(["add", "-A"]);
+      await this.runGit(["add", "-A"], cwd);
       const msg = `ralph: Task #${taskNum} - ${title}`;
-      await this.runGit(["commit", "-m", msg, "--allow-empty"]);
+      await this.runGit(["commit", "-m", msg, "--allow-empty"], cwd);
     } catch (err) {
       // Commit failed — log separately if needed
       throw err;
@@ -246,10 +246,11 @@ export class GitManager {
     return null;
   }
 
-  private runGit(gitArgs: string[]): Promise<string> {
+  private runGit(gitArgs: string[], cwd?: string): Promise<string> {
+    const cwdToUse = cwd ?? this.repoRoot;
     return new Promise((resolve, reject) => {
       const proc = spawn("git", gitArgs, {
-        cwd: this.repoRoot,
+        cwd: cwdToUse,
         stdio: ["pipe", "pipe", "pipe"],
       });
       let stdout = "";

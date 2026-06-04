@@ -215,3 +215,19 @@ Note: Tests use mocked `child_process.spawn` and do not require a Docker daemon;
 - Updated tests: unit tests in `src/server/git-manager.test.ts` and `src/server/ralph-loop.test.ts` were adjusted/mocked as needed and all pass locally.
 - Remaining follow-ups: add `autoCommit` cwd arg for worktree commits and wire `dockerAutoMergeEpicWork` into `finishRun` (planned next).
 - Verified on 2026-06-04: code already contains these fixes; full test suite passed locally (274 tests).
+
+## 2026-06-04 Plan Survey — Epic 004 Phase 2c follow-up tasks
+
+- Remaining backlog tasks (IDs 29-32) cover: worktree-aware `autoCommit` (cwd arg), `dockerAutoMergeEpicWork` setting + `finishRun` auto-merge, DockerSection UI checkbox + README docs, and tests for all of the above.
+- `git-manager.ts` `autoCommit(taskNum, title)` does NOT yet accept a `cwd` parameter — must be added for parallel worktree commits to land on the slot branch.
+- `settings-manager.ts` and `client/types.ts` do NOT yet have `dockerAutoMergeEpicWork` — add with default `true`.
+- `control-panel-dirty.ts` `DOCKER_KEYS` must include `'dockerAutoMergeEpicWork'` once the setting is added.
+- `finishRun` in `ralph-loop.ts` is currently synchronous and has no auto-merge logic; must be carefully extended (or an async pre-step added) without breaking the existing try/finally run structure.
+- Phase 5 (collapsible sections, dirty Save/Reset) is fully complete as of 2026-05-24 (265 tests pass).
+
+## 2026-06-04 Implementation: worktree-aware autoCommit
+
+- Implemented: `GitManager.autoCommit(taskNum, title, cwd?)` accepts an optional host-side cwd so commits run inside a slot worktree when provided. Internally `runGit` gained an optional `cwd` parameter and uses `cwd ?? this.repoRoot` for spawn.
+- `RalphLoop.autoCommitTask` updated to accept `worktreeCwd?: string` (container path). When `worktreeCwd` is provided and starts with `/workspace`, it is mapped to the host path under `repoRoot` (e.g. `/workspace/.ralph/worktrees/slot-0` -> `<repoRoot>/.ralph/worktrees/slot-0`) and passed to `gitManager.autoCommit`.
+- `runDevQALoop` now forwards `slotOpts?.worktreeCwd` into `autoCommitTask` so parallel Docker tasks auto-commit inside their slot worktree.
+- Validation: `npm run typecheck` passed locally after changes.
