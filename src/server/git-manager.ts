@@ -211,9 +211,11 @@ export class GitManager {
   async mergeWorktreeBranch(
     slot: number,
     baseBranch: string,
-    _targetBranch: string,
+    targetBranch: string,
   ): Promise<{ ok: boolean; conflicts?: string[] }> {
     const slotBranch = `${baseBranch}-slot-${slot}`;
+    // Ensure we are on the intended target branch before merging the slot branch into it.
+    await this.runGit(["checkout", targetBranch]);
     return this.mergeWorkBranch(slotBranch, "no-ff");
   }
 

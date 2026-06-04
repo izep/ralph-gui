@@ -694,6 +694,7 @@ describe("RalphLoop parallel dispatch", () => {
     // Mock GitManager branch/worktree operations so start() succeeds
     const gitMod = await import("./git-manager.js");
     vi.spyOn(gitMod.GitManager.prototype, "getCurrentBranch").mockResolvedValue("main");
+    vi.spyOn(gitMod.GitManager.prototype, "hasAnyCommits").mockResolvedValue(true);
     vi.spyOn(gitMod.GitManager.prototype, "createOrCheckoutBranch").mockResolvedValue(undefined);
     vi.spyOn(gitMod.GitManager.prototype, "createWorktree").mockResolvedValue("/workspace/.ralph/worktrees/slot-0");
     vi.spyOn(gitMod.GitManager.prototype, "mergeWorktreeBranch").mockResolvedValue({ ok: true });
@@ -789,6 +790,7 @@ describe("RalphLoop plan-phase parallel dispatch", () => {
     // Mock GitManager operations
     const gitMod = await import("./git-manager.js");
     vi.spyOn(gitMod.GitManager.prototype, "getCurrentBranch").mockResolvedValue("main");
+    vi.spyOn(gitMod.GitManager.prototype, "hasAnyCommits").mockResolvedValue(true);
     vi.spyOn(gitMod.GitManager.prototype, "createOrCheckoutBranch").mockResolvedValue(undefined);
     vi.spyOn(gitMod.GitManager.prototype, "createWorktree").mockResolvedValue("/workspace/.ralph/worktrees/slot-0");
     vi.spyOn(gitMod.GitManager.prototype, "mergeWorktreeBranch").mockResolvedValue({ ok: true });

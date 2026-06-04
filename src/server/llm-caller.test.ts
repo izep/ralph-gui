@@ -455,6 +455,32 @@ describe("LLMCaller.call", () => {
     await expect(resultPromise).resolves.toBe("ok");
   });
 
+  it("writes oversized cursor-agent prompts to stdin instead of failing argv limits", async () => {
+    process.env.CURSOR_AGENT_BIN = await makeExecutable("cursor-agent");
+    const caller = new LLMCaller(() => true);
+
+    const hugePrompt = "x".repeat(50_000);
+    const resultPromise = caller.call(hugePrompt, "gpt-5-mini", tmpDir, {
+      agentBackend: "cursor-agent",
+    });
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
+    const [, args] = spawnMock.mock.calls[0] as [string, string[]];
+    const proc = spawnMock.mock.results[0].value as MockChildProcess;
+
+    expect(args).toEqual([
+      "--print",
+      "--model", "gpt-5-mini",
+      "--yolo",
+      "--output-format", "text",
+    ]);
+    expect(proc.stdin.write).toHaveBeenCalledWith(hugePrompt);
+
+    proc.stdout.emit("data", Buffer.from("ok"));
+    proc.emit("close", 0);
+    await expect(resultPromise).resolves.toBe("ok");
+  });
+
   it("fails with a clear error for oversized argv prompts", async () => {
     process.env.CLAUDE_BIN = await makeExecutable("claude");
     const caller = new LLMCaller(() => true);

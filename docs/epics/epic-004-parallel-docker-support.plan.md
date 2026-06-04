@@ -1,6 +1,6 @@
 ---
 name: Epic 004 — Parallel Docker agents, control panel UX
-overview: Docker agent stack (multi-CLI build args, pool, worktrees, nested compose socket), control panel collapsible sections with dirty-aware Save/Reset, document and test all of the above.
+overview: Docker agent stack (multi-CLI build args, pool, worktrees, nested compose socket), end-to-end git merge-back (parallel slot merges, loop-end auto-merge to epic base branch), control panel collapsible sections with dirty-aware Save/Reset, document and test all of the above.
 todos:
   - id: dockerfile-build-args
     content: Add INSTALL_* build args to docker/Dockerfile; wire args + all auth env vars in docker-compose.agents.yml
@@ -47,14 +47,29 @@ todos:
   - id: tests-control-panel-ux
     content: components.test.tsx for collapse all, dirty Save disabled, Reset restores draft, save button placement
     status: pending
+  - id: git-merge-back-parallel
+    content: Fix parallel worktree base (dockerWorkBranch), mergeWorktreeBranch checkout target, slot branch naming
+    status: pending
+  - id: worktree-auto-commit
+    content: Run autoCommit in slot worktree cwd when parallel Docker dev/QA uses worktreeCwd
+    status: pending
+  - id: auto-merge-epic-work
+    content: dockerAutoMergeEpicWork setting (default true); shared merge helper; call from finishRun on successful loop end
+    status: pending
+  - id: merge-back-ui-docs
+    content: DockerSection auto-merge checkbox; README/docker/README three-layer branch flow and troubleshooting
+    status: pending
+  - id: tests-merge-back
+    content: git-manager + ralph-loop tests for checkout-before-merge, worktree base, loop-end auto-merge and conflicts
+    status: pending
 isProject: false
 ---
 
 # Epic 004 — Parallel Docker agents and control panel UX
 
-**Canonical plan:** [docs/epics/epic-004-parallel-docker-support.plan.md](epic-004-parallel-docker-support.plan.md) — future updates for this epic belong in this file only.
+**Canonical plan:** [docs/epics/epic-004-parallel-docker-support.plan.md](epic-004-parallel-docker-support.plan.md) — **all** future scope, design changes, and todos for this epic are edited in this file only (not separate Cursor plan files).
 
-**Depends on:** [Epic 003 — Docker container agents](epic-003-docker-container.plan.md) (single-container Docker transport, branch merge-back, `docker-runner.ts`, `LLMCaller` docker wrapper).
+**Depends on:** [Epic 003 — Docker container agents](epic-003-docker-container.plan.md) (single-container Docker transport, `epicBaseBranch` / `dockerWorkBranch` capture, manual `merge-epic-work` API, `docker-runner.ts`, `LLMCaller` docker wrapper). Epic 004 completes parallel worktree merge-back and loop-end auto-merge into `epicBaseBranch`.
 
 ## Goal
 
@@ -66,6 +81,7 @@ isProject: false
 6. **Test** the Docker pool pattern end-to-end (automated unit/integration tests plus an optional real-Docker smoke path).
 7. Allow **agent containers to run Docker Compose inside the target repo** (nested compose / “Docker-outside-of-Docker” via host socket) so dev tasks like “start full stack + run E2E pytest” are not blocked when Ralph uses `useDocker`.
 8. Improve **Settings control panel UX**: collapsible sections (Docker Agents, Loop Configuration, Current Epic, Prompts), **Collapse all / Expand all**, per-section **Save** (disabled until dirty) and **Reset** (revert unsaved edits), with Save/Reset controls **below** the fields they affect.
+9. **Complete git merge-back** for Docker epics: parallel slot branches merge into the work branch per task; when the loop finishes successfully, merge the work branch into **`epicBaseBranch`** (the branch checked out at loop start) by default, with opt-out and manual retry (extends [Epic 003](epic-003-docker-container.plan.md) merge-back).
 
 ## Motivation — blocked target-project tasks
 
@@ -112,6 +128,7 @@ flowchart TB
 | Control panel sections | **Repository** stays always visible (not collapsible); **Docker Agents**, **Loop Configuration**, **Current Epic**, **Prompts** are collapsible |
 | Save granularity | **Docker** settings save separately from **Loop** settings (today both share one “Save Settings” in Loop Config) |
 | Dirty / Reset | Compare local draft to last **saved** server state per section; Reset restores draft from props, does not call API |
+| Merge into starting branch | **Default on** at successful loop end: merge `dockerWorkBranch` → `epicBaseBranch` when `dockerIsolateBranch` and both branches are set. Setting **`dockerAutoMergeEpicWork`** (default `true`) disables auto-merge. Manual **Merge work into epic branch** unchanged. On conflict: do not auto-resolve; log + surface in UI (same as Epic 003 API). Skipped when isolation off (commits already on `epicBaseBranch`). |
 
 ## Current state (after Epic 003)
 
@@ -195,7 +212,7 @@ Add [`control-panel-dirty.ts`](../../src/client/control-panel-dirty.ts) (or `src
 
 **`pickDockerSettings`** fields (extend as Epic 004 docker settings land):
 
-`useDocker`, `dockerComposeFile`, `dockerService`, `dockerIsolateBranch`, `dockerPoolSize`, `dockerParallelTasks`, `dockerMountSocket`, `dockerInstalledBackends` — exclude read-only branch metadata (`epicBaseBranch`, `dockerWorkBranch`) from dirty/save unless user-editable.
+`useDocker`, `dockerComposeFile`, `dockerService`, `dockerIsolateBranch`, `dockerPoolSize`, `dockerParallelTasks`, `dockerMountSocket`, `dockerInstalledBackends`, `dockerAutoMergeEpicWork` — exclude read-only branch metadata (`epicBaseBranch`, `dockerWorkBranch`) from dirty/save unless user-editable.
 
 **`pickLoopSettings`**: all other `Settings` keys (models, backend, fleet, frequencies, `requirementsFile`, sort, etc.).
 
@@ -430,10 +447,13 @@ buildDockerSpawn(composeFile, service, command, commandArgs, { containerIndex?: 
 
 ### Git worktrees ([`git-manager.ts`](../../src/server/git-manager.ts))
 
-1. Loop start: create worktrees `.ralph/worktrees/slot-<n>` from `epicBaseBranch` / `dockerWorkBranch`.
+See **[Phase 2c — Git merge-back](#phase-2c--git-merge-back-parallel--loop-end)** for branch naming, merge targets, and loop-end auto-merge. Summary:
+
+1. Per parallel task: `createWorktree(slot, worktreeBase)` where `worktreeBase = dockerWorkBranch || epicBaseBranch`.
 2. `buildDockerSpawn` uses `-w /workspace/.ralph/worktrees/slot-n` (single repo mount).
-3. Task done: merge worktree branch into work/epic branch (extend merge API for conflicts).
-4. Cleanup: default keep worktrees; document `git worktree remove`.
+3. Task done: `mergeWorktreeBranch` into `worktreeBase` (checkout target first).
+4. Loop end (when isolation on): merge `dockerWorkBranch` → `epicBaseBranch` if `dockerAutoMergeEpicWork` (default true).
+5. Cleanup: default keep worktrees; document `git worktree remove`.
 
 ### `LLMCaller` concurrency ([`llm-caller.ts`](../../src/server/llm-caller.ts))
 
@@ -443,6 +463,114 @@ buildDockerSpawn(composeFile, service, command, commandArgs, { containerIndex?: 
 ### `ensureDockerAgentRunning`
 
 Wrap or extend: when `dockerPoolSize > 1`, call pool ensure and validate exec on indices `0..N-1`.
+
+---
+
+## Phase 2c — Git merge-back (parallel + loop end)
+
+Extends [Epic 003 § Merge work back to the epic base branch](epic-003-docker-container.plan.md#merge-work-back-to-the-epic-base-branch) for the container pool and worktree path. Epic 003 ships manual **Merge work into epic branch**; Epic 004 adds correct parallel slot merges and **automatic** final merge when the loop completes successfully.
+
+### Branch stack
+
+| Layer | Name | When |
+|-------|------|------|
+| Starting branch | `epicBaseBranch` | Captured at loop start (`getCurrentBranch()`) |
+| Work branch | `dockerWorkBranch` e.g. `ralph/epic-<slug>-<date>` | When `dockerIsolateBranch` (main worktree checked out here) |
+| Slot branch | `<worktreeBase>-slot-<n>` | Per worktree under `.ralph/worktrees/slot-<n>` |
+
+`worktreeBase = settings.dockerWorkBranch || settings.epicBaseBranch`.
+
+```mermaid
+flowchart LR
+  epicBase["epicBaseBranch"]
+  workBranch["dockerWorkBranch"]
+  slotBranch["worktreeBase-slot-N"]
+
+  epicBase -->|"dockerIsolateBranch at start"| workBranch
+  workBranch -->|"parallel worktree add"| slotBranch
+  slotBranch -->|"after each task"| workBranch
+  workBranch -->|"loop end dockerAutoMergeEpicWork"| epicBase
+  epicBase -->|"isolate off sequential"| epicBase
+```
+
+### 2c.1 — Fix parallel worktree fork base (implementation gap)
+
+**Shipped gap:** [`ralph-loop.ts`](../../src/server/ralph-loop.ts) calls `createWorktree(slot, epicBase)` and slot branches `${epicBaseBranch}-slot-<n>` even when the main worktree is on `dockerWorkBranch`.
+
+**Target behavior:**
+
+- Pass `worktreeBase` (not raw `epicBaseBranch` only) into `createWorktree` for parallel dev/QA and plan-parallel research slots.
+- Rename slot branches to `${worktreeBase}-slot-<n>` in [`git-manager.ts`](../../src/server/git-manager.ts) `createWorktree` / `mergeWorktreeBranch`.
+
+### 2c.2 — Fix `mergeWorktreeBranch` (implementation gap)
+
+**Shipped gap:** [`mergeWorktreeBranch`](../../src/server/git-manager.ts) merges the slot branch into whatever HEAD is at `repoRoot` and ignores the `targetBranch` argument.
+
+**Target behavior:**
+
+1. `checkout` `targetBranch` on the main worktree (`createOrCheckoutBranch` or `git checkout`).
+2. `git merge --no-ff` slot branch (`mergeWorkBranch`).
+3. On conflict: return `{ ok: false, conflicts: string[] }`; log warning in parallel path (do not throw away merge state).
+
+[`ralph-loop.ts`](../../src/server/ralph-loop.ts) parallel path should pass `targetBranch = worktreeBase` consistently.
+
+### 2c.3 — Worktree-aware `autoCommit`
+
+**Shipped gap:** [`autoCommitTask`](../../src/server/ralph-loop.ts) always runs git from `repoRoot`; parallel agents execute in `.ralph/worktrees/slot-N`.
+
+**Target behavior:**
+
+- Extend `GitManager.autoCommit(taskNum, title, cwd?: string)` — `spawn` git with `cwd` = worktree host path when provided.
+- After verified task in `runDevQALoop`, when `slotOpts.worktreeCwd` is set, map `/workspace/.ralph/worktrees/slot-N` → `path.join(repoRoot, '.ralph/worktrees/slot-N')` for auto-commit.
+- Sequential Docker (no slot): unchanged — commits on main worktree (`dockerWorkBranch` or `epicBaseBranch`).
+
+### 2c.4 — Auto-merge on successful loop end
+
+**Setting** ([`settings-manager.ts`](../../src/server/settings-manager.ts), [`types.ts`](../../src/client/types.ts), [`DockerSection.tsx`](../../src/client/components/DockerSection.tsx)):
+
+```ts
+dockerAutoMergeEpicWork: boolean;  // default true
+```
+
+**UI:** Checkbox — **Automatically merge work into epic branch when loop finishes** (visible when `dockerIsolateBranch` and branch metadata exist). Include in `pickDockerSettings` ([`control-panel-dirty.ts`](../../src/client/control-panel-dirty.ts)).
+
+**Server:**
+
+- Extract shared helper from [`POST /api/git/merge-epic-work`](../../src/server/index.ts) (e.g. `mergeEpicWorkIntoBase(gitManager, settings)`).
+- Call from `RalphLoop.finishRun()` when:
+  - Loop ended without user stop (`!wasStopped`)
+  - No error path in `finishRun`
+  - `settings.useDocker && settings.dockerIsolateBranch && settings.dockerAutoMergeEpicWork`
+  - `epicBaseBranch` and `dockerWorkBranch` set and differ
+- Same merge semantics as manual API: checkout `epicBaseBranch`, `merge --no-ff dockerWorkBranch`, return conflicts without auto-resolve.
+- On success: `[system] Merged work branch into epic base: <dockerWorkBranch> → <epicBaseBranch>`.
+- On conflict: log conflict paths; branch status API + UI remain source of truth for retry.
+
+**Manual merge:** Keep **Merge work into epic branch** for conflicts, mid-epic use, and when auto-merge is disabled.
+
+**Isolation off:** Skip auto-merge (no `dockerWorkBranch`; commits target `epicBaseBranch` directly).
+
+```mermaid
+sequenceDiagram
+  participant RL as RalphLoop
+  participant Git as GitManager
+  participant Slot as Slot_worktree
+
+  RL->>Git: capture epicBaseBranch
+  alt dockerIsolateBranch
+    RL->>Git: checkout dockerWorkBranch
+  end
+  par parallel task
+    RL->>Git: createWorktree slot worktreeBase
+    RL->>Slot: dev/QA in slot cwd
+    RL->>Git: autoCommit in slot cwd
+    RL->>Git: mergeWorktreeBranch to worktreeBase
+  end
+  RL->>RL: finishRun success
+  alt dockerAutoMergeEpicWork
+    RL->>Git: merge dockerWorkBranch into epicBaseBranch
+  end
+```
 
 ---
 
@@ -465,12 +593,15 @@ sequenceDiagram
     RL->>Pool: acquire slot 1
     RL->>T2: dev/QA worktree 1
   end
-  RL->>RL: merge / update task-status with lock
+  RL->>RL: per-task mergeWorktreeBranch + task-status lock
+  Note over RL: on loop finish success
+  RL->>RL: auto-merge dockerWorkBranch to epicBaseBranch if dockerAutoMergeEpicWork
 ```
 
 - **Mutex** on [`TaskManager`](../../src/server/task-manager.ts) writes.
 - Cap in-flight tasks at `dockerPoolSize`.
-- Plan phase unchanged in v1.
+- After each parallel task: merge slot branch → `worktreeBase` per Phase 2c.
+- Plan phase unchanged in v1 (plan-parallel slots use same `worktreeBase` when stretch is enabled).
 
 ---
 
@@ -496,11 +627,12 @@ Extend **Docker Agent Execution** (and **Settings Defaults** / **CLI flags** as 
 | Multi-CLI image | `INSTALL_*` build args; example `docker compose build` with env; link to `docker/README.md` for detail |
 | Pool | `dockerPoolSize`, `dockerParallelTasks` in settings table; default `1`; max and resource warning |
 | Parallel tasks | Dev/QA only; requires `useDocker` + pool > 1; worktrees under `.ralph/worktrees/` |
+| Merge-back | Three layers: slot → work branch (per task) → `epicBaseBranch` (loop end, default on via `dockerAutoMergeEpicWork`); manual merge button for conflicts |
 | Validate | **Set Docker** checks active backend CLI + (when pool > 1) all container indices reachable |
 | Compose scale | `up -d --scale ralph-agent=N` equivalent; recreate after `.env` / build-arg changes |
 | Fleet vs pool | Short note: `/fleet` is per-container Copilot subagents; pool is multiple backlog tasks |
 | CLI flags | `--docker-pool-size`, `--docker-parallel-tasks` (if added in [`cli-args.ts`](../../src/server/cli-args.ts)) |
-| Troubleshooting | Wrong CLI in image, `--index` unsupported (upgrade Compose), worktree merge conflicts |
+| Troubleshooting | Wrong CLI in image, `--index` unsupported (upgrade Compose), slot/work/epic merge conflicts, auto-merge skipped (setting off or isolation off), parallel auto-commit empty (worktree cwd) |
 | Nested compose | `dockerMountSocket`, security warning, `INSTALL_DOCKER_CLI`, blocked-task “cannot create containers” |
 | Control panel | Collapsible Docker / Loop / Epic / Prompts; Collapse all / Expand all; per-section Save (dirty-only) and Reset |
 
@@ -512,9 +644,9 @@ Add or expand sections:
 
 1. **Build the image for your backends** — table of `INSTALL_COPILOT` / `INSTALL_CLAUDE` / `INSTALL_GEMINI` / `INSTALL_CURSOR`, sample `.env` + compose build, pinned versions.
 2. **Run a container pool** — `dockerPoolSize`, scale command, verify `docker compose ps` shows N instances.
-3. **Parallel dev/QA and worktrees** — directory layout, branch naming, merge-back relationship to Epic 003 work branch.
+3. **Parallel dev/QA and worktrees** — directory layout; slot branch `${worktreeBase}-slot-N`; per-task merge into work branch; loop-end auto-merge into `epicBaseBranch` (`dockerAutoMergeEpicWork`, default on).
 4. **Validate from Ralph** — what **Set Docker** probes (per-backend CLI, per-index exec, node/git/pnpm).
-5. **Troubleshooting** — new rows: pool not scaling, exec lands on wrong index, worktree already exists, parallel task file conflicts.
+5. **Troubleshooting** — new rows: pool not scaling, exec lands on wrong index, worktree already exists, parallel task file conflicts, slot merge conflict, auto-merge failed (dirty tree / conflicts), auto-commit not on slot branch.
 6. **Nested Docker (target repo compose)** — enable socket mount, `INSTALL_DOCKER_CLI`, verify `docker info` inside agent, E2E harness checklist, when to use host `useDocker: false` instead.
 
 Keep [Step 2 — authentication](docker/README.md#step-2--add-authentication-env) aligned: every backend env var listed in compose `environment`, not only Copilot.
@@ -532,7 +664,7 @@ Keep [Step 2 — authentication](docker/README.md#step-2--add-authentication-env
 |------|--------|
 | Image / compose | [`docker/Dockerfile`](../../docker/Dockerfile), [`docker-compose.agents.yml`](../../docker-compose.agents.yml), [`docker/README.md`](../../docker/README.md) |
 | Pool + spawn | [`docker-runner.ts`](../../src/server/docker-runner.ts), new `docker-pool.ts`, tests |
-| Git | [`git-manager.ts`](../../src/server/git-manager.ts) |
+| Git / merge-back | [`git-manager.ts`](../../src/server/git-manager.ts), [`ralph-loop.ts`](../../src/server/ralph-loop.ts), [`index.ts`](../../src/server/index.ts), [`control-panel-dirty.ts`](../../src/client/control-panel-dirty.ts) |
 | Loop / LLM | [`ralph-loop.ts`](../../src/server/ralph-loop.ts), [`llm-caller.ts`](../../src/server/llm-caller.ts) |
 | API / UI | [`index.ts`](../../src/server/index.ts), [`DockerSection.tsx`](../../src/client/components/DockerSection.tsx) |
 | Control panel UX | [`ControlPanel.tsx`](../../src/client/components/ControlPanel.tsx), [`CollapsibleSection.tsx`](../../src/client/components/CollapsibleSection.tsx), [`control-panel-dirty.ts`](../../src/client/control-panel-dirty.ts), [`LoopConfigSection.tsx`](../../src/client/components/LoopConfigSection.tsx), [`EpicSection.tsx`](../../src/client/components/EpicSection.tsx), [`PromptsSection.tsx`](../../src/client/components/PromptsSection.tsx), [`App.css`](../../src/client/App.css) |
@@ -546,7 +678,9 @@ Keep [Step 2 — authentication](docker/README.md#step-2--add-authentication-env
 - **Resources:** `dockerPoolSize` concurrent agents multiply CPU/RAM/API usage — enforce max in settings validation.
 - **Cursor CLI in Docker:** may not be a single `npm install`; document manual steps if build arg cannot automate.
 - **Compose `--index`:** require recent Compose plugin; validate API should suggest upgrade on failure.
-- **Git conflicts:** parallel worktree merges need conflict paths like today's merge-epic-work API.
+- **Git conflicts:** parallel slot merges and loop-end auto-merge use the same conflict reporting as `merge-epic-work`; never auto-resolve.
+- **Auto-merge with dirty main worktree:** document commit/stash before loop end or disable `dockerAutoMergeEpicWork` and merge manually.
+- **Checkout after auto-merge:** loop end leaves repo on `epicBaseBranch`; log clearly for the operator.
 - **Socket mount security:** agents can start arbitrary host containers; default off; call out in UI and README.
 - **Nested compose on locked-down hosts:** Cursor/cloud sandboxes without socket or cgroup rights will still block — same outcome as task #13 `blocked.needs`; not fixable in software alone.
 
@@ -564,9 +698,10 @@ Keep [Step 2 — authentication](docker/README.md#step-2--add-authentication-env
 3. **Phase 1b** — `INSTALL_DOCKER_CLI`, optional socket mount, `dockerMountSocket` setting, in-container `docker info` validate, nested-compose docs (unblocks target-repo E2E/compose tasks)
 4. Phase 2 — settings, `docker-pool.ts`, scale + `--index`, worktrees, multi-process `LLMCaller` + **unit tests for pool/spawn** (wire new docker fields into `pickDockerSettings` / DockerSection footer)
 5. Phase 3 — parallel `runDevQALoop` with task-manager lock + **ralph-loop / integration tests**
-6. **Documentation pass** — finalize [`README.md`](../../README.md) and [`docker/README.md`](../../docker/README.md) (pool, parallel, nested compose, panel UX, troubleshooting)
-7. **Docker smoke** (optional script, local/CI when `DOCKER_SMOKE=1`) — scaled pool + nested `docker info` inside agent when socket enabled
-8. Phase 4 — plan-phase pool dispatch (stretch PR)
+6. **Phase 2c** — worktree base + `mergeWorktreeBranch` checkout fix, worktree `autoCommit`, `dockerAutoMergeEpicWork` + `finishRun` merge (after Phase 3 parallel path exists, or in same PR if parallel already shipped)
+7. **Documentation pass** — finalize [`README.md`](../../README.md) and [`docker/README.md`](../../docker/README.md) (pool, parallel, merge-back, nested compose, panel UX, troubleshooting)
+8. **Docker smoke** (optional script, local/CI when `DOCKER_SMOKE=1`) — scaled pool + nested `docker info` inside agent when socket enabled
+9. Phase 4 — plan-phase pool dispatch (stretch PR)
 
 ---
 
@@ -581,9 +716,9 @@ Tests must prove the **new Docker pattern works** without requiring every `npm t
 | [`docker-runner.test.ts`](../../src/server/docker-runner.test.ts) | `buildDockerSpawn` with `containerIndex` → argv includes `--index N`; multi-backend CLI probe errors; nested validate runs in-container `docker info` when `dockerMountSocket` |
 | **new** [`docker-pool.test.ts`](../../src/server/docker-pool.test.ts) | `ensureDockerPool` passes `--scale`; `listPoolContainers` ordering; `acquireSlot` / `releaseSlot` exhaustion and release |
 | [`llm-caller.test.ts`](../../src/server/llm-caller.test.ts) | Two parallel `call()` with different `dockerContainerIndex`; `stop()` kills all tracked processes; worktree cwd in spawn argv |
-| [`git-manager.test.ts`](../../src/server/git-manager.test.ts) | Create/remove worktree per slot (mocked `spawn` / temp git repo) |
-| [`ralph-loop.test.ts`](../../src/server/ralph-loop.test.ts) | When `dockerParallelTasks` + pool 2, dispatches at most two dev paths (mock `LLMCaller`) |
-| [`components.test.tsx`](../../src/client/components/components.test.tsx) | Pool size input; parallel checkbox disabled when `dockerPoolSize === 1`; **Phase 5** collapse all, dirty Save, Reset |
+| [`git-manager.test.ts`](../../src/server/git-manager.test.ts) | Create/remove worktree per slot; worktree from `dockerWorkBranch` ref; `mergeWorktreeBranch` checks out target before merge |
+| [`ralph-loop.test.ts`](../../src/server/ralph-loop.test.ts) | When `dockerParallelTasks` + pool 2, dispatches at most two dev paths (mock `LLMCaller`); `finishRun` calls merge when `dockerAutoMergeEpicWork`; skipped when stopped or setting false |
+| [`components.test.tsx`](../../src/client/components/components.test.tsx) | Pool size input; parallel checkbox disabled when `dockerPoolSize === 1`; `dockerAutoMergeEpicWork` in docker dirty pick; **Phase 5** collapse all, dirty Save, Reset |
 | [`cli-args.test.ts`](../../src/server/cli-args.test.ts) or existing pattern | New flags map to settings if added |
 
 **Definition of done (automated):** `npm run test:ci` passes with zero Docker daemon dependency.
@@ -614,6 +749,7 @@ Document in README: “CI does not run Docker smoke by default; maintainers run 
 - [ ] `dockerMountSocket` enabled: inside `ralph-agent`, `docker info` succeeds and target-repo `docker compose config` parses
 - [ ] Representative target task (compose up + pytest e2e) completes or fails with actionable errors, not “cannot create containers” inside agent
 - [ ] Control panel: Collapse all / Expand all; each section Save disabled until edit; Reset reverts; Save buttons below section fields
+- [ ] Parallel epic with isolation: slot commits merge to work branch; loop end auto-merge lands on `epicBaseBranch`; disable `dockerAutoMergeEpicWork` and use manual merge when testing conflicts
 
 ```mermaid
 flowchart LR

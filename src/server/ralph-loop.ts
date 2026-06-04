@@ -585,8 +585,9 @@ export class RalphLoop {
             try {
               const epicBase =
                 settings.epicBaseBranch || (await this.gitManager.getCurrentBranch());
+              const worktreeBase = settings.dockerWorkBranch || epicBase;
               try {
-                await this.gitManager.createWorktree(slot, epicBase);
+                await this.gitManager.createWorktree(slot, worktreeBase);
               } catch {
                 // worktree creation is best-effort; continue even if it fails
               }
@@ -654,8 +655,9 @@ export class RalphLoop {
 
           // Create worktree for the slot (idempotent).
           const epicBase = settings.epicBaseBranch || (await this.gitManager.getCurrentBranch());
+          const worktreeBase = settings.dockerWorkBranch || epicBase;
           try {
-            await this.gitManager.createWorktree(slot, epicBase);
+            await this.gitManager.createWorktree(slot, worktreeBase);
           } catch (err) {
             this.cb.onLog(`[system] Warning: could not create worktree for slot ${slot}: ${err}`);
           }
@@ -676,7 +678,7 @@ export class RalphLoop {
               const workBranch = settings.dockerWorkBranch || epicBase;
               try {
                 await this.withTaskLock(() =>
-                  this.gitManager.mergeWorktreeBranch(slot, epicBase, workBranch),
+                  this.gitManager.mergeWorktreeBranch(slot, worktreeBase, workBranch),
                 );
               } catch (err) {
                 this.cb.onLog(

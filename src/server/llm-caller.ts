@@ -397,17 +397,29 @@ export class LLMCaller {
             break;
           }
           case "cursor-agent": {
-            assertPromptFitsArgv(prompt, backend);
-            args = [
-              "-p",
-              normalizePromptForArgv(prompt),
-              "--model",
-              model,
-              ...CURSOR_AGENT_NON_INTERACTIVE_FLAGS,
-              "--output-format",
-              "text",
-            ];
-            writeStdin = null;
+            if (prompt.length <= ARG_PROMPT_MAX_CHARS) {
+              args = [
+                "-p",
+                normalizePromptForArgv(prompt),
+                "--model",
+                model,
+                ...CURSOR_AGENT_NON_INTERACTIVE_FLAGS,
+                "--output-format",
+                "text",
+              ];
+              writeStdin = null;
+            } else {
+              // Large prompts exceed argv limits; cursor-agent reads the prompt from stdin with --print.
+              args = [
+                "--print",
+                "--model",
+                model,
+                ...CURSOR_AGENT_NON_INTERACTIVE_FLAGS,
+                "--output-format",
+                "text",
+              ];
+              writeStdin = prompt;
+            }
             break;
           }
           case "claude": {
