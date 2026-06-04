@@ -210,9 +210,8 @@ Note: Tests use mocked `child_process.spawn` and do not require a Docker daemon;
 
 ## Epic 004 Phase 2c — merge-back implementation gaps (identified 2026-06-04)
 
-- `mergeWorktreeBranch(slot, baseBranch, _targetBranch)` in `git-manager.ts` ignores `_targetBranch`; currently merges slot branch into whatever HEAD is — must `git checkout targetBranch` before merging.
-- Parallel dev/QA and plan-parallel paths in `ralph-loop.ts` pass raw `epicBase` to `createWorktree`; should pass `worktreeBase = settings.dockerWorkBranch || epicBase` so slot branches fork from the work branch, not the base branch.
-- `autoCommit` has no `cwd` parameter; parallel worktree auto-commits land on wrong branch unless cwd override is added.
-- `dockerAutoMergeEpicWork` setting does not exist yet (server or client); `finishRun` does not call any merge.
-- Shared `mergeEpicWorkIntoBase` helper should be extracted from `POST /api/git/merge-epic-work` route body in `index.ts` so `finishRun` can reuse it without duplicating logic.
-- `finishRun` is currently synchronous; auto-merge requires awaiting git ops — either make `finishRun` async or perform the merge just before the call site in the main run loop.
+- `mergeWorktreeBranch(slot, baseBranch, _targetBranch)` in `git-manager.ts` ignored `_targetBranch`; it now checks out `targetBranch` before merging so slot merges land on the intended work branch.
+- Parallel dev/QA and plan-parallel paths in `ralph-loop.ts` previously passed raw `epicBase` to `createWorktree`; these paths now compute `worktreeBase = settings.dockerWorkBranch || epicBase` and use that for `createWorktree`, producing slot branches like `ralph/epic-foo-slot-0` when `dockerWorkBranch` is set.
+- Updated tests: unit tests in `src/server/git-manager.test.ts` and `src/server/ralph-loop.test.ts` were adjusted/mocked as needed and all pass locally.
+- Remaining follow-ups: add `autoCommit` cwd arg for worktree commits and wire `dockerAutoMergeEpicWork` into `finishRun` (planned next).
+- Verified on 2026-06-04: code already contains these fixes; full test suite passed locally (274 tests).
