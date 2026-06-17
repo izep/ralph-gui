@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach, beforeAll } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { ErrorBanner } from "./ErrorBanner";
 import { KanbanColumn } from "./KanbanColumn";
 import { LogViewer } from "./LogViewer";
 import { TaskCard } from "./TaskCard";
 import { ControlPanel } from "./ControlPanel";
-import type { Task, ColumnDef, Settings, Readiness } from "../types";
+import type { ColumnDef, Readiness, Settings, Task } from "../types";
 
 // jsdom does not implement scrollIntoView
 beforeAll(() => {
@@ -29,7 +29,7 @@ describe("ErrorBanner", () => {
         error="Something went wrong"
         onRestart={() => {}}
         onDismiss={() => {}}
-      />
+      />,
     );
     expect(screen.getByText("Something went wrong")).toBeInTheDocument();
   });
@@ -39,9 +39,11 @@ describe("ErrorBanner", () => {
     render(
       <ErrorBanner
         error="fail"
-        onRestart={() => { restarted = true; }}
+        onRestart={() => {
+          restarted = true;
+        }}
         onDismiss={() => {}}
-      />
+      />,
     );
     fireEvent.click(screen.getByText("Restart Loop"));
     expect(restarted).toBe(true);
@@ -53,8 +55,10 @@ describe("ErrorBanner", () => {
       <ErrorBanner
         error="fail"
         onRestart={() => {}}
-        onDismiss={() => { dismissed = true; }}
-      />
+        onDismiss={() => {
+          dismissed = true;
+        }}
+      />,
     );
     fireEvent.click(screen.getByText("Dismiss"));
     expect(dismissed).toBe(true);
@@ -118,7 +122,7 @@ describe("LogViewer", () => {
       <LogViewer
         lines={["[system] Started", "[dev] Working on task"]}
         onClose={() => {}}
-      />
+      />,
     );
     expect(screen.getByText("[system] Started")).toBeInTheDocument();
     expect(screen.getByText("[dev] Working on task")).toBeInTheDocument();
@@ -129,7 +133,7 @@ describe("LogViewer", () => {
       <LogViewer
         lines={["line 1", "line 2", "line 3"]}
         onClose={() => {}}
-      />
+      />,
     );
     expect(screen.getByText("3 lines")).toBeInTheDocument();
   });
@@ -139,13 +143,20 @@ describe("LogViewer", () => {
     expect(screen.getByText("No output yet")).toBeInTheDocument();
   });
 
+  it("renders a resize separator for the log drawer", () => {
+    render(<LogViewer lines={[]} onClose={() => {}} />);
+    expect(screen.getByLabelText("Resize output log")).toBeInTheDocument();
+  });
+
   it("calls onClose when close button is clicked", () => {
     let closed = false;
     render(
       <LogViewer
         lines={[]}
-        onClose={() => { closed = true; }}
-      />
+        onClose={() => {
+          closed = true;
+        }}
+      />,
     );
     fireEvent.click(screen.getByText("×"));
     expect(closed).toBe(true);
@@ -182,7 +193,7 @@ describe("TaskCard", () => {
             capturedAt: "2026-01-01T00:00:00Z",
           },
         })}
-      />
+      />,
     );
 
     expect(screen.getByText("Summary:")).toBeInTheDocument();
@@ -202,7 +213,10 @@ describe("TaskCard", () => {
   });
 
   it("expands description on click", () => {
-    const task = makeTask({ id: 1, description: "Full description content here" });
+    const task = makeTask({
+      id: 1,
+      description: "Full description content here",
+    });
     render(<TaskCard task={task} />);
 
     // Initially shows "details" link
@@ -211,7 +225,8 @@ describe("TaskCard", () => {
     // Click to expand
     fireEvent.click(screen.getByText("details"));
     expect(screen.getByText("collapse")).toBeInTheDocument();
-    expect(screen.getByText("Full description content here")).toBeInTheDocument();
+    expect(screen.getByText("Full description content here"))
+      .toBeInTheDocument();
   });
 
   it("shows Blocker resolved checkbox for blocked tasks with blocked metadata", () => {
@@ -297,7 +312,7 @@ describe("ControlPanel", () => {
         onRefreshBacklog={noopResult}
         isRunning={false}
         onClose={() => {}}
-      />
+      />,
     );
     expect(screen.getByText("Settings")).toBeInTheDocument();
     expect(screen.getByText("Repository")).toBeInTheDocument();
@@ -321,7 +336,7 @@ describe("ControlPanel", () => {
         onRefreshBacklog={noopResult}
         isRunning={false}
         onClose={() => {}}
-      />
+      />,
     );
     expect(screen.getByText("main")).toBeInTheDocument();
   });
@@ -341,7 +356,7 @@ describe("ControlPanel", () => {
         onRefreshBacklog={noopResult}
         isRunning={false}
         onClose={() => {}}
-      />
+      />,
     );
     // Close button uses × character
     expect(screen.getAllByText("×").length).toBeGreaterThan(0);
@@ -362,7 +377,7 @@ describe("ControlPanel", () => {
         onRefreshBacklog={noopResult}
         isRunning={true}
         onClose={() => {}}
-      />
+      />,
     );
     const btn = screen.getByText("Refresh Tasks");
     expect(btn).toBeDisabled();
