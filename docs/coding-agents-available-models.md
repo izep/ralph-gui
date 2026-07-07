@@ -4,18 +4,28 @@
 
 IDs from `cursor-agent models` (curated subset). Use exact `--model` values.
 
-| Model             | ID                       | Strength                             | Tier       | Multiplier    | YOLO Mode | Fleet Mode         | Preferred For |
-| ----------------- | ------------------------ | ------------------------------------ | ---------- | ------------- | --------- | ------------------ | ------------- |
-| Auto              | auto                     | Cursor picks the best model          | Varies     | Varies        | Yes       | Partial (Composer) |
-| Composer 2.5 Fast | composer-2.5-fast        | Fast agentic coding (CLI default)    | Included   | Included      | Yes       | Partial (Composer) |
-| GPT-5 Mini        | gpt-5-mini               | General-purpose + reasoning, fast    | fast/cheap | Included      | Yes       | Partial (Composer) | Dev, QA       |
-| GPT-5.4           | gpt-5.4-medium           | Deep reasoning & multi-file tasks    | standard   | medium-high   | Yes       | Partial (Composer) |
-| GPT-5.5           | gpt-5.5-medium           | Complex reasoning, most powerful GPT | premium  | premium usage | Yes       | Partial (Composer) |
-| Claude Sonnet 4.5 | claude-4.5-sonnet        | General-purpose, reasoning           | standard   | 1×            | Yes       | Partial (Composer) |
-| Claude Sonnet 4.6 | claude-4.6-sonnet-medium | General-purpose + deeper reasoning   | standard   | 1×            | Yes       | Partial (Composer) | Planning      |
-| Claude Opus 4.7   | claude-opus-4-7-high     | Anthropic's most powerful            | premium    | high          | Yes       | Partial (Composer) |
-| Gemini 3 Flash    | gemini-3-flash           | Fast context processing              | fast/cheap | Included      | Yes       | Partial (Composer) |
-| Gemini 3.1 Pro    | gemini-3.1-pro           | Massive context, advanced reasoning  | premium    | high          | Yes       | Partial (Composer) |
+| Model                      | ID                               | Strength                                  | Tier       | Multiplier    | YOLO Mode | Fleet Mode         | Preferred For |
+| -------------------------- | -------------------------------- | ----------------------------------------- | ---------- | ------------- | --------- | ------------------ | ------------- |
+| Auto                       | auto                             | Cursor picks the best model               | Varies     | Varies        | Yes       | Partial (Composer) |
+| Composer 2.5 Fast          | composer-2.5-fast                | Fast agentic coding (CLI default)         | Included   | Included      | Yes       | Partial (Composer) |
+| GPT-5.4 Mini               | gpt-5.4-mini-medium              | Fast coding & reasoning                   | fast/cheap | Included      | Yes       | Partial (Composer) | Dev, QA       |
+| GPT-5 Mini                 | gpt-5-mini                       | General-purpose + reasoning, fast         | fast/cheap | Included      | Yes       | Partial (Composer) |
+| GPT-5.2 Codex              | gpt-5.2-codex                    | Code generation & review                  | standard   | medium        | Yes       | Partial (Composer) |
+| GPT-5.3 Codex              | gpt-5.3-codex                    | Complex engineering, tests, refactors     | standard   | medium-high   | Yes       | Partial (Composer) |
+| GPT-5.4                    | gpt-5.4-medium                   | Deep reasoning & multi-file tasks         | standard   | medium-high   | Yes       | Partial (Composer) |
+| GPT-5.5                    | gpt-5.5-medium                   | Complex reasoning, most powerful GPT      | premium    | premium usage | Yes       | Partial (Composer) |
+| Claude Sonnet 4.5          | claude-4.5-sonnet                | General-purpose, reasoning                | standard   | 1×            | Yes       | Partial (Composer) |
+| Claude Sonnet 4.5 thinking | claude-4.5-sonnet-thinking       | Reasoning with extended thinking          | standard   | 1×            | Yes       | Partial (Composer) |
+| Claude Sonnet 4.6          | claude-4.6-sonnet-medium         | General-purpose + deeper reasoning        | standard   | 1×            | Yes       | Partial (Composer) |
+| Claude Sonnet 4.6 thinking | claude-4.6-sonnet-medium-thinking | Deeper reasoning with extended thinking    | standard   | 1×            | Yes       | Partial (Composer) |
+| Claude Sonnet 5            | claude-sonnet-5-thinking-high    | Latest Sonnet, deep reasoning             | standard   | 1×            | Yes       | Partial (Composer) | Planning      |
+| Claude Fable 5             | claude-fable-5-thinking-high     | Long-horizon agentic reasoning            | premium    | high          | Yes       | Partial (Composer) |
+| Claude Opus 4.7            | claude-opus-4-7-high             | Deep reasoning, complex problems          | premium    | high          | Yes       | Partial (Composer) |
+| Claude Opus 4.7 thinking   | claude-opus-4-7-thinking-xhigh   | Extended thinking, complex problems       | premium    | high          | Yes       | Partial (Composer) |
+| Claude Opus 4.8            | claude-opus-4-8-thinking-high    | Anthropic's most powerful                 | premium    | high          | Yes       | Partial (Composer) |
+| Gemini 3.5 Flash           | gemini-3.5-flash                 | Fast context processing                   | fast/cheap | Included      | Yes       | Partial (Composer) |
+| Gemini 3 Flash             | gemini-3-flash                   | Fast context processing (prior gen)       | fast/cheap | Included      | Yes       | Partial (Composer) |
+| Gemini 3.1 Pro             | gemini-3.1-pro                   | Massive context, advanced reasoning       | premium    | high          | Yes       | Partial (Composer) |
 
 ## Claude Code CLI
 
@@ -36,10 +46,10 @@ Use `-m` / `--model` with these IDs (`gemini-2.0-*` returns 404 on current CLI).
 
 | Model                  | ID                     | Strength                     | Tier       | Multiplier | YOLO Mode | Fleet Mode | Preferred For |
 | ---------------------- | ---------------------- | ---------------------------- | ---------- | ---------- | --------- | ---------- | ------------- |
-| Gemini 2.5 Flash       | gemini-2.5-flash       | Fast, lightweight context    | fast/cheap | low        | Yes       | No         | Dev, QA       |
-| Gemini 2.5 Pro         | gemini-2.5-pro         | Deep reasoning, high context | standard   | medium     | Yes       | No         | Planning      |
-| Gemini 3 Flash preview | gemini-3-flash-preview | Fast (Gemini 3 family)       | fast/cheap | low        | Yes       | No         |
-| Gemini 3 Pro preview   | gemini-3-pro-preview   | Complex reasoning (Gemini 3) | premium    | high       | Yes       | No         |
+| Gemini 2.5 Flash       | gemini-2.5-flash       | Fast, lightweight context    | fast/cheap | low        | Yes       | No         |
+| Gemini 2.5 Pro         | gemini-2.5-pro         | Deep reasoning, high context | standard   | medium     | Yes       | No         |
+| Gemini 3 Flash preview | gemini-3-flash-preview | Fast (Gemini 3 family)       | fast/cheap | low        | Yes       | No         | Dev, QA       |
+| Gemini 3 Pro preview   | gemini-3-pro-preview   | Complex reasoning (Gemini 3) | premium    | high       | Yes       | No         | Planning      |
 
 ## GitHub Copilot CLI
 
@@ -66,7 +76,7 @@ IDs from `opencode models opencode` (OpenCode Zen free tier). Use exact `-m` / `
 
 | Model                  | ID                              | Strength                                   | Tier | Multiplier | YOLO Mode                              | Fleet Mode          | Preferred For |
 | ---------------------- | ------------------------------- | ------------------------------------------ | ---- | ---------- | -------------------------------------- | ------------------- | ------------- |
-| Big Pickle             | opencode/big-pickle             | Stealth coding-agent model (GLM-4.6 class) | Free | Free       | Yes (`--dangerously-skip-permissions`) | Partial (subagents) | Planning      |
+| Big Pickle             | opencode/big-pickle             | Stealth coding-agent model (GLM-4.6 class) | Free | Free       | Yes (`--dangerously-skip-permissions`) | Partial (subagents) | Dev, Planning   |
 | DeepSeek V4 Flash Free | opencode/deepseek-v4-flash-free | Fast DeepSeek V4 Flash, lightweight tasks  | Free | Free       | Yes (`--dangerously-skip-permissions`) | Partial (subagents) | Dev, QA       |
-| MiMo-V2.5 Free         | opencode/mimo-v2.5-free         | Fast Xiaomi MiMo coding model              | Free | Free       | Yes (`--dangerously-skip-permissions`) | Partial (subagents) |               |
-| Nemotron 3 Super Free  | opencode/nemotron-3-super-free  | NVIDIA Nemotron 3 Super (trial endpoints)  | Free | Free       | Yes (`--dangerously-skip-permissions`) | Partial (subagents) |               |
+| MiMo-V2.5 Free         | opencode/mimo-v2.5-free         | Fast Xiaomi MiMo coding model              | Free | Free       | Yes (`--dangerously-skip-permissions`) | Partial (subagents) | Dev, QA       |
+| Nemotron 3 Super Free  | opencode/nemotron-3-super-free  | NVIDIA Nemotron 3 Super (trial endpoints)  | Free | Free       | Yes (`--dangerously-skip-permissions`) | Partial (subagents) | Dev, QA       |

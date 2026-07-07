@@ -1,66 +1,84 @@
 ---
 name: Epic 004 — Parallel Docker agents, control panel UX
-overview: Docker agent stack (multi-CLI build args, pool, worktrees, nested compose socket), end-to-end git merge-back (parallel slot merges, loop-end auto-merge to epic base branch), control panel collapsible sections with dirty-aware Save/Reset, document and test all of the above.
+overview: Docker agent stack (multi-CLI build args, pool, worktrees, nested compose socket), end-to-end git merge-back, continuous pool workers for dev/QA (inQa, inProgress, backlog), control panel collapsible sections with dirty-aware Save/Reset, document and test all of the above.
 todos:
   - id: dockerfile-build-args
     content: Add INSTALL_* build args to docker/Dockerfile; wire args + all auth env vars in docker-compose.agents.yml
-    status: pending
+    status: completed
   - id: validate-installed-clis
     content: Extend docker-runner validate to probe each installed backend CLI; document rebuild flow in docker/README.md
-    status: pending
+    status: completed
   - id: settings-pool
     content: Add dockerPoolSize, dockerParallelTasks, dockerInstalledBackends to settings + DockerSection UI
-    status: pending
+    status: completed
   - id: docker-pool-module
     content: "Create docker-pool.ts: scale compose service, list containers, acquire/release slots, buildDockerSpawn --index"
-    status: pending
+    status: completed
   - id: git-worktrees
     content: GitManager worktree helpers per slot; per-slot cwd for docker exec -w
-    status: pending
+    status: completed
   - id: llm-caller-parallel
     content: LLMCaller multi-process map + dockerContainerIndex/dockerWorktreeCwd opts
-    status: pending
+    status: completed
   - id: parallel-dev-qa
-    content: "ralph-loop: parallel runDevQALoop up to pool size with TaskManager write mutex"
-    status: pending
+    content: "ralph-loop: parallel runDevQALoop up to pool size with TaskManager write mutex (batch backlog v1 — superseded by pool-worker-module)"
+    status: completed
   - id: plan-pool-stretch
     content: (Stretch) Plan prompt parse + dispatch parallel sub-jobs to pool behind dockerPlanParallel flag
-    status: pending
+    status: completed
   - id: docs-readme-updates
     content: Update README.md and docker/README.md for build args, pool size, parallel tasks, worktrees, validate, and troubleshooting
-    status: pending
+    status: completed
   - id: tests-docker-pool
     content: Add/extend unit and integration tests (docker-pool, buildDockerSpawn --index, parallel LLMCaller, worktrees); optional CI smoke script for real Docker
-    status: pending
+    status: completed
   - id: docker-socket-nested-compose
     content: Optional Docker socket mount + docker/compose CLI in agent image; validate nested docker info; settings + docs for target-project compose/E2E tasks
-    status: pending
+    status: completed
   - id: collapsible-sections
     content: CollapsibleSection wrapper; collapse/expand all in ControlPanel header; wrap Docker, Loop Config, Epic, Prompts
-    status: pending
+    status: completed
   - id: dirty-save-reset
     content: Per-section dirty detection; Save disabled until dirty; Reset rolls back draft; Save/Reset footers below section fields
-    status: pending
+    status: completed
   - id: docker-section-save
     content: Split Docker settings save from Loop Config (Save Docker + save handler for docker* fields only)
-    status: pending
+    status: completed
   - id: tests-control-panel-ux
     content: components.test.tsx for collapse all, dirty Save disabled, Reset restores draft, save button placement
-    status: pending
+    status: completed
   - id: git-merge-back-parallel
     content: Fix parallel worktree base (dockerWorkBranch), mergeWorktreeBranch checkout target, slot branch naming
-    status: pending
+    status: completed
   - id: worktree-auto-commit
     content: Run autoCommit in slot worktree cwd when parallel Docker dev/QA uses worktreeCwd
-    status: pending
+    status: completed
   - id: auto-merge-epic-work
     content: dockerAutoMergeEpicWork setting (default true); shared merge helper; call from finishRun on successful loop end
-    status: pending
+    status: completed
   - id: merge-back-ui-docs
     content: DockerSection auto-merge checkbox; README/docker/README three-layer branch flow and troubleshooting
-    status: pending
+    status: completed
   - id: tests-merge-back
     content: git-manager + ralph-loop tests for checkout-before-merge, worktree base, loop-end auto-merge and conflicts
+    status: completed
+  - id: pool-worker-module
+    content: "Extract pool worker loop: slot acquire, pick eligible task, runDevQALoop, merge-back, release; replace batch allBacklog dispatch"
+    status: pending
+  - id: pool-eligible-tasks
+    content: "Eligibility + priority: inQa then inProgress then backlog; exclude blocked/done/in-flight runningTaskIds"
+    status: pending
+  - id: pool-unify-paths
+    content: Remove sequential-only resume and skip-plan dev path when parallel pool active; single worker entry after plan
+    status: pending
+  - id: pool-active-slots-status
+    content: Add activePoolSlots to task-status for UI/logs; reduce nextTask clobbering in parallel mode
+    status: pending
+  - id: pool-worker-tests
+    content: "ralph-loop tests: inQa+backlog concurrent, skip-plan uses pool, slot release on blocked/done, no sequential resume when pool on"
+    status: pending
+  - id: pool-worker-docs
+    content: README + docker/README continuous worker model; troubleshooting pool idle with inProgress tasks
     status: pending
 isProject: false
 ---
@@ -69,19 +87,20 @@ isProject: false
 
 **Canonical plan:** [docs/epics/epic-004-parallel-docker-support.plan.md](epic-004-parallel-docker-support.plan.md) — **all** future scope, design changes, and todos for this epic are edited in this file only (not separate Cursor plan files).
 
-**Depends on:** [Epic 003 — Docker container agents](epic-003-docker-container.plan.md) (single-container Docker transport, `epicBaseBranch` / `dockerWorkBranch` capture, manual `merge-epic-work` API, `docker-runner.ts`, `LLMCaller` docker wrapper). Epic 004 completes parallel worktree merge-back and loop-end auto-merge into `epicBaseBranch`.
+**Depends on:** [Epic 003 — Docker container agents](epic-003-docker-container.plan.md) (single-container Docker transport, `epicBaseBranch` / `dockerWorkBranch` capture, manual `merge-epic-work` API, `docker-runner.ts`, `LLMCaller` docker wrapper). Epic 004 ships pool infrastructure, merge-back, and batch parallel v1; **Phase 3b** is the remaining continuous-worker work.
 
 ## Goal
 
 1. Build the agent Docker image with **selectable coding-agent CLIs** via Dockerfile **build args** (not Copilot-only).
 2. Run **more than one agent container** at a time, with pool size **N configurable in `ralph/settings.json`**.
-3. Execute **parallel dev/QA backlog tasks** in separate containers using **git worktree** isolation (minimum viable parallelism).
+3. Execute **parallel dev/QA tasks** in separate containers using **git worktree** isolation (shipped: batch backlog v1; target: continuous pool workers per Phase 3b).
 4. *(Stretch)* Let the **planning agent** dispatch parallel sub-jobs into the container pool; aggregate results before dev picks up tasks.
 5. **Document** the new Docker patterns in project README files so operators can build images, size the pool, and troubleshoot without reading source.
 6. **Test** the Docker pool pattern end-to-end (automated unit/integration tests plus an optional real-Docker smoke path).
 7. Allow **agent containers to run Docker Compose inside the target repo** (nested compose / “Docker-outside-of-Docker” via host socket) so dev tasks like “start full stack + run E2E pytest” are not blocked when Ralph uses `useDocker`.
 8. Improve **Settings control panel UX**: collapsible sections (Docker Agents, Loop Configuration, Current Epic, Prompts), **Collapse all / Expand all**, per-section **Save** (disabled until dirty) and **Reset** (revert unsaved edits), with Save/Reset controls **below** the fields they affect.
 9. **Complete git merge-back** for Docker epics: parallel slot branches merge into the work branch per task; when the loop finishes successfully, merge the work branch into **`epicBaseBranch`** (the branch checked out at loop start) by default, with opt-out and manual retry (extends [Epic 003](epic-003-docker-container.plan.md) merge-back).
+10. **Continuous pool workers:** when the Docker pool is enabled, **N container workers** continuously pull eligible dev/QA work (`inQa`, `inProgress`, `backlog`) until the loop stops or `maxLLMCalls` is hit — replacing the one-shot batch backlog dispatch (Phase 3b).
 
 ## Motivation — blocked target-project tasks
 
@@ -115,10 +134,16 @@ flowchart TB
 | Topic | Choice |
 |-------|--------|
 | Image strategy | **Build args** — `INSTALL_COPILOT`, `INSTALL_CLAUDE`, `INSTALL_GEMINI`, `INSTALL_CURSOR` (default Copilot `true`, others `false`) |
-| Parallelism scope (v1) | **Dev + QA only** across backlog items; **plan phase stays sequential** until stretch phase |
+| Parallelism scope | **Dev + QA only** across eligible tasks (`inQa`, `inProgress`, `backlog` after 3b); **plan phase stays sequential** |
 | Isolation model | **Git worktrees** per pool slot under `<repoRoot>/.ralph/worktrees/slot-<n>`; same `.git` object store as host bind-mount |
 | Pool sizing | `dockerPoolSize` in settings (default `1`, capped e.g. at `8`) |
-| Parallel toggle | `dockerParallelTasks` — enable parallel backlog execution when `dockerPoolSize > 1` |
+| Parallel toggle | `dockerParallelTasks` — enable parallel dev/QA pool when `dockerPoolSize > 1` |
+| Parallel dispatch model | **Continuous pool workers** (Phase 3b) replace batch backlog dispatch when `useDocker && dockerParallelTasks && dockerPoolSize > 1`. Plan phase stays sequential. |
+| Eligible task statuses | `inQa`, `inProgress`, `backlog` — exclude `done`, `blocked`. |
+| Pick priority | **inQa** first, then **inProgress**, then **backlog** (lowest `id` within each tier). |
+| Slot binding | One task per slot at a time; in-memory `runningTaskIds` prevents double-dispatch. Slot released on `done`, `blocked`, or loop stop. |
+| Cross-task phases | Within one task, dev before QA per iteration; across tasks, task A may be in QA while task B is in dev. |
+| Loop restart + pool | No separate sequential `resumeTask` block when pool is active — resumed tasks enter the same eligibility queue. |
 | Exec targeting | `docker compose exec --index <n>` per slot (requires recent Compose plugin) |
 | Fleet vs pool | **Complementary** — Copilot `/fleet` is in-container subagents; pool is multiple containers for different backlog tasks |
 | Stretch plan dispatch | Behind `dockerPlanParallel` (default off), requires pool infrastructure from Phase 2 |
@@ -130,33 +155,38 @@ flowchart TB
 | Dirty / Reset | Compare local draft to last **saved** server state per section; Reset restores draft from props, does not call API |
 | Merge into starting branch | **Default on** at successful loop end: merge `dockerWorkBranch` → `epicBaseBranch` when `dockerIsolateBranch` and both branches are set. Setting **`dockerAutoMergeEpicWork`** (default `true`) disables auto-merge. Manual **Merge work into epic branch** unchanged. On conflict: do not auto-resolve; log + surface in UI (same as Epic 003 API). Skipped when isolation off (commits already on `epicBaseBranch`). |
 
-## Current state (after Epic 003)
+## Current state (codebase survey — 2026-06)
 
-- [`docker/Dockerfile`](../../docker/Dockerfile) installs only `@github/copilot`.
-- [`docker-compose.agents.yml`](../../docker-compose.agents.yml) defines a **single** `ralph-agent` service; Ralph always `docker compose exec`s into one container ([`buildDockerSpawn`](../../src/server/docker-runner.ts)).
-- [`LLMCaller`](../../src/server/llm-caller.ts) routes by `agentBackend` inside the container; probes CLI via [`resolveAgentCliInDockerContainer`](../../src/server/docker-runner.ts).
-- [`ralph-loop.ts`](../../src/server/ralph-loop.ts) runs **one** LLM call at a time; `LLMCaller` keeps a single `currentProcess` (parallel calls would clobber stop/kill).
-- Non-Copilot auth vars are documented in [`docker/README.md`](../../docker/README.md); compose `environment` lists Copilot tokens explicitly; other keys rely on `env_file: .env`.
-- **Control panel** ([`ControlPanel.tsx`](../../src/client/components/ControlPanel.tsx)): four sections always expanded; single **Save Settings** in Loop Config persists **all** `localSettings` including Docker fields; Save buttons are always enabled (no dirty check); no Reset; no collapse-all.
+**Shipped (Epic 004 todos `completed`):**
+
+- Multi-CLI [`docker/Dockerfile`](../../docker/Dockerfile) + [`docker-compose.agents.yml`](../../docker-compose.agents.yml) with `INSTALL_*` build args and auth env vars.
+- [`docker-pool.ts`](../../src/server/docker-pool.ts): scale, `DockerPool` acquire/release, `buildDockerSpawn` `--index` + worktree cwd.
+- Parallel [`LLMCaller`](../../src/server/llm-caller.ts) (`activeProcesses` map per slot).
+- Git worktrees + Phase 2c merge-back + `dockerAutoMergeEpicWork` loop-end merge.
+- Phase 3 **batch** parallel dev/QA (backlog only); Phase 4 plan-parallel research.
+- Phase 5 control panel: collapsible sections, dirty Save/Reset, split Docker vs Loop save.
+- Docs in [`README.md`](../../README.md) and [`docker/README.md`](../../docker/README.md); ~284 automated tests pass.
+
+**Remaining (Phase 3b — todos `pool-worker-*`):**
+
+- Replace batch `allBacklog` dispatch with **continuous pool workers**.
+- Eligible queue: `inQa` → `inProgress` → `backlog`; remove sequential-only resume/skip-plan when pool active.
+- Optional `activePoolSlots` in task-status; update docs for continuous worker model.
 
 ```mermaid
 flowchart TB
-  subgraph today [Today]
-    RL[RalphLoop] --> LC[LLMCaller]
-    LC --> Exec["docker compose exec ralph-agent"]
-    Exec --> CLI["one CLI in one container"]
-    CLI --> Mount["/workspace = repoRoot bind mount"]
+  subgraph shipped [Shipped parallel v1]
+    Plan[Plan sequential]
+    Batch[Batch all backlog tasks]
+    PoolN[N containers max]
+    Plan --> Batch --> PoolN
   end
-```
 
-```mermaid
-flowchart TB
-  subgraph panelToday [Control panel today]
-    Repo[Repository always open]
-    Docker[Docker Agents]
-    Loop[Loop Config + Save Settings for ALL settings]
-    Epic[Current Epic + Save Epic]
-    Prompts[Prompts + Save Prompt]
+  subgraph target [Phase 3b target]
+    Plan2[Plan sequential]
+    Worker[runParallelPoolUntilIdle]
+    Queue[inQa inProgress backlog]
+    Plan2 --> Worker --> Queue
   end
 ```
 
@@ -574,9 +604,11 @@ sequenceDiagram
 
 ---
 
-## Phase 3 — Parallel dev/QA ([`ralph-loop.ts`](../../src/server/ralph-loop.ts))
+## Phase 3 — Parallel dev/QA ([`ralph-loop.ts`](../../src/server/ralph-loop.ts)) — shipped v1 (batch backlog)
 
-When `useDocker && dockerParallelTasks && dockerPoolSize > 1`:
+**Status:** Implemented. **Superseded by [Phase 3b](#phase-3b--continuous-pool-workers)** when pool worker ships.
+
+When `useDocker && dockerParallelTasks && dockerPoolSize > 1`, v1 dispatches **all backlog tasks in one batch** after planning:
 
 ```mermaid
 sequenceDiagram
@@ -586,22 +618,148 @@ sequenceDiagram
   participant T2 as Slot1_container
 
   RL->>RL: plan phase sequential
-  RL->>RL: pick up to N backlog tasks
-  par parallel dev/QA
+  RL->>RL: filter status equals backlog
+  par parallel dev/QA batch
     RL->>Pool: acquire slot 0
     RL->>T1: dev/QA worktree 0
     RL->>Pool: acquire slot 1
     RL->>T2: dev/QA worktree 1
   end
-  RL->>RL: per-task mergeWorktreeBranch + task-status lock
-  Note over RL: on loop finish success
-  RL->>RL: auto-merge dockerWorkBranch to epicBaseBranch if dockerAutoMergeEpicWork
+  RL->>RL: Promise.all batch then continue loop
 ```
+
+**Shipped gaps (motivation for Phase 3b):**
+
+- Only `status === "backlog"` tasks enter the parallel path ([`ralph-loop.ts`](../../src/server/ralph-loop.ts) ~639–696).
+- Loop-start `resumeTask` for `inProgress` / `inQa` runs **sequentially** without `slotOpts` (~442–462).
+- Skip-plan path runs **one** backlog task sequentially without pool (~484–513).
+- Pool sits idle after the batch until the next plan iteration.
+
+**Retained from v1 (unchanged in 3b):**
 
 - **Mutex** on [`TaskManager`](../../src/server/task-manager.ts) writes.
 - Cap in-flight tasks at `dockerPoolSize`.
 - After each parallel task: merge slot branch → `worktreeBase` per Phase 2c.
-- Plan phase unchanged in v1 (plan-parallel slots use same `worktreeBase` when stretch is enabled).
+- Plan phase sequential (plan-parallel research uses pool before worker drain — see 3b.6).
+
+---
+
+## Phase 3b — Continuous pool workers
+
+Replace batch backlog dispatch with a **worker loop** that keeps up to `dockerPoolSize` containers busy on eligible dev/QA work until the queue is drained, limits hit, or the loop stops.
+
+### 3b.0 — Target architecture
+
+```mermaid
+flowchart TB
+  subgraph loop [RalphLoop runLoop]
+    Plan[Plan phase sequential]
+    Worker[runParallelPoolUntilIdle]
+  end
+
+  subgraph pool [DockerPool N slots]
+    S0[Slot 0]
+    S1[Slot 1]
+  end
+
+  Plan --> Worker
+  Worker -->|"acquire slot"| pool
+  pool -->|"pickNextEligible"| Queue[Task queue]
+  Queue -->|"runDevQALoop + slotOpts"| Agent[Container exec]
+  Agent -->|"done or blocked"| Merge[mergeWorktreeBranch]
+  Merge -->|"release slot"| pool
+  Worker -->|"repeat while eligible"| pool
+```
+
+**Worker loop** (spec pseudocode):
+
+```text
+while running && under maxLLMCalls:
+  slot = await pool.acquire()
+  task = pickNextEligible(runningTaskIds)
+  if task is null: pool.release(slot); if no in-flight workers: break or plan; continue
+  mark task in runningTaskIds; createWorktree(slot, worktreeBase)
+  runDevQALoop(task, startAtQa = task.status === 'inQa', slotOpts)
+  mergeWorktreeBranch unless blocked; unmark; pool.release(slot)
+```
+
+Implement in [`ralph-loop.ts`](../../src/server/ralph-loop.ts) or new [`docker-pool-worker.ts`](../../src/server/docker-pool-worker.ts).
+
+### 3b.1 — `pickNextEligible` rules
+
+| Rule | Detail |
+|------|--------|
+| Exclude | `done`, `blocked`, task IDs in `runningTaskIds` |
+| Priority 1 | `inQa` — `runDevQALoop(..., startAtQa: true)`; load existing `feedback` for that `taskId` |
+| Priority 2 | `inProgress` — resume dev/QA loop |
+| Priority 3 | `backlog` — set `inProgress`, set task content, start dev loop |
+| Tie-break | Lowest `id` within tier |
+| Plan gating | Worker drains eligible work before next plan when `!shouldPlan && backlogCount > 0` (replaces skip-plan sequential path) |
+
+### 3b.2 — Refactor [`ralph-loop.ts`](../../src/server/ralph-loop.ts)
+
+| Change | Detail |
+|--------|--------|
+| New helper | `runParallelPoolUntilIdle(settings, totalLLMCalls)` |
+| Replace | Batch `for (const bt of allBacklog)` + `Promise.all` block |
+| Remove | Sequential `resumeTask` pre-loop when `dockerPool` is initialized |
+| Remove | Skip-plan sequential `runDevQALoop` without `slotOpts` when parallel pool active |
+| Keep | Sequential path when `dockerPoolSize === 1` or `!dockerParallelTasks` |
+| `tasksSincePlan` | Increment per task **completed** (`done` or `blocked`), not per batch |
+
+```mermaid
+sequenceDiagram
+  participant RL as RalphLoop
+  participant Pool as DockerPool
+  participant W as Worker
+
+  RL->>RL: plan phase sequential
+  RL->>W: runParallelPoolUntilIdle
+  loop while eligible tasks
+    W->>Pool: acquire
+    W->>W: pickNextEligible inQa inProgress backlog
+    W->>W: runDevQALoop slotOpts
+    W->>W: mergeWorktreeBranch
+    W->>Pool: release
+  end
+  Note over RL: loop finish dockerAutoMergeEpicWork
+```
+
+### 3b.3 — Slot / worktree lifecycle
+
+Reuse Phase 2c:
+
+- `worktreeBase = dockerWorkBranch || epicBaseBranch`
+- `createWorktree(slot, worktreeBase)` before each task on that slot (idempotent)
+- `mergeWorktreeBranch(slot, worktreeBase, workBranch)` after task completes (not when `blocked`)
+- **Blocked:** release slot, no merge; task stays `blocked`
+- **Same slot, next task:** reuses `.ralph/worktrees/slot-<n>`; branch `${worktreeBase}-slot-<n>`
+
+**Cross-restart (v1):** No persisted `taskId → slot` map. On loop restart, eligible `inProgress` / `inQa` tasks may land on any free slot. Document: merge or finish slot work before stop when possible.
+
+### 3b.4 — Task status / UI (`activePoolSlots`)
+
+**Problem:** single `nextTask` in [`StatusData`](../../src/server/task-manager.ts) is overwritten by parallel workers.
+
+**v1 minimum:**
+
+```ts
+activePoolSlots?: Array<{ slot: number; taskId: number; phase: "dev" | "qa" }>;
+```
+
+- Update on acquire/release under `withTaskLock`.
+- Keep `nextTask` as “most recently started” for backward compatibility.
+- Log: `[system] Pool slot N: task #id (phase)`.
+
+**Stretch:** Kanban UI shows multiple in-flight cards — document only.
+
+### 3b.5 — Interaction with plan parallel
+
+When `dockerPlanParallel` runs research sub-jobs:
+
+- Research jobs use the same `DockerPool.acquire()` / `release()`.
+- **v1:** research stage completes and releases all slots **before** `runParallelPoolUntilIdle` starts (no overlap).
+- Document: max concurrent = `dockerPoolSize` if stages ever overlap (future).
 
 ---
 
@@ -626,13 +784,14 @@ Extend **Docker Agent Execution** (and **Settings Defaults** / **CLI flags** as 
 |-------|------------------|
 | Multi-CLI image | `INSTALL_*` build args; example `docker compose build` with env; link to `docker/README.md` for detail |
 | Pool | `dockerPoolSize`, `dockerParallelTasks` in settings table; default `1`; max and resource warning |
-| Parallel tasks | Dev/QA only; requires `useDocker` + pool > 1; worktrees under `.ralph/worktrees/` |
+| Parallel tasks | Dev/QA only; requires `useDocker` + pool > 1; worktrees under `.ralph/worktrees/`; **continuous workers** pull inQa → inProgress → backlog (Phase 3b) |
+| Continuous workers | Pool keeps N slots busy until eligible queue drained; replaces batch backlog-only dispatch |
 | Merge-back | Three layers: slot → work branch (per task) → `epicBaseBranch` (loop end, default on via `dockerAutoMergeEpicWork`); manual merge button for conflicts |
 | Validate | **Set Docker** checks active backend CLI + (when pool > 1) all container indices reachable |
 | Compose scale | `up -d --scale ralph-agent=N` equivalent; recreate after `.env` / build-arg changes |
 | Fleet vs pool | Short note: `/fleet` is per-container Copilot subagents; pool is multiple backlog tasks |
 | CLI flags | `--docker-pool-size`, `--docker-parallel-tasks` (if added in [`cli-args.ts`](../../src/server/cli-args.ts)) |
-| Troubleshooting | Wrong CLI in image, `--index` unsupported (upgrade Compose), slot/work/epic merge conflicts, auto-merge skipped (setting off or isolation off), parallel auto-commit empty (worktree cwd) |
+| Troubleshooting | Wrong CLI in image, `--index` unsupported (upgrade Compose), slot/work/epic merge conflicts, auto-merge skipped (setting off or isolation off), parallel auto-commit empty (worktree cwd), pool idle with inProgress/inQa tasks (enable parallel + pool > 1; Phase 3b) |
 | Nested compose | `dockerMountSocket`, security warning, `INSTALL_DOCKER_CLI`, blocked-task “cannot create containers” |
 | Control panel | Collapsible Docker / Loop / Epic / Prompts; Collapse all / Expand all; per-section Save (dirty-only) and Reset |
 
@@ -644,9 +803,9 @@ Add or expand sections:
 
 1. **Build the image for your backends** — table of `INSTALL_COPILOT` / `INSTALL_CLAUDE` / `INSTALL_GEMINI` / `INSTALL_CURSOR`, sample `.env` + compose build, pinned versions.
 2. **Run a container pool** — `dockerPoolSize`, scale command, verify `docker compose ps` shows N instances.
-3. **Parallel dev/QA and worktrees** — directory layout; slot branch `${worktreeBase}-slot-N`; per-task merge into work branch; loop-end auto-merge into `epicBaseBranch` (`dockerAutoMergeEpicWork`, default on).
+3. **Parallel dev/QA and worktrees** — directory layout; slot branch `${worktreeBase}-slot-N`; per-task merge into work branch; loop-end auto-merge into `epicBaseBranch` (`dockerAutoMergeEpicWork`, default on); **continuous pool workers** (inQa / inProgress / backlog priority).
 4. **Validate from Ralph** — what **Set Docker** probes (per-backend CLI, per-index exec, node/git/pnpm).
-5. **Troubleshooting** — new rows: pool not scaling, exec lands on wrong index, worktree already exists, parallel task file conflicts, slot merge conflict, auto-merge failed (dirty tree / conflicts), auto-commit not on slot branch.
+5. **Troubleshooting** — new rows: pool not scaling, exec lands on wrong index, worktree already exists, parallel task file conflicts, slot merge conflict, auto-merge failed (dirty tree / conflicts), auto-commit not on slot branch, pool idle with open dev/QA tasks (pre-3b batch behavior vs continuous workers).
 6. **Nested Docker (target repo compose)** — enable socket mount, `INSTALL_DOCKER_CLI`, verify `docker info` inside agent, E2E harness checklist, when to use host `useDocker: false` instead.
 
 Keep [Step 2 — authentication](docker/README.md#step-2--add-authentication-env) aligned: every backend env var listed in compose `environment`, not only Copilot.
@@ -665,6 +824,7 @@ Keep [Step 2 — authentication](docker/README.md#step-2--add-authentication-env
 | Image / compose | [`docker/Dockerfile`](../../docker/Dockerfile), [`docker-compose.agents.yml`](../../docker-compose.agents.yml), [`docker/README.md`](../../docker/README.md) |
 | Pool + spawn | [`docker-runner.ts`](../../src/server/docker-runner.ts), new `docker-pool.ts`, tests |
 | Git / merge-back | [`git-manager.ts`](../../src/server/git-manager.ts), [`ralph-loop.ts`](../../src/server/ralph-loop.ts), [`index.ts`](../../src/server/index.ts), [`control-panel-dirty.ts`](../../src/client/control-panel-dirty.ts) |
+| Pool workers (3b) | [`ralph-loop.ts`](../../src/server/ralph-loop.ts), optional [`docker-pool-worker.ts`](../../src/server/docker-pool-worker.ts), [`task-manager.ts`](../../src/server/task-manager.ts) |
 | Loop / LLM | [`ralph-loop.ts`](../../src/server/ralph-loop.ts), [`llm-caller.ts`](../../src/server/llm-caller.ts) |
 | API / UI | [`index.ts`](../../src/server/index.ts), [`DockerSection.tsx`](../../src/client/components/DockerSection.tsx) |
 | Control panel UX | [`ControlPanel.tsx`](../../src/client/components/ControlPanel.tsx), [`CollapsibleSection.tsx`](../../src/client/components/CollapsibleSection.tsx), [`control-panel-dirty.ts`](../../src/client/control-panel-dirty.ts), [`LoopConfigSection.tsx`](../../src/client/components/LoopConfigSection.tsx), [`EpicSection.tsx`](../../src/client/components/EpicSection.tsx), [`PromptsSection.tsx`](../../src/client/components/PromptsSection.tsx), [`App.css`](../../src/client/App.css) |
@@ -683,6 +843,10 @@ Keep [Step 2 — authentication](docker/README.md#step-2--add-authentication-env
 - **Checkout after auto-merge:** loop end leaves repo on `epicBaseBranch`; log clearly for the operator.
 - **Socket mount security:** agents can start arbitrary host containers; default off; call out in UI and README.
 - **Nested compose on locked-down hosts:** Cursor/cloud sandboxes without socket or cgroup rights will still block — same outcome as task #13 `blocked.needs`; not fixable in software alone.
+- **Merge contention:** serializing `mergeWorktreeBranch` via `withTaskLock` may bottleneck parallel workers; acceptable v1.
+- **maxLLMCalls across workers:** aggregate `totalLLMCalls` after each worker completes; re-read limit before dispatching next task.
+- **Plan frequency vs drain:** draining all eligible work each iteration may delay replanning — document interaction with `planFrequency` / `minBacklogSize`.
+- **activePoolSlots vs nextTask:** UI may show only last-started task until Kanban stretch ships.
 
 ---
 
@@ -701,7 +865,11 @@ Keep [Step 2 — authentication](docker/README.md#step-2--add-authentication-env
 6. **Phase 2c** — worktree base + `mergeWorktreeBranch` checkout fix, worktree `autoCommit`, `dockerAutoMergeEpicWork` + `finishRun` merge (after Phase 3 parallel path exists, or in same PR if parallel already shipped)
 7. **Documentation pass** — finalize [`README.md`](../../README.md) and [`docker/README.md`](../../docker/README.md) (pool, parallel, merge-back, nested compose, panel UX, troubleshooting)
 8. **Docker smoke** (optional script, local/CI when `DOCKER_SMOKE=1`) — scaled pool + nested `docker info` inside agent when socket enabled
-9. Phase 4 — plan-phase pool dispatch (stretch PR)
+9. Phase 4 — plan-phase pool dispatch (stretch PR) — **shipped**
+10. **Phase 3b** — continuous pool worker (replace batch dispatch, unify resume/skip-plan, `activePoolSlots` v1)
+11. **Phase 3b docs + tests**
+
+**Remaining epic work:** Phase 3b todos only (`pool-worker-*`). All other frontmatter todos are `completed` in code.
 
 ---
 
@@ -717,7 +885,8 @@ Tests must prove the **new Docker pattern works** without requiring every `npm t
 | **new** [`docker-pool.test.ts`](../../src/server/docker-pool.test.ts) | `ensureDockerPool` passes `--scale`; `listPoolContainers` ordering; `acquireSlot` / `releaseSlot` exhaustion and release |
 | [`llm-caller.test.ts`](../../src/server/llm-caller.test.ts) | Two parallel `call()` with different `dockerContainerIndex`; `stop()` kills all tracked processes; worktree cwd in spawn argv |
 | [`git-manager.test.ts`](../../src/server/git-manager.test.ts) | Create/remove worktree per slot; worktree from `dockerWorkBranch` ref; `mergeWorktreeBranch` checks out target before merge |
-| [`ralph-loop.test.ts`](../../src/server/ralph-loop.test.ts) | When `dockerParallelTasks` + pool 2, dispatches at most two dev paths (mock `LLMCaller`); `finishRun` calls merge when `dockerAutoMergeEpicWork`; skipped when stopped or setting false |
+| [`ralph-loop.test.ts`](../../src/server/ralph-loop.test.ts) | Batch parallel dispatch (v1); `finishRun` auto-merge; **Phase 3b:** inQa + backlog concurrent up to pool size; skip-plan uses pool; no sequential resume when pool on; slot released on blocked |
+| [`task-manager.test.ts`](../../src/server/task-manager.test.ts) | `activePoolSlots` read/write if added (Phase 3b) |
 | [`components.test.tsx`](../../src/client/components/components.test.tsx) | Pool size input; parallel checkbox disabled when `dockerPoolSize === 1`; `dockerAutoMergeEpicWork` in docker dirty pick; **Phase 5** collapse all, dirty Save, Reset |
 | [`cli-args.test.ts`](../../src/server/cli-args.test.ts) or existing pattern | New flags map to settings if added |
 
@@ -750,6 +919,9 @@ Document in README: “CI does not run Docker smoke by default; maintainers run 
 - [ ] Representative target task (compose up + pytest e2e) completes or fails with actionable errors, not “cannot create containers” inside agent
 - [ ] Control panel: Collapse all / Expand all; each section Save disabled until edit; Reset reverts; Save buttons below section fields
 - [ ] Parallel epic with isolation: slot commits merge to work branch; loop end auto-merge lands on `epicBaseBranch`; disable `dockerAutoMergeEpicWork` and use manual merge when testing conflicts
+- [ ] **Phase 3b:** Task in **In QA** + two backlog tasks with pool size 2 — QA and dev run concurrently on different slots
+- [ ] **Phase 3b:** Stop loop with one inProgress task; restart — task resumes via pool (not sequential-only path)
+- [ ] **Phase 3b:** Skip-plan iteration drains multiple backlog items via continuous workers
 
 ```mermaid
 flowchart LR

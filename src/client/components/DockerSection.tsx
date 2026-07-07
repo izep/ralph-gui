@@ -1,5 +1,9 @@
 import { useState } from "react";
-import type { Settings, Readiness } from "../types";
+import type { Settings, Readiness, DockerMergeStrategy } from "../types";
+import {
+  mergesPerTaskToEpicBase,
+  usesWorkBranchStaging,
+} from "../../shared/docker-merge-strategy";
 
 export function DockerSection({
   localSettings,
@@ -68,8 +72,12 @@ export function DockerSection({
     }
   }
 
-  const hasBranchInfo = !!(localSettings.epicBaseBranch && localSettings.dockerWorkBranch);
-  const canMerge = !isRunning && hasBranchInfo && localSettings.useDocker;
+  const perTaskToEpicBase = mergesPerTaskToEpicBase(localSettings);
+  const workBranchStaging = usesWorkBranchStaging(localSettings);
+  const hasBranchInfo = !!localSettings.epicBaseBranch;
+  const hasWorkBranch = !!localSettings.dockerWorkBranch;
+  const canMerge =
+    !isRunning && hasBranchInfo && hasWorkBranch && workBranchStaging && localSettings.useDocker;
 
   return (
     <section className="control-panel__section">
@@ -122,39 +130,75 @@ export function DockerSection({
           />
         </label>
 
-        <label className="cp-field cp-field--row">
-          <input
-            type="checkbox"
-            checked={localSettings.dockerIsolateBranch}
+        <label className="cp-field">
+          <span>Git merge strategy</span>
+          <select
+            value={localSettings.dockerMergeStrategy ?? "work-branch"}
             onChange={(e) =>
-              onChangeSettings({ ...localSettings, dockerIsolateBranch: e.target.checked })
+              onChangeSettings({
+                ...localSettings,
+                dockerMergeStrategy: e.target.value as DockerMergeStrategy,
+              })
             }
             disabled={!localSettings.useDocker}
-          />
-          <span>Isolate on work branch</span>
+          >
+            <option value="work-branch">Work branch (stage, merge at loop end)</option>
+            <option value="epic-base-per-task">Epic base per task (merge each task immediately)</option>
+          </select>
         </label>
-        <p className="cp-hint">
-          Creates a <code>ralph/epic-*</code> branch at loop start so agent commits are
-          isolated from your base branch until you merge.
-        </p>
+        {perTaskToEpicBase ? (
+          <p className="cp-hint">
+            Each parallel agent merges its slot branch into the epic base branch when its task
+            completes. Avoid using <code>main</code> or <code>master</code> as the epic base.
+            Merge conflicts block the task and pause further merges until resolved.
+          </p>
+        ) : (
+          <p className="cp-hint">
+            Stage agent work on a <code>ralph/epic-*</code> branch, then merge into the epic base
+            at loop end (or manually).
+          </p>
+        )}
 
-        {localSettings.dockerIsolateBranch && (
+        {!perTaskToEpicBase && (
           <>
             <label className="cp-field cp-field--row">
               <input
                 type="checkbox"
-                checked={localSettings.dockerAutoMergeEpicWork ?? true}
+                checked={localSettings.dockerIsolateBranch}
                 onChange={(e) =>
-                  onChangeSettings({ ...localSettings, dockerAutoMergeEpicWork: e.target.checked })
+                  onChangeSettings({ ...localSettings, dockerIsolateBranch: e.target.checked })
                 }
                 disabled={!localSettings.useDocker}
               />
-              <span>Automatically merge work into epic branch when loop finishes</span>
+              <span>Isolate on work branch</span>
             </label>
             <p className="cp-hint">
-              When enabled, the work branch is merged into the epic base branch at loop end.
-              Disable to merge manually after reviewing changes.
+              Creates a <code>ralph/epic-*</code> branch at loop start so agent commits are
+              isolated from your base branch until you merge.
             </p>
+
+            {localSettings.dockerIsolateBranch && (
+              <>
+                <label className="cp-field cp-field--row">
+                  <input
+                    type="checkbox"
+                    checked={localSettings.dockerAutoMergeEpicWork ?? true}
+                    onChange={(e) =>
+                      onChangeSettings({
+                        ...localSettings,
+                        dockerAutoMergeEpicWork: e.target.checked,
+                      })
+                    }
+                    disabled={!localSettings.useDocker}
+                  />
+                  <span>Automatically merge work into epic branch when loop finishes</span>
+                </label>
+                <p className="cp-hint">
+                  When enabled, the work branch is merged into the epic base branch at loop end.
+                  Disable to merge manually after reviewing changes.
+                </p>
+              </>
+            )}
           </>
         )}
 
@@ -247,9 +291,11 @@ export function DockerSection({
             <div className="cp-branch">
               Epic base: <code>{localSettings.epicBaseBranch}</code>
             </div>
-            <div className="cp-branch">
-              Work branch: <code>{localSettings.dockerWorkBranch}</code>
-            </div>
+            {hasWorkBranch && (
+              <div className="cp-branch">
+                Work branch: <code>{localSettings.dockerWorkBranch}</code>
+              </div>
+            )}
           </div>
         )}
 
@@ -266,20 +312,22 @@ export function DockerSection({
         )}
         {mergeError && <p className="cp-error">{mergeError}</p>}
 
-        <button
-          className="cp-btn cp-btn--secondary"
-          onClick={handleMergeEpicWork}
-          disabled={!canMerge || merging}
-          title={
-            isRunning
-              ? "Stop the loop before merging"
-              : !hasBranchInfo
-                ? "Start the loop with Docker to capture branch info"
-                : undefined
-          }
-        >
-          {merging ? "Merging..." : "Merge work into epic branch"}
-        </button>
+        {workBranchStaging && (
+          <button
+            className="cp-btn cp-btn--secondary"
+            onClick={handleMergeEpicWork}
+            disabled={!canMerge || merging}
+            title={
+              isRunning
+                ? "Stop the loop before merging"
+                : !hasBranchInfo || !hasWorkBranch
+                  ? "Start the loop with Docker to capture branch info"
+                  : undefined
+            }
+          >
+            {merging ? "Merging..." : "Merge work into epic branch"}
+          </button>
+        )}
       </fieldset>
 
       {(onSaveDocker || onResetDocker) && (

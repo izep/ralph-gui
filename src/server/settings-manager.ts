@@ -3,6 +3,13 @@ import { readFile, writeFile } from "fs/promises";
 import path from "path";
 import { normalizeAgentBackend, type AgentBackendId } from "./llm-caller.js";
 import { normalizeSettingsModels, type SavedModelsByBackend } from "../shared/agent-models.js";
+import {
+  DEFAULT_DOCKER_MERGE_STRATEGY,
+  normalizeDockerMergeStrategy,
+  type DockerMergeStrategy,
+} from "../shared/docker-merge-strategy.js";
+
+export type { DockerMergeStrategy };
 
 export type TaskColumnSort =
   | "updatedAtAsc"
@@ -32,6 +39,8 @@ export interface Settings {
   epicBaseBranch: string;
   dockerWorkBranch: string;
   dockerIsolateBranch: boolean;
+  /** work-branch: stage on ralph/epic-* then merge at loop end; epic-base-per-task: merge each task into epic base */
+  dockerMergeStrategy: DockerMergeStrategy;
   // Container pool — parallel dev/QA tasks in separate containers
   dockerPoolSize: number;
   dockerParallelTasks: boolean;
@@ -70,6 +79,7 @@ export const DEFAULT_SETTINGS: Settings = {
   epicBaseBranch: "",
   dockerWorkBranch: "",
   dockerIsolateBranch: true,
+  dockerMergeStrategy: DEFAULT_DOCKER_MERGE_STRATEGY,
   dockerPoolSize: 1,
   dockerParallelTasks: false,
   dockerPlanParallel: false,
@@ -131,6 +141,7 @@ export class SettingsManager {
       merged.devModel = normalizedModels.devModel;
       merged.qaModel = normalizedModels.qaModel;
       merged.savedModelsByBackend = normalizedModels.savedModelsByBackend;
+      merged.dockerMergeStrategy = normalizeDockerMergeStrategy(parsed.dockerMergeStrategy);
 
       return merged;
     } catch {

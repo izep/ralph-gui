@@ -5,6 +5,7 @@ const DOCKER_KEYS: ReadonlyArray<keyof Settings> = [
   "dockerComposeFile",
   "dockerService",
   "dockerIsolateBranch",
+  "dockerMergeStrategy",
   "dockerPoolSize",
   "dockerParallelTasks",
   "dockerMountSocket",

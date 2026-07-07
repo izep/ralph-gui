@@ -25,6 +25,11 @@ import {
   resolveDockerSocketPath,
 } from "./docker-runner.js";
 import { DockerPool, ensureDockerPool } from "./docker-pool.js";
+import {
+  isProtectedEpicBaseBranch,
+  mergesPerTaskToEpicBase,
+  usesWorkBranchStaging,
+} from "../shared/docker-merge-strategy.js";
 
 const DEFAULT_EPIC_NORMALIZED = DEFAULT_EPIC.replace(/\r\n/g, "\n").trim();
 
@@ -51,6 +56,8 @@ export class RalphLoop {
   private llmCaller: LLMCaller;
   private completedEpic = false;
   private dockerPool: DockerPool | null = null;
+  /** When true, per-task merges into epic base are paused after a conflict. */
+  private epicBaseMergePaused = false;
   /** Simple async mutex for TaskManager writes during parallel execution. */
   private taskWriteLock: Promise<void> = Promise.resolve();
 
@@ -254,8 +261,37 @@ export class RalphLoop {
 
       const epicBaseBranch = currentBranch;
       let dockerWorkBranch = settings.dockerWorkBranch;
+      const perTaskToEpicBase = mergesPerTaskToEpicBase(settings);
 
-      if (settings.dockerIsolateBranch) {
+      if (perTaskToEpicBase) {
+        if (await this.gitManager.hasMergeInProgress()) {
+          return {
+            ok: false,
+            error:
+              `Branch '${epicBaseBranch}' has a merge in progress. ` +
+              "Resolve or abort the merge before starting the loop.",
+          };
+        }
+        if (isProtectedEpicBaseBranch(epicBaseBranch)) {
+          this.cb.onLog(
+            `[system] Warning: epic base branch is '${epicBaseBranch}'. ` +
+            "Per-task merges will land directly on this branch. Prefer a dedicated integration branch.",
+          );
+        }
+        try {
+          await this.gitManager.createOrCheckoutBranch(epicBaseBranch, epicBaseBranch);
+          this.cb.onLog(
+            `[system] Merge strategy: per-task into epic base (${epicBaseBranch}). ` +
+            "Parallel slots merge after each task completes.",
+          );
+        } catch (err) {
+          return {
+            ok: false,
+            error: `Failed to check out epic base branch '${epicBaseBranch}': ${String(err)}`,
+          };
+        }
+        dockerWorkBranch = "";
+      } else if (usesWorkBranchStaging(settings)) {
         // Generate a deterministic work branch name if not already set
         if (!dockerWorkBranch || dockerWorkBranch === currentBranch) {
           const epicSlug = path.basename(settings.epicFile || "epic").replace(/\.[^.]+$/, "");
@@ -277,11 +313,12 @@ export class RalphLoop {
       await this.settingsManager.write({
         ...settings,
         epicBaseBranch,
-        dockerWorkBranch: settings.dockerIsolateBranch ? dockerWorkBranch : "",
+        dockerWorkBranch: usesWorkBranchStaging(settings) ? dockerWorkBranch : "",
       });
     }
 
     const runId = ++this.runGeneration;
+    this.epicBaseMergePaused = false;
     this.running = true;
     this.completedEpic = false;
     this.stopRequestedRunId = null;
@@ -586,7 +623,7 @@ export class RalphLoop {
             try {
               const epicBase =
                 settings.epicBaseBranch || (await this.gitManager.getCurrentBranch());
-              const worktreeBase = settings.dockerWorkBranch || epicBase;
+              const worktreeBase = this.resolveWorktreeBase(settings, epicBase);
               try {
                 await this.gitManager.createWorktree(slot, worktreeBase);
               } catch {
@@ -656,7 +693,7 @@ export class RalphLoop {
 
           // Create worktree for the slot (idempotent).
           const epicBase = settings.epicBaseBranch || (await this.gitManager.getCurrentBranch());
-          const worktreeBase = settings.dockerWorkBranch || epicBase;
+          const worktreeBase = this.resolveWorktreeBase(settings, epicBase);
           try {
             await this.gitManager.createWorktree(slot, worktreeBase);
           } catch (err) {
@@ -675,17 +712,16 @@ export class RalphLoop {
             .then(async (r) => {
               totalLLMCalls = r.totalLLMCalls;
               tasksSincePlan++;
-              // Merge slot branch back to work branch.
-              const workBranch = settings.dockerWorkBranch || epicBase;
-              try {
-                await this.withTaskLock(() =>
-                  this.gitManager.mergeWorktreeBranch(slot, worktreeBase, workBranch),
-                );
-              } catch (err) {
-                this.cb.onLog(
-                  `[system] Warning: merge-back for slot ${slot} failed: ${err}. Resolve manually.`,
-                );
-              }
+              await this.mergeSlotWorkBack({
+                settings,
+                slot,
+                worktreeBase,
+                epicBase,
+                taskId,
+                taskTitle,
+                totalLLMCalls,
+                maxLLMCalls: settings.maxLLMCalls,
+              });
             })
             .finally(() => pool.release(slot));
 
@@ -937,7 +973,7 @@ export class RalphLoop {
 
   private async buildPrompt(
     templateName: string,
-    _settings: Settings,
+    settings: Settings,
     options?: { task?: string; feedback?: string }
   ): Promise<string> {
     const SEP = "\n---\n";
@@ -965,7 +1001,137 @@ export class RalphLoop {
     // Prompt template (already has its own heading)
     parts.push(await this.fileManager.read(templateName));
 
+    if (
+      templateName === "plan-prompt.md" &&
+      settings.useDocker &&
+      settings.dockerParallelTasks &&
+      (settings.dockerPoolSize ?? 1) > 1
+    ) {
+      const poolSize = settings.dockerPoolSize ?? 1;
+      const minBacklog = settings.minBacklogSize ?? 3;
+      parts.push(
+        `## Parallel Docker pool\n\n` +
+        `Ralph runs up to ${poolSize} backlog tasks concurrently in separate Docker containers. ` +
+        `When work remains, emit at least ${minBacklog} independent, non-overlapping backlog tasks in your JSON array ` +
+        `(ideally up to ${poolSize} tasks that can run in parallel without file conflicts). ` +
+        `A single backlog task uses only one container; multiple tasks are required to use the full pool.`,
+      );
+    }
+
     return parts.join(SEP);
+  }
+
+  private resolveWorktreeBase(settings: Settings, epicBase: string): string {
+    if (mergesPerTaskToEpicBase(settings)) {
+      return epicBase;
+    }
+    return settings.dockerWorkBranch || epicBase;
+  }
+
+  private resolveSlotMergeTarget(settings: Settings, epicBase: string): string {
+    if (mergesPerTaskToEpicBase(settings)) {
+      return epicBase;
+    }
+    return settings.dockerWorkBranch || epicBase;
+  }
+
+  private async mergeSlotWorkBack(args: {
+    settings: Settings;
+    slot: number;
+    worktreeBase: string;
+    epicBase: string;
+    taskId: number;
+    taskTitle: string;
+    totalLLMCalls: number;
+    maxLLMCalls: number;
+  }): Promise<void> {
+    const { settings, slot, worktreeBase, epicBase, taskId, taskTitle, totalLLMCalls, maxLLMCalls } =
+      args;
+    const mergeTarget = this.resolveSlotMergeTarget(settings, epicBase);
+    const perTaskToEpicBase = mergesPerTaskToEpicBase(settings);
+
+    if (perTaskToEpicBase && this.epicBaseMergePaused) {
+      this.cb.onLog(
+        `[system] Skipping merge for slot ${slot} (task #${taskId}): epic base merge paused after a prior conflict.`,
+      );
+      await this.blockTaskForMergeConflict(taskId, taskTitle, totalLLMCalls, maxLLMCalls, slot, mergeTarget, []);
+      return;
+    }
+
+    let result: { ok: boolean; conflicts?: string[] };
+    try {
+      result = await this.withTaskLock(() =>
+        this.gitManager.mergeWorktreeBranch(slot, worktreeBase, mergeTarget),
+      );
+    } catch (err) {
+      this.cb.onLog(
+        `[system] Warning: merge-back for slot ${slot} failed: ${err}. Resolve manually.`,
+      );
+      if (perTaskToEpicBase) {
+        this.epicBaseMergePaused = true;
+        await this.blockTaskForMergeConflict(taskId, taskTitle, totalLLMCalls, maxLLMCalls, slot, mergeTarget, []);
+      }
+      return;
+    }
+
+    if (result.ok) {
+      const targetLabel = perTaskToEpicBase ? "epic base" : "work branch";
+      this.cb.onLog(
+        `[system] Merged slot ${slot} into ${targetLabel}: ${worktreeBase}-slot-${slot} -> ${mergeTarget}`,
+      );
+      return;
+    }
+
+    const conflictList = (result.conflicts ?? []).join(", ") || "(unknown)";
+    this.cb.onLog(
+      `[system] Merge conflict for slot ${slot} into ${mergeTarget}. Conflicting files: ${conflictList}`,
+    );
+
+    if (perTaskToEpicBase) {
+      this.epicBaseMergePaused = true;
+      await this.blockTaskForMergeConflict(
+        taskId,
+        taskTitle,
+        totalLLMCalls,
+        maxLLMCalls,
+        slot,
+        mergeTarget,
+        result.conflicts ?? [],
+      );
+    }
+  }
+
+  private async blockTaskForMergeConflict(
+    taskId: number,
+    taskTitle: string,
+    totalLLMCalls: number,
+    maxLLMCalls: number,
+    slot: number,
+    mergeTarget: string,
+    conflicts: string[],
+  ): Promise<void> {
+    const conflictDetail =
+      conflicts.length > 0 ? ` Files: ${conflicts.join(", ")}.` : "";
+    await this.withTaskLock(() =>
+      this.taskManager.setTaskStatus(
+        taskId,
+        "blocked",
+        totalLLMCalls,
+        maxLLMCalls,
+        taskTitle,
+        "",
+        0,
+        {
+          summary: `Git merge conflict merging slot ${slot} into ${mergeTarget}`,
+          impact: `Task #${taskId} work could not be merged into the epic base branch.${conflictDetail}`,
+          nextStep:
+            "Resolve merge conflicts in the repository (complete or abort the merge), then restart the loop or mark the task resolved.",
+          needs: "Manual git conflict resolution",
+          capturedAt: new Date().toISOString(),
+        },
+      ),
+    );
+    this.cb.onLog(`[system] Task #${taskId} blocked due to merge conflict. Further epic-base merges are paused.`);
   }
 
   private async autoMergeOnFinish(runId: number): Promise<void> {
@@ -974,10 +1140,10 @@ export class RalphLoop {
       return;
     }
     const settings = await this.settingsManager.read();
-    const { useDocker, dockerIsolateBranch, dockerAutoMergeEpicWork, epicBaseBranch, dockerWorkBranch } = settings;
+    const { useDocker, dockerAutoMergeEpicWork, epicBaseBranch, dockerWorkBranch } = settings;
     if (
       !useDocker ||
-      !dockerIsolateBranch ||
+      !usesWorkBranchStaging(settings) ||
       !dockerAutoMergeEpicWork ||
       !epicBaseBranch ||
       !dockerWorkBranch ||

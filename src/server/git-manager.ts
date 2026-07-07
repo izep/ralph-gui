@@ -56,6 +56,24 @@ export class GitManager {
     await this.runGit(["checkout", "-B", branchName, fromBranch]);
   }
 
+  /** True when the repo (or optional cwd) has an in-progress merge or unresolved conflicts. */
+  async hasMergeInProgress(cwd?: string): Promise<boolean> {
+    try {
+      await this.runGit(["rev-parse", "-q", "--verify", "MERGE_HEAD"], cwd);
+      return true;
+    } catch {
+      // No MERGE_HEAD — fall through to porcelain check.
+    }
+    try {
+      const status = await this.runGit(["status", "--porcelain"], cwd);
+      return status
+        .split("\n")
+        .some((line) => line.startsWith("UU ") || line.startsWith("AA ") || line.startsWith("DD "));
+    } catch {
+      return false;
+    }
+  }
+
   async mergeWorkBranch(
     workBranch: string,
     strategy: "no-ff" | "ff" = "no-ff",

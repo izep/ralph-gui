@@ -242,6 +242,34 @@ describe("GitManager.autoCommit with cwd", () => {
 // GitManager.mergeWorktreeBranch checks out targetBranch before merging
 // ---------------------------------------------------------------------------
 
+describe("GitManager.hasMergeInProgress", () => {
+  it("returns false when no merge is in progress", async () => {
+    expect(await gitManager.hasMergeInProgress()).toBe(false);
+  });
+
+  it("returns true while a merge has conflicts left unresolved", async () => {
+    const root = (await gitManager.getCurrentBranch()) || "main";
+    git(`branch merge-a ${root}`);
+    git(`branch merge-b ${root}`);
+    git("checkout merge-a");
+    await writeFile(path.join(tmpDir, "both.txt"), "a", "utf-8");
+    git("add both.txt");
+    git('commit -m "a"');
+    git("checkout merge-b");
+    await writeFile(path.join(tmpDir, "both.txt"), "b", "utf-8");
+    git("add both.txt");
+    git('commit -m "b"');
+    git("checkout merge-a");
+    try {
+      execSync("git merge merge-b", { cwd: tmpDir, encoding: "utf-8", stdio: "pipe" });
+    } catch {
+      // expected conflict
+    }
+    expect(await gitManager.hasMergeInProgress()).toBe(true);
+    git("merge --abort");
+  });
+});
+
 describe("GitManager.mergeWorktreeBranch checkout behavior", () => {
   it("checks out targetBranch before merging slot branch", async () => {
     const baseBranch = await gitManager.getCurrentBranch();

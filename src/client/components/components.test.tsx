@@ -271,6 +271,7 @@ const defaultSettings: Settings = {
   epicBaseBranch: "",
   dockerWorkBranch: "",
   dockerIsolateBranch: true,
+  dockerMergeStrategy: "work-branch",
   dockerPoolSize: 1,
   dockerParallelTasks: false,
   dockerPlanParallel: false,
@@ -1010,5 +1011,22 @@ describe("ControlPanel Phase 5: collapsible and dirty/save/reset UX", () => {
     fireEvent.click(checkbox);
     expect(screen.getByRole("button", { name: /save docker/i })).not.toBeDisabled();
     expect(screen.getByRole("button", { name: /save loop settings/i })).toBeDisabled();
+  });
+
+  // --- dockerMergeStrategy ---
+
+  it("hides isolate and manual merge when epic-base-per-task strategy is selected", () => {
+    renderPanel({ useDocker: true, dockerMergeStrategy: "epic-base-per-task" });
+    expect(screen.queryByLabelText(/isolate on work branch/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /merge work into epic branch/i })).toBeNull();
+    expect(screen.getByText(/merge each task immediately/i)).toBeInTheDocument();
+  });
+
+  it("changing dockerMergeStrategy enables Save Docker", () => {
+    renderPanel({ useDocker: true, dockerMergeStrategy: "work-branch" });
+    fireEvent.change(screen.getByLabelText(/git merge strategy/i), {
+      target: { value: "epic-base-per-task" },
+    });
+    expect(screen.getByRole("button", { name: /save docker/i })).not.toBeDisabled();
   });
 });

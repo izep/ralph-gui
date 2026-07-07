@@ -626,15 +626,47 @@ body {
 
 .control-panel__header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  gap: 10px;
   padding: 14px 16px;
   border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+}
+
+.control-panel__header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
 .control-panel__header h2 {
   font-size: 14px;
   font-weight: 600;
+}
+
+.control-panel__header-toolbar {
+  display: flex;
+  gap: 8px;
+}
+
+.control-panel__toolbar-btn {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.control-panel__toolbar-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 .control-panel__close {
@@ -659,13 +691,27 @@ body {
 .collapsible-section {
   transition: background 0.15s;
 }
+
 .collapsible-section__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   cursor: pointer;
+  user-select: none;
+  border-radius: 4px;
+  margin: -4px;
+  padding: 4px;
 }
+
+.collapsible-section__header:hover {
+  background: var(--surface-hover);
+}
+
+.collapsible-section__header:hover h3 {
+  color: var(--text);
+}
+
 .collapsible-section__header h3 {
   font-size: 12px;
   font-weight: 600;
@@ -674,16 +720,33 @@ body {
   color: var(--text-dim);
   margin: 0;
 }
+
 .collapsible-section__chevron {
-  display: inline-block;
-  transition: transform 0.18s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 9px;
+  color: var(--accent);
+  flex-shrink: 0;
+  transition: transform 0.18s ease, border-color 0.15s, color 0.15s;
 }
+
+.collapsible-section__header:hover .collapsible-section__chevron {
+  border-color: var(--accent);
+}
+
 .collapsible-section--expanded .collapsible-section__chevron {
   transform: rotate(180deg);
 }
+
 .collapsible-section__body {
   margin-top: 12px;
 }
+
 .collapsible-section--collapsed .collapsible-section__body {
   display: none;
 }
@@ -1038,6 +1101,7 @@ body {
   gap: 8px;
   flex-direction: column;
 }
+
 /* Section save/reset footer */
 .section-footer {
   display: flex;

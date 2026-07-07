@@ -39,6 +39,7 @@ const DEFAULT_SETTINGS: Settings = {
   epicBaseBranch: "",
   dockerWorkBranch: "",
   dockerIsolateBranch: true,
+  dockerMergeStrategy: "work-branch",
   dockerPoolSize: 1,
   dockerParallelTasks: false,
   dockerPlanParallel: false,

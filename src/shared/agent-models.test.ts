@@ -24,11 +24,11 @@ describe('agent-models catalog', () => {
   });
 
   it('cursor-agent uses cursor-agent CLI model IDs', () => {
-    expect(getPreferredModels('cursor-agent').planModel).toBe('claude-4.6-sonnet-medium');
+    expect(getPreferredModels('cursor-agent').planModel).toBe('claude-sonnet-5-thinking-high');
     expect(isModelInCatalog('cursor-agent', 'claude-sonnet-4.6')).toBe(false);
-    expect(isModelInCatalog('cursor-agent', 'claude-4.6-sonnet-medium')).toBe(true);
+    expect(isModelInCatalog('cursor-agent', 'claude-sonnet-5-thinking-high')).toBe(true);
     const cursorPlan = AGENT_MODEL_CATALOG['cursor-agent'].find(
-      (e) => e.id === 'claude-4.6-sonnet-medium',
+      (e) => e.id === 'claude-sonnet-5-thinking-high',
     );
     expect(cursorPlan?.preferredFor).toContain('Planning');
   });
@@ -46,14 +46,14 @@ describe('agent-models catalog', () => {
     expect(getPreferredModels('copilot').planModel).toBe('claude-sonnet-4.6');
   });
 
-  it('gemini catalog uses Gemini 2.5+ IDs', () => {
+  it('gemini catalog uses Gemini 3 preview IDs for preferred roles', () => {
     expect(getPreferredModels('gemini')).toEqual({
-      planModel: 'gemini-2.5-pro',
-      devModel: 'gemini-2.5-flash',
-      qaModel: 'gemini-2.5-flash',
+      planModel: 'gemini-3-pro-preview',
+      devModel: 'gemini-3-flash-preview',
+      qaModel: 'gemini-3-flash-preview',
     });
     expect(isModelInCatalog('gemini', 'gemini-2.0-flash')).toBe(false);
-    expect(isModelInCatalog('gemini', 'gemini-2.5-flash')).toBe(true);
+    expect(isModelInCatalog('gemini', 'gemini-3-flash-preview')).toBe(true);
   });
 
   it('opencode catalog uses OpenCode Zen free model IDs', () => {
@@ -67,9 +67,9 @@ describe('agent-models catalog', () => {
   });
 
   it('normalizeModelId maps legacy IDs to current catalog entries', () => {
-    expect(normalizeModelId('cursor-agent', 'claude-sonnet-4.6')).toBe('claude-4.6-sonnet-medium');
+    expect(normalizeModelId('cursor-agent', 'claude-sonnet-4.6')).toBe('claude-sonnet-5-thinking-high');
     expect(normalizeModelId('claude', 'claude-sonnet-4.6')).toBe('claude-sonnet-4-6');
-    expect(normalizeModelId('gemini', 'gemini-2.0-auto')).toBe('gemini-2.5-pro');
+    expect(normalizeModelId('gemini', 'gemini-2.0-auto')).toBe('gemini-3-pro-preview');
   });
 
   it('formatModelOptionLabel uses (id) Model -- recommendation', () => {
@@ -96,7 +96,7 @@ describe('agent-models catalog', () => {
       },
     };
     expect(resolveModelsForBackend('cursor-agent', saved)).toEqual({
-      planModel: 'claude-4.6-sonnet-medium',
+      planModel: 'claude-sonnet-5-thinking-high',
       devModel: 'gpt-5-mini',
       qaModel: 'gpt-5-mini',
     });
@@ -110,9 +110,9 @@ describe('agent-models catalog', () => {
       'gemini-2.0-flash',
       {},
     );
-    expect(result.planModel).toBe('gemini-2.5-pro');
-    expect(result.devModel).toBe('gemini-2.5-flash');
-    expect(result.qaModel).toBe('gemini-2.5-flash');
+    expect(result.planModel).toBe('gemini-3-pro-preview');
+    expect(result.devModel).toBe('gemini-3-flash-preview');
+    expect(result.qaModel).toBe('gemini-3-flash-preview');
   });
 
   it('resolveModelsForBackend falls back to preferred when no saved entry', () => {

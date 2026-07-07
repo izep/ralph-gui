@@ -145,7 +145,7 @@ export function ControlPanel({
     if (!result.ok) setRepoError(result.error ?? "Failed to set repository");
   }
 
-  const [expandedMap, setExpandedMap] = useState<Record<'docker'|'loop'|'epic'|'prompts', boolean>>({
+  const [expandedMap, setExpandedMap] = useState<Record<'docker' | 'loop' | 'epic' | 'prompts', boolean>>({
     docker: true,
     loop: true,
     epic: true,
@@ -158,28 +158,29 @@ export function ControlPanel({
   function expandAll() {
     setExpandedMap({ docker: true, loop: true, epic: true, prompts: true });
   }
-  function toggle(id: 'docker'|'loop'|'epic'|'prompts') {
+  function toggle(id: 'docker' | 'loop' | 'epic' | 'prompts') {
     setExpandedMap((m) => ({ ...m, [id]: !m[id] }));
   }
 
   return (
     <aside className="control-panel">
       <div className="control-panel__header">
-        <h2>Settings</h2>
-        {canClose && (
-          <button className="control-panel__close" onClick={onClose}>
-            &times;
+        <div className="control-panel__header-top">
+          <h2>Settings</h2>
+          {canClose && (
+            <button className="control-panel__close" onClick={onClose} type="button" aria-label="Close settings">
+              &times;
+            </button>
+          )}
+        </div>
+        <div className="control-panel__header-toolbar">
+          <button className="control-panel__toolbar-btn" onClick={collapseAll} type="button">
+            Collapse all
           </button>
-        )}
-      </div>
-
-      <div className="control-panel__header-toolbar" style={{ padding: '8px 16px', display: 'flex', gap: 8 }}>
-        <button className="loop-btn" onClick={collapseAll} type="button">
-          Collapse all
-        </button>
-        <button className="loop-btn" onClick={expandAll} type="button">
-          Expand all
-        </button>
+          <button className="control-panel__toolbar-btn" onClick={expandAll} type="button">
+            Expand all
+          </button>
+        </div>
       </div>
 
       <RepositorySection

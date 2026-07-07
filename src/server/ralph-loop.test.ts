@@ -7,10 +7,10 @@ vi.mock("./docker-pool.js", () => {
     counter: number;
     released: number[];
     constructor(size: number) { this.size = size; this.counter = 0; this.released = []; }
-    init(): void {}
+    init(): void { }
     acquire(): Promise<number> { return Promise.resolve(this.counter++); }
     release(slot: number): void { this.released.push(slot); }
-    stopAll(): void {}
+    stopAll(): void { }
   }
   return { ensureDockerPool: vi.fn(() => Promise.resolve()), DockerPool: MockDockerPool };
 });
@@ -58,6 +58,7 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await rm(tmpDir, { recursive: true, force: true });
 });
 
@@ -226,7 +227,7 @@ describe("RalphLoop.checkRequirements", () => {
     const result = await loop.checkRequirements();
     // On case-insensitive filesystems (macOS), the first candidate
     // "requirements.md" matches so the returned name is lowercase.
-    expect(result).toMatch(/^(requirements\.md|REQUIREMENTS\.md)$/);  
+    expect(result).toMatch(/^(requirements\.md|REQUIREMENTS\.md)$/);
   });
 
   it("finds requirements in docs/ subdirectory", async () => {
@@ -960,7 +961,7 @@ describe("RalphLoop auto-merge on loop end", () => {
     vi.spyOn(sm.SettingsManager.prototype, "read").mockResolvedValue(autoMergeSettings);
 
     // Stub runLoop to complete immediately
-    (loop as any).runLoop = async () => {};
+    (loop as any).runLoop = async () => { };
 
     const startRes = await loop.start();
     expect(startRes.ok).toBe(true);
@@ -1003,7 +1004,7 @@ describe("RalphLoop auto-merge on loop end", () => {
     const sm = await import("./settings-manager.js");
     vi.spyOn(sm.SettingsManager.prototype, "read").mockResolvedValue(noMergeSettings);
 
-    (loop as any).runLoop = async () => {};
+    (loop as any).runLoop = async () => { };
 
     await loop.start();
     await new Promise((r) => setTimeout(r, 100));
@@ -1088,7 +1089,7 @@ describe("RalphLoop auto-merge on loop end", () => {
     const sm = await import("./settings-manager.js");
     vi.spyOn(sm.SettingsManager.prototype, "read").mockResolvedValue(autoMergeSettings);
 
-    (loop as any).runLoop = async () => {};
+    (loop as any).runLoop = async () => { };
 
     await loop.start();
     await new Promise((r) => setTimeout(r, 100));
@@ -1097,5 +1098,147 @@ describe("RalphLoop auto-merge on loop end", () => {
     expect(cb.logs.some((l) => l.includes("src/foo.ts"))).toBe(true);
     // Loop should still finish as idle (not error)
     expect(cb.statuses.some((s) => s.status === "idle")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// epic-base-per-task merge strategy
+// ---------------------------------------------------------------------------
+
+describe("RalphLoop epic-base-per-task merge strategy", () => {
+  it("blocks start when epic base has a merge in progress", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic("# Epic\n\nMerge guard test.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      useDocker: true,
+      dockerMergeStrategy: "epic-base-per-task" as const,
+    };
+    await writeFile(path.join(tmpDir, "ralph", "settings.json"), JSON.stringify(settings), "utf-8");
+
+    const gitMod = await import("./git-manager.js");
+    vi.spyOn(gitMod.GitManager.prototype, "getCurrentBranch").mockResolvedValue("main");
+    vi.spyOn(gitMod.GitManager.prototype, "hasAnyCommits").mockResolvedValue(true);
+    vi.spyOn(gitMod.GitManager.prototype, "hasMergeInProgress").mockResolvedValue(true);
+
+    const startRes = await loop.start();
+    expect(startRes.ok).toBe(false);
+    expect(startRes.error).toMatch(/merge in progress/i);
+  });
+
+  it("skips loop-end auto-merge for epic-base-per-task strategy", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic("# Epic\n\nPer-task merge test.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+
+    const perTaskSettings = {
+      ...DEFAULT_SETTINGS,
+      useDocker: true,
+      dockerMergeStrategy: "epic-base-per-task" as const,
+      epicBaseBranch: "main",
+      dockerWorkBranch: "",
+    };
+    await writeFile(
+      path.join(tmpDir, "ralph", "settings.json"),
+      JSON.stringify(perTaskSettings),
+      "utf-8",
+    );
+
+    const gitMod = await import("./git-manager.js");
+    vi.spyOn(gitMod.GitManager.prototype, "getCurrentBranch").mockResolvedValue("main");
+    vi.spyOn(gitMod.GitManager.prototype, "hasAnyCommits").mockResolvedValue(true);
+    vi.spyOn(gitMod.GitManager.prototype, "hasMergeInProgress").mockResolvedValue(false);
+    vi.spyOn(gitMod.GitManager.prototype, "createOrCheckoutBranch").mockResolvedValue(undefined);
+    const mergeWorkSpy = vi
+      .spyOn(gitMod.GitManager.prototype, "mergeWorkBranch")
+      .mockResolvedValue({ ok: true });
+    mergeWorkSpy.mockClear();
+
+    const sm = await import("./settings-manager.js");
+    vi.spyOn(sm.SettingsManager.prototype, "read").mockResolvedValue(perTaskSettings);
+
+    (loop as any).runLoop = async () => { };
+
+    const startRes = await loop.start();
+    expect(startRes.ok).toBe(true);
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(mergeWorkSpy).not.toHaveBeenCalled();
+    expect(cb.logs.some((l) => l.includes("Merge strategy: per-task into epic base"))).toBe(true);
+  });
+
+  it("merges parallel slots into epic base branch", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic("# Epic\n\nParallel per-task merge.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      useDocker: true,
+      dockerPoolSize: 2,
+      dockerParallelTasks: true,
+      dockerMergeStrategy: "epic-base-per-task" as const,
+      epicBaseBranch: "integration",
+      minBacklogSize: 3,
+    };
+    await writeFile(path.join(tmpDir, "ralph", "settings.json"), JSON.stringify(settings), "utf-8");
+
+    const status = {
+      tasks: [
+        { id: 1, title: "Task One", description: "Do one", status: "backlog", devIterations: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        { id: 2, title: "Task Two", description: "Do two", status: "backlog", devIterations: 0, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+      ],
+      currentTaskNum: 0,
+      totalLLMCalls: 0,
+      maxLLMCalls: 100,
+      nextTask: { taskId: null, content: "", updatedAt: new Date().toISOString() },
+      feedback: { taskId: null, content: "", updatedAt: new Date().toISOString() },
+      lastUpdated: new Date().toISOString(),
+    };
+    await writeFile(path.join(tmpDir, "ralph", "task-status.json"), JSON.stringify(status), "utf-8");
+
+    const gitMod = await import("./git-manager.js");
+    vi.spyOn(gitMod.GitManager.prototype, "getCurrentBranch").mockResolvedValue("integration");
+    vi.spyOn(gitMod.GitManager.prototype, "hasAnyCommits").mockResolvedValue(true);
+    vi.spyOn(gitMod.GitManager.prototype, "hasMergeInProgress").mockResolvedValue(false);
+    vi.spyOn(gitMod.GitManager.prototype, "createOrCheckoutBranch").mockResolvedValue(undefined);
+    vi.spyOn(gitMod.GitManager.prototype, "createWorktree").mockResolvedValue("/workspace/.ralph/worktrees/slot-0");
+    const mergeWorktreeSpy = vi
+      .spyOn(gitMod.GitManager.prototype, "mergeWorktreeBranch")
+      .mockResolvedValue({ ok: true });
+
+    const sm = await import("./settings-manager.js");
+    const loopSettings = {
+      ...settings,
+      epicBaseBranch: "integration",
+      dockerWorkBranch: "",
+    };
+    vi.spyOn(sm.SettingsManager.prototype, "read").mockResolvedValue(loopSettings);
+
+    (loop as any).runDevQALoop = async () => {
+      await new Promise((r) => setTimeout(r, 50));
+      return { totalLLMCalls: 1 };
+    };
+
+    const llmMod = await import("./llm-caller.js");
+    vi.spyOn(llmMod.LLMCaller.prototype, "call").mockImplementation(async () => "OK");
+
+    const startRes = await loop.start();
+    expect(startRes.ok).toBe(true);
+    await new Promise((r) => setTimeout(r, 400));
+
+    expect(mergeWorktreeSpy).toHaveBeenCalled();
+    for (const [, base, target] of mergeWorktreeSpy.mock.calls) {
+      expect(base).toBe("integration");
+      expect(target).toBe("integration");
+    }
   });
 });

@@ -56,6 +56,8 @@ export interface LoopStatus {
 
 export type AgentBackendId = "copilot" | "cursor-agent" | "claude" | "gemini" | "opencode";
 
+export type DockerMergeStrategy = "work-branch" | "epic-base-per-task";
+
 export type TaskColumnSort =
   | "updatedAtAsc"
   | "updatedAtDesc"
@@ -80,6 +82,7 @@ export interface Settings {
   epicBaseBranch: string;
   dockerWorkBranch: string;
   dockerIsolateBranch: boolean;
+  dockerMergeStrategy: DockerMergeStrategy;
   dockerPoolSize: number;
   dockerParallelTasks: boolean;
   /** Dispatch parallel research sub-jobs during the plan phase (stretch) */
