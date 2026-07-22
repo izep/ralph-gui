@@ -718,7 +718,7 @@ describe("LoopConfigSection model dropdowns", () => {
     const settings: Settings = {
       ...defaultSettings,
       agentBackend: "cursor-agent",
-      planModel: "claude-4.6-sonnet-medium",
+      planModel: "claude-sonnet-5-thinking-high",
       devModel: "gpt-5-mini",
       qaModel: "gpt-5-mini",
     };
@@ -732,7 +732,7 @@ describe("LoopConfigSection model dropdowns", () => {
     );
     expect(
       screen.getByText(
-        /\(claude-4\.6-sonnet-medium\) Claude Sonnet 4\.6 -- recommended for planning/,
+        /\(claude-sonnet-5-thinking-high\) Claude Sonnet 5 -- recommended for planning/,
       ),
     ).toBeInTheDocument();
   });
