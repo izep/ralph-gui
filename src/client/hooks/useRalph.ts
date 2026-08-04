@@ -24,18 +24,33 @@ const EMPTY_TASKS: TaskStatusData = {
 const DEFAULT_SETTINGS: Settings = {
   maxLLMCalls: 100,
   planModel: "claude-sonnet-4.6",
-  devModel: "gpt-5-mini",
-  qaModel: "gpt-5-mini",
+  devModel: "gpt-5.4-mini",
+  qaModel: "gpt-5.4-mini",
   devReasoningEffort: "xhigh",
   qaReasoningEffort: "high",
   autoCommit: false,
   planFrequency: 1,
   minBacklogSize: 3,
   agentBackend: "copilot",
+  fleetMode: false,
+  useDocker: false,
+  dockerComposeFile: "",
+  dockerService: "ralph-agent",
+  epicBaseBranch: "",
+  dockerWorkBranch: "",
+  dockerIsolateBranch: true,
+  dockerMergeStrategy: "work-branch",
+  dockerPoolSize: 1,
+  dockerParallelTasks: false,
+  dockerPlanParallel: false,
+  dockerInstalledBackends: [],
+  dockerMountSocket: false,
+  dockerAutoMergeEpicWork: true,
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,
   taskColumnSort: "idAsc",
+  savedModelsByBackend: {},
 };
 
 const WS_RECONNECT_DELAY = 3000;
@@ -122,7 +137,30 @@ export function useRalph() {
   }, []);
 
   // --- Actions ---
-  const startLoop = useCallback(() => fetch("/api/loop/start", { method: "POST" }), []);
+  const startLoop = useCallback(async () => {
+    const res = await fetch("/api/loop/start", { method: "POST" });
+    const data = (await res.json()) as { ok: boolean; error?: string };
+    if (!data.ok) {
+      setLoopStatus({
+        status: "error",
+        error: data.error ?? "Failed to start loop",
+      });
+    }
+    return data;
+  }, []);
+
+  const saveSettingsAndStart = useCallback(
+    async (settingsToRun: Settings) => {
+      await fetch("/api/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(settingsToRun),
+      });
+      setSettings(settingsToRun);
+      return startLoop();
+    },
+    [startLoop],
+  );
   const stopLoop = useCallback(() => fetch("/api/loop/stop", { method: "POST" }), []);
   const restartLoop = useCallback(() => fetch("/api/loop/restart", { method: "POST" }), []);
 
@@ -165,6 +203,34 @@ export function useRalph() {
     return res.json();
   }, []);
 
+  const setEpicFile = useCallback(async (epicFile: string) => {
+    const res = await fetch("/api/epic/set-file", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ epicFile }),
+    });
+    return res.json() as Promise<{ ok: boolean; content?: string; notFound?: boolean; epicFile?: string }>;
+  }, []);
+
+  const createEpicFile = useCallback(async (epicFile: string) => {
+    const res = await fetch("/api/epic/create-file", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ epicFile }),
+    });
+    return res.json() as Promise<{ ok: boolean; content?: string }>;
+  }, []);
+
+  const validateDocker = useCallback(async () => {
+    const res = await fetch("/api/docker/validate", { method: "POST" });
+    return res.json() as Promise<{ ok: boolean; reason?: string; message?: string }>;
+  }, []);
+
+  const mergeEpicWork = useCallback(async () => {
+    const res = await fetch("/api/git/merge-epic-work", { method: "POST" });
+    return res.json() as Promise<{ ok: boolean; conflicts?: string[]; error?: string }>;
+  }, []);
+
   return {
     tasks,
     loopStatus,
@@ -176,6 +242,7 @@ export function useRalph() {
     readiness,
     connected,
     startLoop,
+    saveSettingsAndStart,
     stopLoop,
     restartLoop,
     saveSettings,
@@ -183,5 +250,9 @@ export function useRalph() {
     setRepo,
     savePrompt,
     refreshBacklog,
+    setEpicFile,
+    createEpicFile,
+    validateDocker,
+    mergeEpicWork,
   };
 }

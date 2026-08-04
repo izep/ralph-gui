@@ -1,10 +1,10 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useRalph } from "./hooks/useRalph";
 import { KanbanColumn } from "./components/KanbanColumn";
 import { ControlPanel } from "./components/ControlPanel";
 import { LogViewer } from "./components/LogViewer";
 import { ErrorBanner } from "./components/ErrorBanner";
-import { COLUMNS, groupTasks, sortTasks } from "./types";
+import { COLUMNS, groupTasks, sortTasks, type Settings } from "./types";
 import "./App.css";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -22,6 +22,7 @@ export default function App() {
   const [panelWidth, setPanelWidth] = useState(400);
   const panelWidthRef = useRef(400);
   panelWidthRef.current = panelWidth;
+  const [settingsDraft, setSettingsDraft] = useState<Settings>(ralph.settings);
 
   const startResize = useCallback((e: React.MouseEvent) => {
     const startX = e.clientX;
@@ -55,7 +56,21 @@ export default function App() {
     ralph.readiness.requirementsFound &&
     ralph.readiness.epicConfigured;
   const settingsVisible = showSettings || !isReady;
-  const canStart = isReady && !isRunning;
+
+  useEffect(() => {
+    if (!settingsVisible) {
+      setSettingsDraft(ralph.settings);
+    }
+  }, [ralph.settings, settingsVisible]);
+  const dockerBlocksStart =
+    settingsDraft.useDocker && ralph.readiness.dockerHostOk === false;
+  const canStart = isReady && !isRunning && !dockerBlocksStart;
+
+  async function handleStart() {
+    setErrorDismissed(false);
+    setShowLog(true);
+    await ralph.saveSettingsAndStart(settingsDraft);
+  }
 
   function handleRestart() {
     setErrorDismissed(false);
@@ -106,9 +121,15 @@ export default function App() {
             ) : (
               <button
                 className="loop-btn loop-btn--start"
-                onClick={ralph.startLoop}
+                onClick={() => void handleStart()}
                 disabled={!canStart}
-                title={!isReady ? "Configure repository, requirements, and epic first" : undefined}
+                title={
+                  !isReady
+                    ? "Configure repository, requirements, and epic first"
+                    : dockerBlocksStart
+                      ? ralph.readiness.dockerHostError ?? "Docker is not ready"
+                      : undefined
+                }
               >
                 Start
               </button>
@@ -179,6 +200,7 @@ export default function App() {
             <div className="cp-resize-handle" onMouseDown={startResize} />
             <ControlPanel
               settings={ralph.settings}
+              onSettingsDraftChange={setSettingsDraft}
               epic={ralph.epic}
               prompts={ralph.prompts}
               repoRoot={ralph.repoRoot}
@@ -188,6 +210,10 @@ export default function App() {
               onSavePrompt={ralph.savePrompt}
               onSetRepo={ralph.setRepo}
               onRefreshBacklog={ralph.refreshBacklog}
+              onSetEpicFile={ralph.setEpicFile}
+              onCreateEpicFile={ralph.createEpicFile}
+              onValidateDocker={ralph.validateDocker}
+              onMergeEpicWork={ralph.mergeEpicWork}
               isRunning={isRunning}
               onClose={() => setShowSettings(false)}
             />

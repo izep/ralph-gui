@@ -28,6 +28,7 @@ Produce a JSON array of all tasks still needed to complete the epic. Rules:
 - Testing steps and acceptance criteria", "status": "backlog" }
 ```
 - Do NOT write any files; the loop engine owns `task-status.json`.
+- When parallel Docker execution is enabled, prefer several small, independent backlog tasks over one large task so multiple agents can work at once. Tasks should not edit the same files concurrently.
 
 
 ## Output Format

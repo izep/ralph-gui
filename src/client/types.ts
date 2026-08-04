@@ -54,7 +54,9 @@ export interface LoopStatus {
   error: string | null;
 }
 
-export type AgentBackendId = "copilot" | "cursor-agent" | "claude" | "gemini";
+export type AgentBackendId = "copilot" | "cursor-agent" | "claude" | "gemini" | "opencode";
+
+export type DockerMergeStrategy = "work-branch" | "epic-base-per-task";
 
 export type TaskColumnSort =
   | "updatedAtAsc"
@@ -73,10 +75,29 @@ export interface Settings {
   planFrequency: number;
   minBacklogSize: number;
   agentBackend: AgentBackendId;
+  fleetMode: boolean;
+  useDocker: boolean;
+  dockerComposeFile: string;
+  dockerService: string;
+  epicBaseBranch: string;
+  dockerWorkBranch: string;
+  dockerIsolateBranch: boolean;
+  dockerMergeStrategy: DockerMergeStrategy;
+  dockerPoolSize: number;
+  dockerParallelTasks: boolean;
+  /** Dispatch parallel research sub-jobs during the plan phase (stretch) */
+  dockerPlanParallel: boolean;
+  dockerInstalledBackends: AgentBackendId[];
+  dockerMountSocket: boolean;
+  /** Auto-merge dockerWorkBranch into epicBaseBranch when loop finishes successfully */
+  dockerAutoMergeEpicWork: boolean;
   epicFile: string;
   requirementsFile: string;
   pauseAfterPlan: boolean;
   taskColumnSort: TaskColumnSort;
+  savedModelsByBackend: Partial<
+    Record<AgentBackendId, { planModel: string; devModel: string; qaModel: string }>
+  >;
 }
 
 export interface Readiness {
@@ -85,6 +106,8 @@ export interface Readiness {
   requirementsFile: string | null;
   gitBranch: string;
   epicConfigured: boolean;
+  dockerHostOk?: boolean;
+  dockerHostError?: string;
 }
 
 export type ServerMessage =

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach, beforeAll } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { describe, it, expect, afterEach, beforeAll, vi } from "vitest";
+import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { ErrorBanner } from "./ErrorBanner";
 import { KanbanColumn } from "./KanbanColumn";
@@ -11,7 +11,7 @@ import type { Task, ColumnDef, Settings, Readiness } from "../types";
 
 // jsdom does not implement scrollIntoView
 beforeAll(() => {
-  Element.prototype.scrollIntoView = () => {};
+  Element.prototype.scrollIntoView = () => { };
 });
 
 afterEach(() => {
@@ -27,8 +27,8 @@ describe("ErrorBanner", () => {
     render(
       <ErrorBanner
         error="Something went wrong"
-        onRestart={() => {}}
-        onDismiss={() => {}}
+        onRestart={() => { }}
+        onDismiss={() => { }}
       />
     );
     expect(screen.getByText("Something went wrong")).toBeInTheDocument();
@@ -40,7 +40,7 @@ describe("ErrorBanner", () => {
       <ErrorBanner
         error="fail"
         onRestart={() => { restarted = true; }}
-        onDismiss={() => {}}
+        onDismiss={() => { }}
       />
     );
     fireEvent.click(screen.getByText("Restart Loop"));
@@ -52,7 +52,7 @@ describe("ErrorBanner", () => {
     render(
       <ErrorBanner
         error="fail"
-        onRestart={() => {}}
+        onRestart={() => { }}
         onDismiss={() => { dismissed = true; }}
       />
     );
@@ -117,7 +117,7 @@ describe("LogViewer", () => {
     render(
       <LogViewer
         lines={["[system] Started", "[dev] Working on task"]}
-        onClose={() => {}}
+        onClose={() => { }}
       />
     );
     expect(screen.getByText("[system] Started")).toBeInTheDocument();
@@ -128,14 +128,14 @@ describe("LogViewer", () => {
     render(
       <LogViewer
         lines={["line 1", "line 2", "line 3"]}
-        onClose={() => {}}
+        onClose={() => { }}
       />
     );
     expect(screen.getByText("3 lines")).toBeInTheDocument();
   });
 
   it("shows empty message when no lines", () => {
-    render(<LogViewer lines={[]} onClose={() => {}} />);
+    render(<LogViewer lines={[]} onClose={() => { }} />);
     expect(screen.getByText("No output yet")).toBeInTheDocument();
   });
 
@@ -256,18 +256,33 @@ describe("TaskCard", () => {
 const defaultSettings: Settings = {
   maxLLMCalls: 100,
   planModel: "claude-sonnet-4.6",
-  devModel: "gpt-5-mini",
-  qaModel: "gpt-5-mini",
+  devModel: "gpt-5.4-mini",
+  qaModel: "gpt-5.4-mini",
   devReasoningEffort: "xhigh",
   qaReasoningEffort: "high",
   autoCommit: false,
   planFrequency: 1,
   minBacklogSize: 3,
   agentBackend: "copilot",
+  fleetMode: false,
+  useDocker: false,
+  dockerComposeFile: "",
+  dockerService: "ralph-agent",
+  epicBaseBranch: "",
+  dockerWorkBranch: "",
+  dockerIsolateBranch: true,
+  dockerMergeStrategy: "work-branch",
+  dockerPoolSize: 1,
+  dockerParallelTasks: false,
+  dockerPlanParallel: false,
+  dockerInstalledBackends: [],
+  dockerMountSocket: false,
+  dockerAutoMergeEpicWork: true,
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,
   taskColumnSort: "idAsc",
+  savedModelsByBackend: {},
 };
 
 const readyState: Readiness = {
@@ -279,11 +294,14 @@ const readyState: Readiness = {
 };
 
 describe("ControlPanel", () => {
-  const noop = async () => {};
+  const noop = async () => { };
   const noopResult = async () => ({ ok: true });
+  const noopContent = async () => ({ ok: true, content: "" });
+  const noopDocker = async () => ({ ok: true });
+  const noopMerge = async () => ({ ok: true });
 
-  it("renders settings header and section titles", () => {
-    render(
+  function renderPanel(isRunning = false) {
+    return render(
       <ControlPanel
         settings={defaultSettings}
         epic=""
@@ -295,10 +313,18 @@ describe("ControlPanel", () => {
         onSavePrompt={noop}
         onSetRepo={noopResult}
         onRefreshBacklog={noopResult}
-        isRunning={false}
-        onClose={() => {}}
+        onSetEpicFile={noopContent}
+        onCreateEpicFile={noopContent}
+        onValidateDocker={noopDocker}
+        onMergeEpicWork={noopMerge}
+        isRunning={isRunning}
+        onClose={() => { }}
       />
     );
+  }
+
+  it("renders settings header and section titles", () => {
+    renderPanel();
     expect(screen.getByText("Settings")).toBeInTheDocument();
     expect(screen.getByText("Repository")).toBeInTheDocument();
     expect(screen.getByText("Loop Configuration")).toBeInTheDocument();
@@ -307,50 +333,31 @@ describe("ControlPanel", () => {
   });
 
   it("shows git branch when available", () => {
-    render(
-      <ControlPanel
-        settings={defaultSettings}
-        epic=""
-        prompts={{}}
-        repoRoot="/test/repo"
-        readiness={readyState}
-        onSaveSettings={noop}
-        onSaveEpic={noop}
-        onSavePrompt={noop}
-        onSetRepo={noopResult}
-        onRefreshBacklog={noopResult}
-        isRunning={false}
-        onClose={() => {}}
-      />
-    );
+    renderPanel();
     expect(screen.getByText("main")).toBeInTheDocument();
   });
 
   it("shows close button when repo is configured", () => {
-    render(
-      <ControlPanel
-        settings={defaultSettings}
-        epic=""
-        prompts={{}}
-        repoRoot="/test/repo"
-        readiness={readyState}
-        onSaveSettings={noop}
-        onSaveEpic={noop}
-        onSavePrompt={noop}
-        onSetRepo={noopResult}
-        onRefreshBacklog={noopResult}
-        isRunning={false}
-        onClose={() => {}}
-      />
-    );
+    renderPanel();
     // Close button uses × character
     expect(screen.getAllByText("×").length).toBeGreaterThan(0);
   });
 
   it("disables Refresh Backlog when running", () => {
+    renderPanel(true);
+    const btn = screen.getByText("Refresh Tasks");
+    expect(btn).toBeDisabled();
+  });
+
+  it("renders Docker Agents section", () => {
+    renderPanel();
+    expect(screen.getByText("Docker Agents")).toBeInTheDocument();
+  });
+
+  it("fleet checkbox disabled when agent backend is not copilot", () => {
     render(
       <ControlPanel
-        settings={defaultSettings}
+        settings={{ ...defaultSettings, agentBackend: "claude" }}
         epic=""
         prompts={{}}
         repoRoot="/test/repo"
@@ -360,11 +367,666 @@ describe("ControlPanel", () => {
         onSavePrompt={noop}
         onSetRepo={noopResult}
         onRefreshBacklog={noopResult}
-        isRunning={true}
-        onClose={() => {}}
+        onSetEpicFile={noopContent}
+        onCreateEpicFile={noopContent}
+        onValidateDocker={noopDocker}
+        onMergeEpicWork={noopMerge}
+        isRunning={false}
+        onClose={() => { }}
       />
     );
-    const btn = screen.getByText("Refresh Tasks");
-    expect(btn).toBeDisabled();
+    const checkbox = screen.getByRole("checkbox", { name: /fleet mode/i });
+    expect(checkbox).toBeDisabled();
+  });
+
+  it("fleet checkbox enabled when agent backend is copilot", () => {
+    renderPanel();
+    const checkbox = screen.getByRole("checkbox", { name: /fleet mode/i });
+    expect(checkbox).not.toBeDisabled();
+  });
+
+  it("Epic Set button is present", () => {
+    renderPanel();
+    // There should be a Set button in the Epic File row
+    const setButtons = screen.getAllByText("Set");
+    expect(setButtons.length).toBeGreaterThan(0);
+  });
+
+  it("Set Docker button calls validate API and shows success", async () => {
+    const onValidateDocker = vi.fn(async () => ({ ok: true }));
+    render(
+      <ControlPanel
+        settings={{ ...defaultSettings, useDocker: true }}
+        epic=""
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={async () => { }}
+        onSaveEpic={async () => { }}
+        onSavePrompt={async () => { }}
+        onSetRepo={async () => ({ ok: true })}
+        onRefreshBacklog={async () => ({ ok: true })}
+        onSetEpicFile={async () => ({ ok: true, content: "" })}
+        onCreateEpicFile={async () => ({ ok: true, content: "" })}
+        onValidateDocker={onValidateDocker}
+        onMergeEpicWork={async () => ({ ok: true })}
+        isRunning={false}
+        onClose={() => { }}
+      />
+    );
+
+    fireEvent.click(screen.getByText("Set Docker"));
+    await waitFor(() => expect(onValidateDocker).toHaveBeenCalledTimes(1));
+  });
+
+  it("Set Docker shows error message when validation fails", async () => {
+    const onValidateDocker = vi.fn(async () => ({ ok: false, reason: 'not_running', message: 'Daemon not running' }));
+    render(
+      <ControlPanel
+        settings={{ ...defaultSettings, useDocker: true }}
+        epic=""
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={{ ...readyState, dockerHostOk: false, dockerHostError: 'Daemon not running' }}
+        onSaveSettings={async () => { }}
+        onSaveEpic={async () => { }}
+        onSavePrompt={async () => { }}
+        onSetRepo={async () => ({ ok: true })}
+        onRefreshBacklog={async () => ({ ok: true })}
+        onSetEpicFile={async () => ({ ok: true, content: "" })}
+        onCreateEpicFile={async () => ({ ok: true, content: "" })}
+        onValidateDocker={onValidateDocker}
+        onMergeEpicWork={async () => ({ ok: true })}
+        isRunning={false}
+        onClose={() => { }}
+      />
+    );
+
+    fireEvent.click(screen.getByText("Set Docker"));
+    expect(await screen.findByText(/Daemon not running/)).toBeInTheDocument();
+  });
+
+  it("Pool size input is present when useDocker is true", () => {
+    render(
+      <ControlPanel
+        settings={{ ...defaultSettings, useDocker: true }}
+        epic=""
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={async () => { }}
+        onSaveEpic={async () => { }}
+        onSavePrompt={async () => { }}
+        onSetRepo={async () => ({ ok: true })}
+        onRefreshBacklog={async () => ({ ok: true })}
+        onSetEpicFile={async () => ({ ok: true, content: "" })}
+        onCreateEpicFile={async () => ({ ok: true, content: "" })}
+        onValidateDocker={async () => ({ ok: true })}
+        onMergeEpicWork={async () => ({ ok: true })}
+        isRunning={false}
+        onClose={() => { }}
+      />
+    );
+    expect(screen.getByText("Pool size")).toBeInTheDocument();
+  });
+
+  it("Run backlog tasks in parallel checkbox is disabled when dockerPoolSize is 1", () => {
+    render(
+      <ControlPanel
+        settings={{ ...defaultSettings, useDocker: true, dockerPoolSize: 1 }}
+        epic=""
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={async () => { }}
+        onSaveEpic={async () => { }}
+        onSavePrompt={async () => { }}
+        onSetRepo={async () => ({ ok: true })}
+        onRefreshBacklog={async () => ({ ok: true })}
+        onSetEpicFile={async () => ({ ok: true, content: "" })}
+        onCreateEpicFile={async () => ({ ok: true, content: "" })}
+        onValidateDocker={async () => ({ ok: true })}
+        onMergeEpicWork={async () => ({ ok: true })}
+        isRunning={false}
+        onClose={() => { }}
+      />
+    );
+    const parallel = screen.getByLabelText(/Run backlog tasks in parallel/i);
+    expect((parallel as HTMLInputElement).disabled).toBe(true);
+  });
+
+  it("Run backlog tasks in parallel checkbox is enabled when dockerPoolSize > 1", () => {
+    render(
+      <ControlPanel
+        settings={{ ...defaultSettings, useDocker: true, dockerPoolSize: 2 }}
+        epic=""
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={async () => { }}
+        onSaveEpic={async () => { }}
+        onSavePrompt={async () => { }}
+        onSetRepo={async () => ({ ok: true })}
+        onRefreshBacklog={async () => ({ ok: true })}
+        onSetEpicFile={async () => ({ ok: true, content: "" })}
+        onCreateEpicFile={async () => ({ ok: true, content: "" })}
+        onValidateDocker={async () => ({ ok: true })}
+        onMergeEpicWork={async () => ({ ok: true })}
+        isRunning={false}
+        onClose={() => { }}
+      />
+    );
+    const parallel = screen.getByLabelText(/Run backlog tasks in parallel/i);
+    expect((parallel as HTMLInputElement).disabled).toBe(false);
+  });
+
+  it("Parallel plan research checkbox is disabled when dockerPoolSize is 1", () => {
+    render(
+      <ControlPanel
+        settings={{ ...defaultSettings, useDocker: true, dockerPoolSize: 1 }}
+        epic=""
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={async () => { }}
+        onSaveEpic={async () => { }}
+        onSavePrompt={async () => { }}
+        onSetRepo={async () => ({ ok: true })}
+        onRefreshBacklog={async () => ({ ok: true })}
+        onSetEpicFile={async () => ({ ok: true, content: "" })}
+        onCreateEpicFile={async () => ({ ok: true, content: "" })}
+        onValidateDocker={async () => ({ ok: true })}
+        onMergeEpicWork={async () => ({ ok: true })}
+        isRunning={false}
+        onClose={() => { }}
+      />
+    );
+    const planParallel = screen.getByLabelText(/Parallel plan research/i);
+    expect((planParallel as HTMLInputElement).disabled).toBe(true);
+  });
+
+  it("Parallel plan research checkbox is enabled when dockerPoolSize > 1", () => {
+    render(
+      <ControlPanel
+        settings={{ ...defaultSettings, useDocker: true, dockerPoolSize: 2 }}
+        epic=""
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={async () => { }}
+        onSaveEpic={async () => { }}
+        onSavePrompt={async () => { }}
+        onSetRepo={async () => ({ ok: true })}
+        onRefreshBacklog={async () => ({ ok: true })}
+        onSetEpicFile={async () => ({ ok: true, content: "" })}
+        onCreateEpicFile={async () => ({ ok: true, content: "" })}
+        onValidateDocker={async () => ({ ok: true })}
+        onMergeEpicWork={async () => ({ ok: true })}
+        isRunning={false}
+        onClose={() => { }}
+      />
+    );
+    const planParallel = screen.getByLabelText(/Parallel plan research/i);
+    expect((planParallel as HTMLInputElement).disabled).toBe(false);
+  });
+
+
+  it("Epic Set button calls set-file API and loads content", async () => {
+    const onSetEpicFile = vi.fn(async (_path: string) => ({ ok: true, content: "# Epic content" }));
+    render(
+      <ControlPanel
+        settings={defaultSettings}
+        epic=""
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={async () => { }}
+        onSaveEpic={async () => { }}
+        onSavePrompt={async () => { }}
+        onSetRepo={async () => ({ ok: true })}
+        onRefreshBacklog={async () => ({ ok: true })}
+        onSetEpicFile={onSetEpicFile}
+        onCreateEpicFile={async () => ({ ok: true, content: "" })}
+        onValidateDocker={async () => ({ ok: true })}
+        onMergeEpicWork={async () => ({ ok: true })}
+        isRunning={false}
+        onClose={() => { }}
+      />
+    );
+
+    const setBtn = screen.getByTitle("Load epic content from this path (or create if not found)");
+    fireEvent.click(setBtn);
+
+    await waitFor(() => expect(onSetEpicFile).toHaveBeenCalledWith(defaultSettings.epicFile));
+    expect(await screen.findByText(/Loaded!/)).toBeInTheDocument();
+  });
+
+  it("Epic Set button shows dialog when file not found and Create triggers create-file API", async () => {
+    const onSetEpicFile = vi.fn(async (_path: string) => ({ ok: false, notFound: true }));
+    const onCreateEpicFile = vi.fn(async (_path: string) => ({ ok: true, content: "# Created" }));
+
+    render(
+      <ControlPanel
+        settings={defaultSettings}
+        epic=""
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={async () => { }}
+        onSaveEpic={async () => { }}
+        onSavePrompt={async () => { }}
+        onSetRepo={async () => ({ ok: true })}
+        onRefreshBacklog={async () => ({ ok: true })}
+        onSetEpicFile={onSetEpicFile}
+        onCreateEpicFile={onCreateEpicFile}
+        onValidateDocker={async () => ({ ok: true })}
+        onMergeEpicWork={async () => ({ ok: true })}
+        isRunning={false}
+        onClose={() => { }}
+      />
+    );
+
+    const setBtn = screen.getByTitle("Load epic content from this path (or create if not found)");
+    fireEvent.click(setBtn);
+
+    // Dialog should appear
+    expect(await screen.findByText(/Epic file not found/)).toBeInTheDocument();
+
+    // Click Create in dialog
+    fireEvent.click(screen.getByText("Create"));
+    await waitFor(() => expect(onCreateEpicFile).toHaveBeenCalledWith(defaultSettings.epicFile));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// LoopConfigSection — model dropdowns and View models link
+// ---------------------------------------------------------------------------
+
+import { LoopConfigSection } from "./LoopConfigSection";
+
+describe("LoopConfigSection model dropdowns", () => {
+  it("shows copilot model options when agentBackend is copilot", () => {
+    const settings: Settings = { ...defaultSettings, agentBackend: "copilot", planModel: "claude-sonnet-4.6", devModel: "gpt-5.4-mini", qaModel: "gpt-5.4-mini" };
+    render(
+      <LoopConfigSection
+        localSettings={settings}
+        onChangeSettings={() => { }}
+        repoLocked={false}
+        onSaveSettings={() => { }}
+      />
+    );
+    // Verify the Plan Model label and a copilot-specific option text are present
+    expect(screen.getByText("Plan Model")).toBeInTheDocument();
+    expect(
+      screen.getByText(/\(claude-sonnet-4\.6\) Claude Sonnet 4\.6 -- recommended for planning/),
+    ).toBeInTheDocument();
+  });
+
+  it("restores saved copilot models when switching back from another backend", async () => {
+    const copilotModels = {
+      planModel: "claude-sonnet-4.6",
+      devModel: "gpt-5.4-mini",
+      qaModel: "gpt-5.4-mini",
+    };
+    let settings: Settings = {
+      ...defaultSettings,
+      agentBackend: "copilot",
+      ...copilotModels,
+      savedModelsByBackend: { copilot: copilotModels },
+    };
+
+    const { rerender } = render(
+      <LoopConfigSection
+        localSettings={settings}
+        onChangeSettings={(s) => {
+          settings = s;
+        }}
+        repoLocked={false}
+        onSaveSettings={() => { }}
+      />,
+    );
+
+    fireEvent.change(screen.getByDisplayValue("GitHub Copilot CLI"), {
+      target: { value: "claude" },
+    });
+    await waitFor(() => expect(settings.agentBackend).toBe("claude"));
+    expect(settings.savedModelsByBackend?.copilot).toEqual(copilotModels);
+
+    rerender(
+      <LoopConfigSection
+        localSettings={settings}
+        onChangeSettings={(s) => {
+          settings = s;
+        }}
+        repoLocked={false}
+        onSaveSettings={() => { }}
+      />,
+    );
+
+    fireEvent.change(screen.getByDisplayValue("Claude Code (claude CLI)"), {
+      target: { value: "copilot" },
+    });
+    await waitFor(() => {
+      expect(settings.agentBackend).toBe("copilot");
+      expect(settings.planModel).toBe("claude-sonnet-4.6");
+      expect(settings.devModel).toBe("gpt-5.4-mini");
+      expect(settings.qaModel).toBe("gpt-5.4-mini");
+    });
+  });
+
+  it("uses cursor-agent CLI IDs for recommended plan model", () => {
+    const settings: Settings = {
+      ...defaultSettings,
+      agentBackend: "cursor-agent",
+      planModel: "claude-sonnet-5-thinking-high",
+      devModel: "gpt-5-mini",
+      qaModel: "gpt-5-mini",
+    };
+    render(
+      <LoopConfigSection
+        localSettings={settings}
+        onChangeSettings={() => { }}
+        repoLocked={false}
+        onSaveSettings={() => { }}
+      />,
+    );
+    expect(
+      screen.getByText(
+        /\(claude-sonnet-5-thinking-high\) Claude Sonnet 5 -- recommended for planning/,
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it("shows claude CLI hyphenated model options when agentBackend is claude", () => {
+    const settings: Settings = {
+      ...defaultSettings,
+      agentBackend: "claude",
+      planModel: "claude-sonnet-4-6",
+      devModel: "claude-haiku-4-5",
+      qaModel: "claude-haiku-4-5",
+    };
+    render(
+      <LoopConfigSection
+        localSettings={settings}
+        onChangeSettings={() => { }}
+        repoLocked={false}
+        onSaveSettings={() => { }}
+      />,
+    );
+    expect(
+      screen.getByText(/\(claude-sonnet-4-6\) Claude Sonnet 4\.6 -- recommended for planning/),
+    ).toBeInTheDocument();
+  });
+
+  it("shows opencode Zen free model options when agentBackend is opencode", () => {
+    const settings: Settings = {
+      ...defaultSettings,
+      agentBackend: "opencode",
+      planModel: "opencode/big-pickle",
+      devModel: "opencode/deepseek-v4-flash-free",
+      qaModel: "opencode/deepseek-v4-flash-free",
+    };
+    render(
+      <LoopConfigSection
+        localSettings={settings}
+        onChangeSettings={() => { }}
+        repoLocked={false}
+        onSaveSettings={() => { }}
+      />,
+    );
+    expect(
+      screen.getByText(/\(opencode\/big-pickle\) Big Pickle -- recommended for planning/),
+    ).toBeInTheDocument();
+  });
+
+  it("View models link uses current backend in URL", () => {
+    const openSpy = vi.fn();
+    vi.stubGlobal("open", openSpy);
+
+    const settings: Settings = {
+      ...defaultSettings,
+      agentBackend: "gemini",
+      planModel: "gemini-2.5-pro",
+      devModel: "gemini-2.5-flash",
+      qaModel: "gemini-2.5-flash",
+    };
+    render(
+      <LoopConfigSection
+        localSettings={settings}
+        onChangeSettings={() => { }}
+        repoLocked={false}
+        onSaveSettings={() => { }}
+      />
+    );
+    const link = screen.getByText(/View models for/i);
+    fireEvent.click(link);
+    expect(openSpy).toHaveBeenCalledWith(
+      "/models-reference?backend=gemini",
+      "_blank",
+      "noopener,width=960,height=720"
+    );
+
+    vi.unstubAllGlobals();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// ControlPanel — Phase 5: collapsible sections, dirty detection, Save/Reset
+// ---------------------------------------------------------------------------
+
+describe("ControlPanel Phase 5: collapsible and dirty/save/reset UX", () => {
+  const noop = async () => { };
+  const noopResult = async () => ({ ok: true });
+  const noopContent = async () => ({ ok: true, content: "" });
+  const noopDocker = async () => ({ ok: true });
+  const noopMerge = async () => ({ ok: true });
+
+  function renderPanel(
+    overrideSettings: Partial<Settings> = {},
+    overrideProps: {
+      epic?: string;
+      prompts?: Record<string, string>;
+      onSaveSettings?: (s: Settings) => Promise<void>;
+    } = {},
+  ) {
+    const settings = { ...defaultSettings, ...overrideSettings };
+    return render(
+      <ControlPanel
+        settings={settings}
+        epic={overrideProps.epic ?? ""}
+        prompts={overrideProps.prompts ?? {}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={overrideProps.onSaveSettings ?? noop}
+        onSaveEpic={noop}
+        onSavePrompt={noop}
+        onSetRepo={noopResult}
+        onRefreshBacklog={noopResult}
+        onSetEpicFile={noopContent}
+        onCreateEpicFile={noopContent}
+        onValidateDocker={noopDocker}
+        onMergeEpicWork={noopMerge}
+        isRunning={false}
+        onClose={() => { }}
+      />
+    );
+  }
+
+  // --- Collapse / Expand ---
+
+  it("Collapse all hides Docker Agents, Loop Configuration, Current Epic, Prompts bodies", () => {
+    renderPanel();
+    fireEvent.click(screen.getByText("Collapse all"));
+    const headers = screen.getAllByRole("button", { name: /docker agents|loop configuration|current epic|prompts/i });
+    for (const header of headers) {
+      expect(header).toHaveAttribute("aria-expanded", "false");
+    }
+  });
+
+  it("Expand all restores all four sections after collapse", () => {
+    renderPanel();
+    fireEvent.click(screen.getByText("Collapse all"));
+    fireEvent.click(screen.getByText("Expand all"));
+    const headers = screen.getAllByRole("button", { name: /docker agents|loop configuration|current epic|prompts/i });
+    for (const header of headers) {
+      expect(header).toHaveAttribute("aria-expanded", "true");
+    }
+  });
+
+  it("clicking a section header toggles only that section", () => {
+    renderPanel();
+    const dockerHeader = screen.getByRole("button", { name: /docker agents/i });
+    fireEvent.click(dockerHeader);
+    expect(dockerHeader).toHaveAttribute("aria-expanded", "false");
+    const loopHeader = screen.getByRole("button", { name: /loop configuration/i });
+    expect(loopHeader).toHaveAttribute("aria-expanded", "true");
+  });
+
+  // --- Save buttons disabled when pristine ---
+
+  it("Save Docker is disabled when no docker changes made", () => {
+    renderPanel();
+    expect(screen.getByRole("button", { name: /save docker/i })).toBeDisabled();
+  });
+
+  it("Save loop settings is disabled when no loop changes made", () => {
+    renderPanel();
+    expect(screen.getByRole("button", { name: /save loop settings/i })).toBeDisabled();
+  });
+
+  it("Save epic is disabled when no epic changes made", () => {
+    renderPanel();
+    expect(screen.getByRole("button", { name: /save epic/i })).toBeDisabled();
+  });
+
+  it("Save Plan Prompt is disabled when no prompt changes made", () => {
+    renderPanel({}, { prompts: { "plan-prompt.md": "original plan prompt" } });
+    expect(screen.getByRole("button", { name: /save plan prompt/i })).toBeDisabled();
+  });
+
+  // --- Editing a docker field enables Save Docker only ---
+
+  it("editing dockerPoolSize enables Save Docker but not Save loop settings", () => {
+    renderPanel({ useDocker: true });
+    const poolInput = screen.getByLabelText(/pool size/i);
+    fireEvent.change(poolInput, { target: { value: "3" } });
+    expect(screen.getByRole("button", { name: /save docker/i })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: /save loop settings/i })).toBeDisabled();
+  });
+
+  // --- Editing a loop field enables Save loop settings only ---
+
+  it("editing maxLLMCalls enables Save loop settings but not Save Docker", () => {
+    renderPanel();
+    const maxCallsInput = screen.getByDisplayValue("100");
+    fireEvent.change(maxCallsInput, { target: { value: "50" } });
+    expect(screen.getByRole("button", { name: /save loop settings/i })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: /save docker/i })).toBeDisabled();
+  });
+
+  // --- Editing epic textarea enables Save epic ---
+
+  it("editing epic textarea enables Save epic", () => {
+    renderPanel({}, { epic: "initial epic" });
+    const textarea = screen.getAllByRole("textbox").find(
+      (el) => (el as HTMLTextAreaElement).value === "initial epic",
+    ) as HTMLTextAreaElement;
+    expect(textarea).toBeDefined();
+    fireEvent.change(textarea, { target: { value: "updated epic" } });
+    expect(screen.getByRole("button", { name: /save epic/i })).not.toBeDisabled();
+  });
+
+  // --- Reset docker reverts draft and disables Save Docker ---
+
+  it("Reset for Docker reverts docker draft and disables Save Docker", () => {
+    renderPanel({ useDocker: true });
+    const poolInput = screen.getByLabelText(/pool size/i);
+    fireEvent.change(poolInput, { target: { value: "3" } });
+    expect(screen.getByRole("button", { name: /save docker/i })).not.toBeDisabled();
+
+    // Find Docker Reset button
+    const resetButtons = screen.getAllByRole("button", { name: /^reset$/i });
+    // The docker reset is the first Reset button (in Docker section footer)
+    fireEvent.click(resetButtons[0]);
+    expect(screen.getByRole("button", { name: /save docker/i })).toBeDisabled();
+  });
+
+  // --- Reset loop reverts draft and disables Save loop settings ---
+
+  it("Reset for Loop reverts loop draft and disables Save loop settings", () => {
+    renderPanel();
+    const maxCallsInput = screen.getByDisplayValue("100");
+    fireEvent.change(maxCallsInput, { target: { value: "50" } });
+    expect(screen.getByRole("button", { name: /save loop settings/i })).not.toBeDisabled();
+
+    const resetButtons = screen.getAllByRole("button", { name: /^reset$/i });
+    // Loop reset is the second Reset button (in Loop section footer)
+    fireEvent.click(resetButtons[1]);
+    expect(screen.getByRole("button", { name: /save loop settings/i })).toBeDisabled();
+  });
+
+  // --- epicFile path change marks epic dirty ---
+
+  it("changing epicFile path marks epic dirty", () => {
+    renderPanel({ epicFile: "ralph/epic.md" });
+    const epicFileInput = screen.getByDisplayValue("ralph/epic.md");
+    fireEvent.change(epicFileInput, { target: { value: "ralph/new-epic.md" } });
+    expect(screen.getByRole("button", { name: /save epic/i })).not.toBeDisabled();
+  });
+
+  // --- Secondary actions not gated on dirty state ---
+
+  it("Set Docker button is enabled regardless of dirty state", () => {
+    renderPanel({ useDocker: true });
+    const setDockerBtn = screen.getByRole("button", { name: /^set docker$/i });
+    expect(setDockerBtn).not.toBeDisabled();
+  });
+
+  it("Refresh Tasks button is enabled regardless of dirty state", () => {
+    renderPanel();
+    expect(screen.getByRole("button", { name: /refresh tasks/i })).not.toBeDisabled();
+  });
+
+  it("Set epic file button is enabled regardless of dirty state", () => {
+    renderPanel();
+    const setButtons = screen.getAllByTitle(/load epic content/i);
+    expect(setButtons[0]).not.toBeDisabled();
+  });
+
+  // --- dockerAutoMergeEpicWork dirty detection and visibility ---
+
+  it("dockerAutoMergeEpicWork checkbox hidden when isolation is off", () => {
+    renderPanel({ dockerIsolateBranch: false });
+    expect(screen.queryByLabelText(/automatically merge work into epic branch/i)).toBeNull();
+  });
+
+  it("dockerAutoMergeEpicWork checkbox visible when isolation is on", () => {
+    renderPanel({ useDocker: true, dockerIsolateBranch: true });
+    expect(screen.getByLabelText(/automatically merge work into epic branch/i)).toBeInTheDocument();
+  });
+
+  it("toggling dockerAutoMergeEpicWork enables Save Docker but not Save loop settings", () => {
+    renderPanel({ useDocker: true, dockerIsolateBranch: true, dockerAutoMergeEpicWork: true });
+    const checkbox = screen.getByLabelText(/automatically merge work into epic branch/i);
+    fireEvent.click(checkbox);
+    expect(screen.getByRole("button", { name: /save docker/i })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: /save loop settings/i })).toBeDisabled();
+  });
+
+  // --- dockerMergeStrategy ---
+
+  it("hides isolate and manual merge when epic-base-per-task strategy is selected", () => {
+    renderPanel({ useDocker: true, dockerMergeStrategy: "epic-base-per-task" });
+    expect(screen.queryByLabelText(/isolate on work branch/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /merge work into epic branch/i })).toBeNull();
+    expect(screen.getByText(/merge each task immediately/i)).toBeInTheDocument();
+  });
+
+  it("changing dockerMergeStrategy enables Save Docker", () => {
+    renderPanel({ useDocker: true, dockerMergeStrategy: "work-branch" });
+    fireEvent.change(screen.getByLabelText(/git merge strategy/i), {
+      target: { value: "epic-base-per-task" },
+    });
+    expect(screen.getByRole("button", { name: /save docker/i })).not.toBeDisabled();
   });
 });

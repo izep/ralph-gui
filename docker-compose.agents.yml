@@ -1,0 +1,42 @@
+services:
+  ralph-agent:
+    build:
+      context: ./docker
+      args:
+        INSTALL_COPILOT: ${INSTALL_COPILOT:-true}
+        INSTALL_CLAUDE: ${INSTALL_CLAUDE:-false}
+        INSTALL_GEMINI: ${INSTALL_GEMINI:-false}
+        INSTALL_CURSOR: ${INSTALL_CURSOR:-false}
+        INSTALL_OPENCODE: ${INSTALL_OPENCODE:-false}
+        INSTALL_DOCKER_CLI: ${INSTALL_DOCKER_CLI:-false}
+    # Keep the container alive for `docker compose exec` (default Node image exits immediately).
+    command: [ "sleep", "infinity" ]
+    working_dir: /workspace
+    volumes:
+      - ${RALPH_REPO_ROOT:-.}:/workspace
+      # Nested Docker (Settings → Allow agents to run Docker). On macOS set DOCKER_SOCKET in .env.
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+    environment:
+      - GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME:-Ralph Agent}
+      - GIT_AUTHOR_EMAIL=${GIT_AUTHOR_EMAIL:-ralph@localhost}
+      - GIT_COMMITTER_NAME=${GIT_COMMITTER_NAME:-Ralph Agent}
+      - GIT_COMMITTER_EMAIL=${GIT_COMMITTER_EMAIL:-ralph@localhost}
+      # Copilot in Docker: use GH_TOKEN from `gh auth token` (OAuth). Fine-grained PATs in
+      # COPILOT_GITHUB_TOKEN often fail inside Linux containers — leave that unset if so.
+      - GH_TOKEN=${GH_TOKEN:-}
+      - COPILOT_GITHUB_TOKEN=${COPILOT_GITHUB_TOKEN:-}
+      # Claude Code CLI auth
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      # Gemini CLI auth
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      # Cursor agent auth
+      - CURSOR_API_KEY=${CURSOR_API_KEY:-}
+      - CURSOR_SESSION_TOKEN=${CURSOR_SESSION_TOKEN:-}
+      # OpenCode Zen auth (free opencode/* models)
+      - OPENCODE_API_KEY=${OPENCODE_API_KEY:-}
+      # In-container docker CLI (when socket is mounted)
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    env_file:
+      - path: .env
+        required: false
+    restart: "no"
