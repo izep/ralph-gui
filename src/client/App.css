@@ -1040,6 +1040,69 @@ body {
 .log-viewer__auto-label:hover {
   color: var(--text-dim);
 }
+.log-viewer__save {
+  position: relative;
+  flex-shrink: 0;
+}
+.log-viewer__save-summary {
+  list-style: none;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
+  padding: 2px 0;
+}
+.log-viewer__save-summary::-webkit-details-marker {
+  display: none;
+}
+.log-viewer__save-summary::marker {
+  content: "";
+}
+.log-viewer__save:not(.log-viewer__save--disabled) .log-viewer__save-summary:hover {
+  color: var(--text-dim);
+}
+.log-viewer__save--disabled .log-viewer__save-summary {
+  opacity: 0.45;
+  cursor: default;
+}
+.log-viewer__save-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 5;
+  min-width: 9.5rem;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.log-viewer__save-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.log-viewer__save-item:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface-hover);
+}
+.log-viewer__save-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
 .log-viewer__close {
   background: none;
   border: none;

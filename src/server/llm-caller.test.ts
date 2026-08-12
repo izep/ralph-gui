@@ -561,7 +561,7 @@ describe("applyCopilotFleetPrefix", () => {
 });
 
 describe("LLMCaller.call with fleetMode", () => {
-  it("applies /fleet prefix on stdin when copilot + fleetMode true", async () => {
+  it("applies /fleet prefix to the prompt when copilot + fleetMode true", async () => {
     process.env.COPILOT_BIN = await makeExecutable("gh");
     const caller = new LLMCaller(() => true);
 
@@ -572,11 +572,10 @@ describe("LLMCaller.call with fleetMode", () => {
 
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
     const proc = spawnMock.mock.results[0].value as MockChildProcess;
-
-    const stdinWrite = proc.stdin.write as ReturnType<typeof vi.fn>;
-    await vi.waitFor(() => expect(stdinWrite).toHaveBeenCalledTimes(1));
-    const written = stdinWrite.mock.calls[0][0] as string;
-    expect(written).toMatch(/^\/fleet/);
+    const [, args] = spawnMock.mock.calls[0] as [string, string[]];
+    // Non-Docker copilot calls pass the prompt via argv (-p), not stdin.
+    const promptArg = args[args.indexOf("-p") + 1];
+    expect(promptArg).toMatch(/^\/fleet/);
 
     proc.stdout.emit("data", Buffer.from("done"));
     proc.emit("close", 0);
@@ -641,12 +640,12 @@ describe("LLMCaller.call with useDocker", () => {
   });
 
   it("streams stdout lines to onProgress while running", async () => {
-    process.env.COPILOT_BIN = await makeExecutable("gh");
+    process.env.CURSOR_AGENT_BIN = await makeExecutable("cursor-agent");
     const caller = new LLMCaller(() => true);
     const progress: string[] = [];
 
     const resultPromise = caller.call("prompt", "gpt-5-mini", tmpDir, {
-      agentBackend: "copilot",
+      agentBackend: "cursor-agent",
       onProgress: (line) => progress.push(line),
     });
 

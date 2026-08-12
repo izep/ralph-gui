@@ -22,6 +22,9 @@
   },
   "include": [
     "./**/*",
-    "../shared/**/*.ts"
+    "../shared/agent-models.ts",
+    "../shared/docker-merge-strategy.ts",
+    "../shared/copilotLogFormat.ts",
+    "../shared/parseTaskList.ts"
   ]
 }

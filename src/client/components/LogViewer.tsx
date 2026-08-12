@@ -40,6 +40,7 @@ import {
   toolCountsSummaryLine,
   type RunStateFromLog,
 } from "../lib/runStateFromLog";
+import { exportLogAsHtml, exportLogAsText } from "../lib/logExport";
 
 const HEIGHT_KEY = "ralph.logviewer.height";
 
@@ -633,6 +634,7 @@ export function LogViewer({
   onClose: () => void;
 }) {
   const bodyRef = useRef<HTMLDivElement>(null);
+  const saveMenuRef = useRef<HTMLDetailsElement>(null);
   const stickToBottomRef = useRef(true);
   const [autoScroll, setAutoScroll] = useState(true);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
@@ -742,6 +744,25 @@ export function LogViewer({
   }
 
   const showRunStateHeader = lines.length > 0;
+  const canSave = lines.length > 0;
+
+  function closeSaveMenu() {
+    if (saveMenuRef.current) saveMenuRef.current.open = false;
+  }
+
+  function onSaveAsHtml() {
+    const el = bodyRef.current;
+    if (!el || !canSave) return;
+    exportLogAsHtml(el);
+    closeSaveMenu();
+  }
+
+  function onSaveAsText() {
+    if (!canSave) return;
+    exportLogAsText(lines);
+    closeSaveMenu();
+  }
+
   return (
     <div
       className={showRunStateHeader
@@ -768,6 +789,46 @@ export function LogViewer({
           />
           <span>Auto-scroll</span>
         </label>
+        <details
+          ref={saveMenuRef}
+          className={`log-viewer__save${canSave ? "" : " log-viewer__save--disabled"}`}
+          onToggle={(e) => {
+            if (!canSave && (e.currentTarget as HTMLDetailsElement).open) {
+              (e.currentTarget as HTMLDetailsElement).open = false;
+            }
+          }}
+        >
+          <summary
+            className="log-viewer__save-summary"
+            aria-label="Save output log"
+            aria-disabled={!canSave}
+            onClick={(e) => {
+              if (!canSave) e.preventDefault();
+            }}
+          >
+            Save
+          </summary>
+          <div className="log-viewer__save-menu" role="menu">
+            <button
+              type="button"
+              role="menuitem"
+              className="log-viewer__save-item"
+              disabled={!canSave}
+              onClick={onSaveAsHtml}
+            >
+              Save as HTML
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="log-viewer__save-item"
+              disabled={!canSave}
+              onClick={onSaveAsText}
+            >
+              Save as text
+            </button>
+          </div>
+        </details>
         <button
           type="button"
           className="log-viewer__close"

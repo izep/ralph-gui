@@ -393,6 +393,10 @@ describe("ControlPanel", () => {
         onSavePrompt={noop}
         onSetRepo={noopResult}
         onRefreshBacklog={noopResult}
+        onSetEpicFile={noopContent}
+        onCreateEpicFile={noopContent}
+        onValidateDocker={noopDocker}
+        onMergeEpicWork={noopMerge}
         isRunning={false}
         onClose={() => {}}
       />
@@ -414,6 +418,10 @@ describe("ControlPanel", () => {
         onSavePrompt={noop}
         onSetRepo={noopResult}
         onRefreshBacklog={noopResult}
+        onSetEpicFile={noopContent}
+        onCreateEpicFile={noopContent}
+        onValidateDocker={noopDocker}
+        onMergeEpicWork={noopMerge}
         isRunning={false}
         onClose={() => {}}
       />
