@@ -49,7 +49,7 @@ function makeCallbacks(isActive: () => boolean, getActiveLoop: () => RalphLoop |
       broadcast(JSON.stringify({ type: "loopStatus", data: { status: loopStatus, error: loopError } }));
 
       if (exitWhenComplete && loopStatus === "idle" && getActiveLoop()?.didCompleteEpic) {
-        addLog("[system] Epic complete, exiting server (--exit-when-complete).");
+        addLog("[ralph] Epic complete, exiting server (--exit-when-complete).");
         setTimeout(() => {
           void requestShutdown?.("epic-complete");
         }, 100);
@@ -117,11 +117,11 @@ async function setRepo(repoPath: string): Promise<{ ok: boolean; error?: string 
     loopError = null;
 
     const readiness = await buildReadiness();
-    addLog(`[system] Repository set to ${loop.repoRoot}`);
+    addLog(`[ralph] Repository set to ${loop.repoRoot}`);
     if (readiness.requirementsFile) {
-      addLog(`[system] Found requirements: ${readiness.requirementsFile}`);
+      addLog(`[ralph] Found requirements: ${readiness.requirementsFile}`);
     } else {
-      addLog("[system] Warning: no requirements.md found in repo root");
+      addLog("[ralph] Warning: no requirements.md found in repo root");
     }
 
     // Broadcast full state refresh to all clients

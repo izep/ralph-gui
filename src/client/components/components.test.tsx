@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach, beforeAll, vi } from "vitest";
+import { describe, it, expect, afterEach, beforeAll, beforeEach, vi } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { ErrorBanner } from "./ErrorBanner";
@@ -113,15 +113,51 @@ describe("KanbanColumn", () => {
 // ---------------------------------------------------------------------------
 
 describe("LogViewer", () => {
+  beforeEach(() => {
+    try {
+      localStorage.removeItem("ralph.logviewer.height");
+    } catch {
+      // ignore
+    }
+  });
+
   it("renders log lines", () => {
     render(
       <LogViewer
-        lines={["[system] Started", "[dev] Working on task"]}
-        onClose={() => { }}
+        lines={["[ralph] Started", "[dev] Working on task"]}
+        onClose={() => {}}
       />
     );
-    expect(screen.getByText("[system] Started")).toBeInTheDocument();
-    expect(screen.getByText("[dev] Working on task")).toBeInTheDocument();
+    expect(screen.getByTitle("[ralph] Started")).toBeInTheDocument();
+    expect(screen.getByText("Started")).toBeInTheDocument();
+    expect(screen.getByText("Working on task")).toBeInTheDocument();
+  });
+
+  it("shows Ralph mascot art on the first [ralph] line in a run", () => {
+    render(
+      <LogViewer
+        lines={[
+          "[ralph] Ralph loop started",
+          "[ralph] Planning iteration #1...",
+          "[dev] Working on task",
+        ]}
+        onClose={() => {}}
+      />
+    );
+    expect(document.querySelector(".log-line__header-art--ralph")).toBeInTheDocument();
+    expect(document.querySelectorAll(".log-line__header-art--ralph")).toHaveLength(1);
+    expect(screen.getAllByText("ralph").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("maps legacy [system] tags to [ralph] styling and mascot", () => {
+    render(
+      <LogViewer
+        lines={["[system] Ralph loop started"]}
+        onClose={() => {}}
+      />
+    );
+    expect(document.querySelector(".log-line__header-art--ralph")).toBeInTheDocument();
+    expect(screen.getAllByText("ralph").length).toBeGreaterThanOrEqual(1);
   });
 
   it("shows line count", () => {
@@ -278,6 +314,7 @@ const defaultSettings: Settings = {
   dockerInstalledBackends: [],
   dockerMountSocket: false,
   dockerAutoMergeEpicWork: true,
+  copilotOutputFormat: "streaming",
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,
@@ -341,6 +378,55 @@ describe("ControlPanel", () => {
     renderPanel();
     // Close button uses × character
     expect(screen.getAllByText("×").length).toBeGreaterThan(0);
+  });
+
+  it("shows Copilot log format when agent backend is copilot", () => {
+    render(
+      <ControlPanel
+        settings={defaultSettings}
+        epic=""
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={noop}
+        onSaveEpic={noop}
+        onSavePrompt={noop}
+        onSetRepo={noopResult}
+        onRefreshBacklog={noopResult}
+        onSetEpicFile={noopContent}
+        onCreateEpicFile={noopContent}
+        onValidateDocker={noopDocker}
+        onMergeEpicWork={noopMerge}
+        isRunning={false}
+        onClose={() => {}}
+      />
+    );
+    expect(screen.getByText("Copilot Log Format")).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Streaming JSONL/ })).toBeInTheDocument();
+  });
+
+  it("hides Copilot log format for non-copilot backends", () => {
+    render(
+      <ControlPanel
+        settings={{ ...defaultSettings, agentBackend: "claude" }}
+        epic=""
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={noop}
+        onSaveEpic={noop}
+        onSavePrompt={noop}
+        onSetRepo={noopResult}
+        onRefreshBacklog={noopResult}
+        onSetEpicFile={noopContent}
+        onCreateEpicFile={noopContent}
+        onValidateDocker={noopDocker}
+        onMergeEpicWork={noopMerge}
+        isRunning={false}
+        onClose={() => {}}
+      />
+    );
+    expect(screen.queryByText("Copilot Log Format")).not.toBeInTheDocument();
   });
 
   it("disables Refresh Backlog when running", () => {

@@ -46,6 +46,7 @@ const DEFAULT_SETTINGS: Settings = {
   dockerInstalledBackends: [],
   dockerMountSocket: false,
   dockerAutoMergeEpicWork: true,
+  copilotOutputFormat: "streaming",
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,

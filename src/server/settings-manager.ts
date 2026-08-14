@@ -8,6 +8,10 @@ import {
   normalizeDockerMergeStrategy,
   type DockerMergeStrategy,
 } from "../shared/docker-merge-strategy.js";
+import {
+  normalizeCopilotOutputFormat,
+  type CopilotOutputFormat,
+} from "../shared/copilotLogFormat.js";
 
 export type { DockerMergeStrategy };
 
@@ -51,6 +55,8 @@ export interface Settings {
   dockerMountSocket: boolean;
   /** Auto-merge dockerWorkBranch into epicBaseBranch when loop finishes successfully */
   dockerAutoMergeEpicWork: boolean;
+  /** Copilot CLI log format when agentBackend is copilot (JSONL + UI formatters). */
+  copilotOutputFormat: CopilotOutputFormat;
   // Relative path to the epic file from the repo root (default: "ralph/epic.md")
   epicFile: string;
   // Relative path to the requirements file; empty string means auto-discover
@@ -86,6 +92,7 @@ export const DEFAULT_SETTINGS: Settings = {
   dockerInstalledBackends: [],
   dockerMountSocket: false,
   dockerAutoMergeEpicWork: true,
+  copilotOutputFormat: "streaming",
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,
@@ -114,6 +121,7 @@ export class SettingsManager {
         ...DEFAULT_SETTINGS,
         ...parsed,
         agentBackend: normalizeAgentBackend(parsed.agentBackend),
+        copilotOutputFormat: normalizeCopilotOutputFormat(parsed.copilotOutputFormat),
       };
 
       // Backward compatibility for older settings.json files.
@@ -152,6 +160,9 @@ export class SettingsManager {
   async write(settings: Settings): Promise<void> {
     const normalized = { ...DEFAULT_SETTINGS, ...settings };
     normalized.agentBackend = normalizeAgentBackend(settings.agentBackend);
+    normalized.copilotOutputFormat = normalizeCopilotOutputFormat(
+      settings.copilotOutputFormat,
+    );
     await writeFile(
       path.join(this.ralphDir, "settings.json"),
       JSON.stringify(normalized, null, 2),

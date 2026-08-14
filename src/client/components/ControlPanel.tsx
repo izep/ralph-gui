@@ -1,7 +1,11 @@
 import { useState, useEffect } from "react";
 import type { Settings, Readiness } from "../types";
 import { RepositorySection } from "./RepositorySection";
-import { LoopConfigSection, normalizeAgentBackend } from "./LoopConfigSection";
+import {
+  LoopConfigSection,
+  normalizeAgentBackend,
+  normalizeCopilotOutputFormat,
+} from "./LoopConfigSection";
 import { EpicSection } from "./EpicSection";
 import { PromptsSection } from "./PromptsSection";
 import { DockerSection } from "./DockerSection";
@@ -60,7 +64,12 @@ export function ControlPanel({
 
   // Sync from server when props change
   useEffect(
-    () => setLocalSettings({ ...settings, agentBackend: normalizeAgentBackend(settings.agentBackend) }),
+    () =>
+      setLocalSettings({
+        ...settings,
+        agentBackend: normalizeAgentBackend(settings.agentBackend),
+        copilotOutputFormat: normalizeCopilotOutputFormat(settings.copilotOutputFormat),
+      }),
     [settings],
   );
   useEffect(() => setLocalEpic(epic), [epic]);

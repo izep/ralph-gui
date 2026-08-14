@@ -353,6 +353,7 @@ Default loop settings are:
 - `dockerInstalledBackends: []`
 - `dockerMountSocket: false`
 - `dockerAutoMergeEpicWork: true` — When `dockerIsolateBranch` is on, automatically merge the work branch into the epic base branch at successful loop end. Set to `false` to merge manually.
+- `copilotOutputFormat: streaming` — Copilot JSONL logs with `[copilot:plan|dev|qa]` tags and a structured log viewer (also `json` or `text`)
 
 Use your selected CLI's help output for supported models (for example `copilot --help`, `claude --help`, `cursor-agent --help`, or `gemini --help`).
 

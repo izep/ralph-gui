@@ -9,6 +9,7 @@ import {
 } from "./templates.js";
 import { TaskManager, type StatusData } from "./task-manager.js";
 import { LLMCaller, type LLMCallOpts } from "./llm-caller.js";
+import { copilotAgentUsesJsonlLog } from "../shared/copilotLogFormat.js";
 import {
   parseRemainingTasks,
   parseBlockedInfo,
@@ -69,7 +70,7 @@ export class RalphLoop {
     this.fileManager = new RalphFileManager(this.ralphDir);
     this.settingsManager = new SettingsManager(this.ralphDir);
     this.gitManager = new GitManager(this.repoRoot);
-    this.llmCaller = new LLMCaller(() => this.running);
+    this.llmCaller = new LLMCaller(() => this.running, (line) => this.cb.onLog(line));
   }
 
   get isRunning() {
@@ -97,6 +98,8 @@ export class RalphLoop {
     const tag = phase === "backlog" ? "plan" : phase;
     return {
       agentBackend: s.agentBackend,
+      phase: tag,
+      copilotOutputFormat: s.copilotOutputFormat,
       reasoningEffort:
         phase === "dev"
           ? s.devReasoningEffort
@@ -323,7 +326,7 @@ export class RalphLoop {
     this.completedEpic = false;
     this.stopRequestedRunId = null;
     this.cb.onLoopStatus("running", null);
-    this.cb.onLog(`[system] Ralph loop started (requirements: ${reqFile})`);
+    this.cb.onLog(`[ralph] Ralph loop started (requirements: ${reqFile})`);
 
     // Run in background — don't await
     const runPromise = this.runLoop();
@@ -353,7 +356,7 @@ export class RalphLoop {
     this.dockerPool?.stopAll();
     this.dockerPool = null;
     this.cb.onLoopStatus("stopped", null);
-    this.cb.onLog("[system] Ralph loop stopped by user");
+    this.cb.onLog("[ralph] Ralph loop stopped by user");
     return { ok: true };
   }
 
@@ -387,7 +390,7 @@ export class RalphLoop {
     }
 
     this.refreshing = true;
-    this.cb.onLog("[system] Refreshing backlog...");
+    this.cb.onLog("[ralph] Refreshing backlog...");
 
     try {
       await this.bootstrap();
@@ -412,26 +415,26 @@ export class RalphLoop {
         const data = await this.taskManager.readStatus();
         data.tasks = data.tasks.filter((t) => t.status !== "backlog");
         await this.taskManager.writeStatus(data);
-        this.cb.onLog("[system] Backlog refresh: project appears complete");
+        this.cb.onLog("[ralph] Backlog refresh: project appears complete");
       } else {
         const parsedTasks = parseJsonTaskList(output);
         if (parsedTasks.length > 0) {
           await this.taskManager.syncBacklogTasks(parsedTasks);
-          this.cb.onLog(`[system] Backlog refreshed: ${parsedTasks.length} tasks`);
+          this.cb.onLog(`[ralph] Backlog refreshed: ${parsedTasks.length} tasks`);
         } else {
           const remainingTasks = parseRemainingTasks(output);
           if (remainingTasks.length > 0) {
             await this.taskManager.syncBacklogTasksByTitle(remainingTasks);
-            this.cb.onLog(`[system] Backlog refreshed: ${remainingTasks.length} tasks`);
+            this.cb.onLog(`[ralph] Backlog refreshed: ${remainingTasks.length} tasks`);
           } else {
-            this.cb.onLog("[system] Backlog refresh: no tasks parsed from output");
+            this.cb.onLog("[ralph] Backlog refresh: no tasks parsed from output");
           }
         }
       }
       return { ok: true };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      this.cb.onLog(`[system] Backlog refresh failed: ${msg}`);
+      this.cb.onLog(`[ralph] Backlog refresh failed: ${msg}`);
       return { ok: false, error: msg };
     } finally {
       this.refreshing = false;
@@ -483,7 +486,7 @@ export class RalphLoop {
     if (resumeTask && this.running) {
       const isQa = resumeTask.status === "inQa";
       this.cb.onLog(
-        `[system] Resuming ${isQa ? "QA" : "dev"} for task #${resumeTask.id}: ${resumeTask.title}`
+        `[ralph] Resuming ${isQa ? "QA" : "dev"} for task #${resumeTask.id}: ${resumeTask.title}`
       );
       const taskContent = `## Task: ${resumeTask.title}\n\n${resumeTask.description}`;
       await this.taskManager.setNextTaskContent(resumeTask.id, taskContent);
@@ -503,7 +506,7 @@ export class RalphLoop {
       const settings = await this.settingsManager.read();
       if (totalLLMCalls >= settings.maxLLMCalls) {
         this.cb.onLog(
-          `[system] Max LLM calls reached (${totalLLMCalls}/${settings.maxLLMCalls})`
+          `[ralph] Max LLM calls reached (${totalLLMCalls}/${settings.maxLLMCalls})`
         );
         break;
       }
@@ -522,7 +525,7 @@ export class RalphLoop {
         // Pick the first backlog task without re-planning
         const nextBacklog = currentStatus.tasks.find((t) => t.status === "backlog");
         if (nextBacklog) {
-          this.cb.onLog(`[system] Skipping plan phase (${backlogCount} backlog tasks, plan every ${settings.planFrequency} tasks)`);
+          this.cb.onLog(`[ralph] Skipping plan phase (${backlogCount} backlog tasks, plan every ${settings.planFrequency} tasks)`);
           const effectiveTaskId = nextBacklog.id;
           const title = nextBacklog.title;
 
@@ -550,7 +553,7 @@ export class RalphLoop {
         }
       }
 
-      this.cb.onLog(`[system] Planning iteration #${iteration}...`);
+      this.cb.onLog(`[ralph] Planning iteration #${iteration}...`);
       tasksSincePlan = 0;
 
       // --- Plan phase ---
@@ -568,11 +571,11 @@ export class RalphLoop {
         throw new Error(`Plan phase failed: ${err}`);
       }
       totalLLMCalls++;
-      this.cb.onLog(`[system] Planning iteration #${iteration} finished in ${this.elapsed(planStart)}`);
+      this.cb.onLog(`[ralph] Planning iteration #${iteration} finished in ${this.elapsed(planStart)}`);
 
       // Check if all tasks are done
       if (nextTaskContent.includes("<status>complete</status>")) {
-        this.cb.onLog(`[system] All tasks completed after ${iteration - 1} tasks.`);
+        this.cb.onLog(`[ralph] All tasks completed after ${iteration - 1} tasks.`);
         this.completedEpic = true;
         const statusData = await this.taskManager.readStatus();
         statusData.tasks = statusData.tasks.filter(
@@ -599,10 +602,10 @@ export class RalphLoop {
       const parsedTaskList = parseJsonTaskList(nextTaskContent);
       if (parsedTaskList.length > 0) {
         await this.taskManager.syncBacklogTasks(parsedTaskList);
-        this.cb.onLog(`[system] Synced ${parsedTaskList.length} tasks from plan output (json)`);
+        this.cb.onLog(`[ralph] Synced ${parsedTaskList.length} tasks from plan output (json)`);
       } else if (remainingTasks.length > 0) {
         await this.taskManager.syncBacklogTasksByTitle(remainingTasks);
-        this.cb.onLog(`[system] Synced ${remainingTasks.length} tasks from plan output`);
+        this.cb.onLog(`[ralph] Synced ${remainingTasks.length} tasks from plan output`);
       }
 
       // --- Parallel plan research sub-jobs (stretch, gated by dockerPlanParallel) ---
@@ -662,7 +665,7 @@ export class RalphLoop {
       const taskEntry = statusData.tasks.find((t) => t.status === "backlog");
 
       if (!taskEntry) {
-        this.cb.onLog("[system] Warning: no backlog task found after planning — skipping dev loop.");
+        this.cb.onLog("[ralph] Warning: no backlog task found after planning — skipping dev loop.");
         continue;
       }
 
@@ -783,7 +786,7 @@ export class RalphLoop {
       if (totalLLMCalls >= s.maxLLMCalls) break;
 
       this.cb.onLog(
-        `[system] Dev iteration #${devIteration} for task #${effectiveTaskId}: ${title}`
+        `[ralph] Dev iteration #${devIteration} for task #${effectiveTaskId}: ${title}`
       );
 
       if (!startAtQa) {
@@ -805,9 +808,12 @@ export class RalphLoop {
         totalLLMCalls++;
         this.cb.onLog(`[dev] Dev agent finished in ${this.elapsed(devStart)}`);
 
-        // Log a summary (first 200 chars)
-        const summary = devOutput.slice(0, 200).replace(/\n/g, " ");
-        this.cb.onLog(`[dev] ${summary}${devOutput.length > 200 ? "..." : ""}`);
+        if (
+          !copilotAgentUsesJsonlLog(s.agentBackend, s.copilotOutputFormat)
+        ) {
+          const summary = devOutput.slice(0, 200).replace(/\n/g, " ");
+          this.cb.onLog(`[dev] ${summary}${devOutput.length > 200 ? "..." : ""}`);
+        }
 
         if (devOutput.includes("<status>blocked</status>")) {
           const blockedInfo = parseBlockedInfo(devOutput);
@@ -839,7 +845,7 @@ export class RalphLoop {
         // Respect limits between dev and QA calls.
         if (totalLLMCalls >= s.maxLLMCalls) {
           this.cb.onLog(
-            `[system] Max LLM calls reached (${totalLLMCalls}/${s.maxLLMCalls})`
+            `[ralph] Max LLM calls reached (${totalLLMCalls}/${s.maxLLMCalls})`
           );
           break;
         }
@@ -904,8 +910,12 @@ export class RalphLoop {
             devIteration
           ),
         );
-        const fbSummary = feedback.slice(0, 120).replace(/\n/g, " ");
-        this.cb.onLog(`[qa] Feedback: ${fbSummary}...`);
+        if (
+          !copilotAgentUsesJsonlLog(s.agentBackend, s.copilotOutputFormat)
+        ) {
+          const fbSummary = feedback.slice(0, 120).replace(/\n/g, " ");
+          this.cb.onLog(`[qa] Feedback: ${fbSummary}...`);
+        }
       }
 
       devIteration++;
@@ -930,9 +940,9 @@ export class RalphLoop {
         }
       }
       await this.gitManager.autoCommit(taskNum, title, hostCwd);
-      this.cb.onLog(`[system] Committed: Task #${taskNum} - ${title}`);
+      this.cb.onLog(`[ralph] Committed: Task #${taskNum} - ${title}`);
     } catch (err) {
-      this.cb.onLog(`[system] Auto-commit failed: ${err}`);
+      this.cb.onLog(`[ralph] Auto-commit failed: ${err}`);
     }
   }
 
@@ -1181,12 +1191,12 @@ export class RalphLoop {
 
     if (err) {
       this.cb.onLoopStatus("error", err.message);
-      this.cb.onLog(`[system] Loop error: ${err.message}`);
+      this.cb.onLog(`[ralph] Loop error: ${err.message}`);
       return;
     }
 
     this.cb.onLoopStatus("idle", null);
-    this.cb.onLog("[system] Ralph loop finished");
+    this.cb.onLog("[ralph] Ralph loop finished");
   }
 
   private async waitForIdle(): Promise<void> {
