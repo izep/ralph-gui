@@ -34,16 +34,18 @@ describe('agent-models catalog', () => {
   });
 
   it('claude backend uses hyphenated Claude Code CLI IDs', () => {
-    expect(getPreferredModels('claude').planModel).toBe('claude-sonnet-4-6');
+    expect(getPreferredModels('claude').planModel).toBe('claude-sonnet-5');
     expect(isModelInCatalog('claude', 'claude-sonnet-4.6')).toBe(false);
     expect(isModelInCatalog('claude', 'claude-sonnet-4-6')).toBe(true);
+    expect(isModelInCatalog('claude', 'claude-sonnet-5')).toBe(true);
   });
 
   it('copilot keeps dotted Anthropic IDs separate from Claude CLI', () => {
-    expect(AGENT_MODEL_CATALOG.copilot.length).toBe(14);
+    expect(AGENT_MODEL_CATALOG.copilot.length).toBe(24);
     expect(isModelInCatalog('copilot', 'claude-sonnet-4.6')).toBe(true);
     expect(isModelInCatalog('copilot', 'claude-sonnet-4-6')).toBe(false);
-    expect(getPreferredModels('copilot').planModel).toBe('claude-sonnet-4.6');
+    expect(isModelInCatalog('copilot', 'claude-sonnet-5')).toBe(true);
+    expect(getPreferredModels('copilot').planModel).toBe('claude-sonnet-5');
   });
 
   it('gemini catalog uses Gemini 3 preview IDs for preferred roles', () => {
@@ -73,9 +75,9 @@ describe('agent-models catalog', () => {
   });
 
   it('formatModelOptionLabel uses (id) Model -- recommendation', () => {
-    const entry = AGENT_MODEL_CATALOG.claude.find((e) => e.id === 'claude-sonnet-4-6')!;
+    const entry = AGENT_MODEL_CATALOG.claude.find((e) => e.id === 'claude-sonnet-5')!;
     expect(formatModelOptionLabel(entry, 'Planning')).toBe(
-      '(claude-sonnet-4-6) Claude Sonnet 4.6 -- recommended for planning',
+      '(claude-sonnet-5) Claude Sonnet 5 -- recommended for planning',
     );
   });
 
@@ -115,7 +117,55 @@ describe('agent-models catalog', () => {
     expect(result.qaModel).toBe('gemini-3-flash-preview');
   });
 
+  it('normalizeSettingsModels preserves custom free-text model IDs instead of resetting to preferred', () => {
+    const result = normalizeSettingsModels(
+      'copilot',
+      'my-org/custom-fine-tune',
+      'gpt-5.4-mini',
+      'gpt-5.4-mini',
+      {},
+    );
+    expect(result.planModel).toBe('my-org/custom-fine-tune');
+  });
+
+  it('resolveModelsForBackend preserves a saved custom free-text model ID', () => {
+    const saved = {
+      copilot: { planModel: 'my-org/custom-fine-tune', devModel: 'gpt-5.4-mini', qaModel: 'gpt-5.4-mini' },
+    };
+    expect(resolveModelsForBackend('copilot', saved).planModel).toBe('my-org/custom-fine-tune');
+  });
+
   it('resolveModelsForBackend falls back to preferred when no saved entry', () => {
     expect(resolveModelsForBackend('gemini', {})).toEqual(getPreferredModels('gemini'));
+  });
+
+  it('catalog ids match docs/coding-agents-available-models.md tables', async () => {
+    const { readFile } = await import('node:fs/promises');
+    const { fileURLToPath } = await import('node:url');
+    const path = await import('node:path');
+    const here = path.dirname(fileURLToPath(import.meta.url));
+    const md = await readFile(
+      path.join(here, '../../docs/coding-agents-available-models.md'),
+      'utf-8',
+    );
+    const sectionToBackend: Record<string, keyof typeof AGENT_MODEL_CATALOG> = {
+      'Cursor Agent CLI': 'cursor-agent',
+      'Claude Code CLI': 'claude',
+      'Gemini CLI': 'gemini',
+      'GitHub Copilot CLI': 'copilot',
+      'OpenCode CLI': 'opencode',
+    };
+    for (const [heading, backend] of Object.entries(sectionToBackend)) {
+      const start = md.indexOf(`## ${heading}`);
+      expect(start).toBeGreaterThanOrEqual(0);
+      const rest = md.slice(start);
+      const next = rest.indexOf('\n## ', 3);
+      const section = next === -1 ? rest : rest.slice(0, next);
+      const ids = [...section.matchAll(/^\| [^|]+ \| ([^|]+) \|/gm)]
+        .map((m) => m[1].trim())
+        .filter((id) => id && id !== 'ID' && !id.startsWith('-'));
+      const catalogIds = AGENT_MODEL_CATALOG[backend].map((e) => e.id);
+      expect(catalogIds.sort()).toEqual([...ids].sort());
+    }
   });
 });

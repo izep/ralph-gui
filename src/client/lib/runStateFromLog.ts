@@ -334,7 +334,7 @@ export function deriveRunStateForCurrentTask(
   if (!state) return null;
   if (anchor) {
     state.taskLine = anchor.taskLine;
-  } else if (taskId > 0) {
+  } else if (taskId > 0 && state.phase !== "plan") {
     state.taskLine = taskTitle
       ? `Task #${taskId} · ${taskTitle}`
       : `Task #${taskId}`;

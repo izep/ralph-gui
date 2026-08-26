@@ -19,7 +19,7 @@ export function normalizeAgentBackend(value: string | undefined): AgentBackendId
   return "copilot";
 }
 
-export const FLEET_CAPABLE_BACKENDS = ["copilot"] as const satisfies readonly AgentBackendId[];
+export const FLEET_CAPABLE_BACKENDS = ["copilot", "claude"] as const satisfies readonly AgentBackendId[];
 
 export function backendSupportsFleetMode(backend: AgentBackendId): boolean {
   return (FLEET_CAPABLE_BACKENDS as readonly string[]).includes(backend);
@@ -197,8 +197,10 @@ export function LoopConfigSection({
         </label>
         {!backendSupportsFleetMode(localSettings.agentBackend) ? (
           <p className="cp-hint">
-            Only available for agents that support parallel subagents (currently GitHub Copilot CLI).
+            Only available for agents whose Fleet Mode is Yes (GitHub Copilot CLI and Claude Code).
           </p>
+        ) : localSettings.agentBackend === "claude" ? (
+          <p className="cp-hint">Uses Claude Code parallel subagents on dev/QA.</p>
         ) : (
           <p className="cp-hint">Uses Copilot /fleet on dev/QA; may increase premium request usage.</p>
         )}
@@ -330,6 +332,7 @@ export function LoopConfigSection({
             <option value="idAsc">Task id (low to high)</option>
             <option value="idDesc">Task id (high to low)</option>
           </select>
+          <span className="cp-hint">Applies to In Progress, In QA, and Done. Backlog is always lowest task number first.</span>
         </label>
 
         <label className="cp-field cp-field--row">

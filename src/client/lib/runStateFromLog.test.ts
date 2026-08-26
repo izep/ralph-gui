@@ -147,11 +147,21 @@ describe("deriveRunStateForCurrentTask", () => {
     expect(s2!.writes).toBe(1);
   });
 
-  it("uses app title when the task is not in the log yet", () => {
+  it("does not show a leftover task title during plan", () => {
     const lines = ["[ralph] Planning iteration #1..."];
+    const s = deriveRunStateForCurrentTask(lines, 1, "Live Databricks smoke validation");
+    expect(s!.taskLine).toBe("");
+    expect(s!.phase).toBe("plan");
+  });
+
+  it("uses app title when a claimed task is not in the log yet", () => {
+    const lines = [
+      "[ralph] Planning iteration #1 finished in 12s",
+      "[dev] Running dev agent...",
+    ];
     const s = deriveRunStateForCurrentTask(lines, 4, "Future work");
     expect(s!.taskLine).toBe("Task #4 · Future work");
-    expect(s!.phase).toBe("plan");
+    expect(s!.phase).toBe("dev");
   });
 
   it("shows QA when the log tail is in QA even after a dev banner", () => {

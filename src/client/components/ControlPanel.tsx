@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import type { Settings, Readiness } from "../types";
 import { RepositorySection } from "./RepositorySection";
 import {
@@ -7,7 +7,7 @@ import {
   normalizeCopilotOutputFormat,
 } from "./LoopConfigSection";
 import { EpicSection } from "./EpicSection";
-import { PromptsSection } from "./PromptsSection";
+import { PromptsSection, promptLabel } from "./PromptsSection";
 import { DockerSection } from "./DockerSection";
 import { CollapsibleSection } from "./CollapsibleSection";
 import { isDockerDirty, isLoopDirty, pickDockerSettings, pickLoopSettings } from "../control-panel-dirty";
@@ -56,25 +56,73 @@ export function ControlPanel({
   const [localRepo, setLocalRepo] = useState(repoRoot);
   const [repoError, setRepoError] = useState("");
   const [activePrompt, setActivePrompt] = useState(DEFAULT_PROMPT_KEY);
-  const [localPrompt, setLocalPrompt] = useState("");
+  const [localPrompt, setLocalPrompt] = useState(prompts[DEFAULT_PROMPT_KEY] ?? "");
   const [refreshing, setRefreshing] = useState(false);
   const repoLocked = !readiness.repoConfigured;
+  const settingsBaselineRef = useRef(settings);
+  const epicBaselineRef = useRef(epic);
+  const promptBaselineRef = useRef(prompts[DEFAULT_PROMPT_KEY] ?? "");
 
-  const canClose = readiness.repoConfigured && readiness.requirementsFound;
+  const canClose = true;
 
-  // Sync from server when props change
+  function normalizedSettings(s: Settings): Settings {
+    return {
+      ...s,
+      agentBackend: normalizeAgentBackend(s.agentBackend),
+      copilotOutputFormat: normalizeCopilotOutputFormat(s.copilotOutputFormat),
+    };
+  }
+
+  // Sync from server when props change, but do not clobber dirty drafts.
   useEffect(
     () =>
-      setLocalSettings({
-        ...settings,
-        agentBackend: normalizeAgentBackend(settings.agentBackend),
-        copilotOutputFormat: normalizeCopilotOutputFormat(settings.copilotOutputFormat),
+      setLocalSettings((prev) => {
+        const dirtyVsBaseline =
+          isDockerDirty(prev, settingsBaselineRef.current) ||
+          isLoopDirty(prev, settingsBaselineRef.current);
+        const dirtyVsIncoming = isDockerDirty(prev, settings) || isLoopDirty(prev, settings);
+        if (dirtyVsBaseline && dirtyVsIncoming) return prev;
+        const next = normalizedSettings(settings);
+        settingsBaselineRef.current = next;
+        return next;
       }),
     [settings],
   );
-  useEffect(() => setLocalEpic(epic), [epic]);
-  useEffect(() => setLocalRepo(repoRoot), [repoRoot]);
-  useEffect(() => setLocalPrompt(prompts[activePrompt] ?? ""), [prompts, activePrompt]);
+  useEffect(() => {
+    setLocalEpic((prev) => {
+      const dirty = prev !== epicBaselineRef.current;
+      if (dirty && prev !== epic) return prev;
+      epicBaselineRef.current = epic;
+      return epic;
+    });
+  }, [epic]);
+  useEffect(() => {
+    setLocalRepo(repoRoot);
+    setLocalSettings(normalizedSettings(settings));
+    settingsBaselineRef.current = normalizedSettings(settings);
+    setLocalEpic(epic);
+    epicBaselineRef.current = epic;
+    const incomingPrompt = prompts[activePrompt] ?? "";
+    setLocalPrompt(incomingPrompt);
+    promptBaselineRef.current = incomingPrompt;
+  }, [repoRoot]);
+  useEffect(() => {
+    const incoming = prompts[activePrompt] ?? "";
+    setLocalPrompt((prev) => {
+      // Empty local + server content is a load, not a user-cleared draft.
+      // Dev Strict Mode can mutate the baseline ref before the first setState flushes.
+      if (prev === "" && incoming !== "") {
+        promptBaselineRef.current = incoming;
+        return incoming;
+      }
+      const dirty = prev !== promptBaselineRef.current;
+      if (dirty && prev !== incoming) return prev;
+      promptBaselineRef.current = incoming;
+      return incoming;
+    });
+    // Tab switches apply the selected file in handleActivePromptChange so this
+    // effect does not treat the previous persona's text as a dirty draft.
+  }, [prompts]);
 
   useEffect(() => {
     onSettingsDraftChange?.(localSettings);
@@ -85,6 +133,24 @@ export function ControlPanel({
   const loopDirty = isLoopDirty(localSettings, settings);
   const epicDirty = localEpic !== epic || localSettings.epicFile !== settings.epicFile;
   const promptDirty = localPrompt !== (prompts[activePrompt] ?? "");
+
+  function applyPrompt(key: string) {
+    const incoming = prompts[key] ?? "";
+    setActivePrompt(key);
+    setLocalPrompt(incoming);
+    promptBaselineRef.current = incoming;
+  }
+
+  function handleActivePromptChange(nextKey: string) {
+    if (nextKey === activePrompt) return;
+    if (promptDirty) {
+      window.alert(
+        `Save or reset the ${promptLabel(activePrompt)} prompt before switching to ${promptLabel(nextKey)}.`,
+      );
+      return;
+    }
+    applyPrompt(nextKey);
+  }
 
   async function handleSaveDocker() {
     const merged: Settings = { ...settings, ...pickDockerSettings(localSettings) };
@@ -132,7 +198,9 @@ export function ControlPanel({
   }
 
   function handleResetPrompt() {
-    setLocalPrompt(prompts[activePrompt] ?? "");
+    const incoming = prompts[activePrompt] ?? "";
+    setLocalPrompt(incoming);
+    promptBaselineRef.current = incoming;
   }
 
   async function handleSavePrompt() {
@@ -155,10 +223,10 @@ export function ControlPanel({
   }
 
   const [expandedMap, setExpandedMap] = useState<Record<'docker' | 'loop' | 'epic' | 'prompts', boolean>>({
-    docker: true,
-    loop: true,
-    epic: true,
-    prompts: true,
+    docker: false,
+    loop: false,
+    epic: false,
+    prompts: false,
   });
 
   function collapseAll() {
@@ -202,22 +270,6 @@ export function ControlPanel({
         onRequirementsFileChange={(v) => setLocalSettings({ ...localSettings, requirementsFile: v })}
       />
 
-      <CollapsibleSection id="docker" title="Docker Agents" expanded={expandedMap.docker} onToggle={() => toggle('docker')}>
-        <DockerSection
-          localSettings={localSettings}
-          onChangeSettings={setLocalSettings}
-          readiness={readiness}
-          repoLocked={repoLocked}
-          isRunning={isRunning}
-          onValidateDocker={onValidateDocker}
-          onMergeEpicWork={onMergeEpicWork}
-          dockerDirty={dockerDirty}
-          onSaveDocker={handleSaveDocker}
-          onResetDocker={handleResetDocker}
-          suppressHeader
-        />
-      </CollapsibleSection>
-
       <CollapsibleSection id="loop" title="Loop Configuration" expanded={expandedMap.loop} onToggle={() => toggle('loop')}>
         <LoopConfigSection
           localSettings={localSettings}
@@ -254,12 +306,28 @@ export function ControlPanel({
         <PromptsSection
           repoLocked={repoLocked}
           activePrompt={activePrompt}
-          onActivePromptChange={setActivePrompt}
+          onActivePromptChange={handleActivePromptChange}
           localPrompt={localPrompt}
           onLocalPromptChange={setLocalPrompt}
           promptDirty={promptDirty}
           onSavePrompt={handleSavePrompt}
           onResetPrompt={handleResetPrompt}
+          suppressHeader
+        />
+      </CollapsibleSection>
+
+      <CollapsibleSection id="docker" title="Docker Agents" expanded={expandedMap.docker} onToggle={() => toggle('docker')}>
+        <DockerSection
+          localSettings={localSettings}
+          onChangeSettings={setLocalSettings}
+          readiness={readiness}
+          repoLocked={repoLocked}
+          isRunning={isRunning}
+          onValidateDocker={onValidateDocker}
+          onMergeEpicWork={onMergeEpicWork}
+          dockerDirty={dockerDirty}
+          onSaveDocker={handleSaveDocker}
+          onResetDocker={handleResetDocker}
           suppressHeader
         />
       </CollapsibleSection>

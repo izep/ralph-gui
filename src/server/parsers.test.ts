@@ -181,6 +181,39 @@ describe("parseJsonTaskList", () => {
     expect(parseJsonTaskList(content)).toEqual([]);
   });
 
+  it("parses an unlabeled fence", () => {
+    const tasks = [{ id: 1, title: "Unlabeled", description: "d", status: "backlog" }];
+    const content = "```\n" + JSON.stringify(tasks) + "\n```";
+    expect(parseJsonTaskList(content)).toHaveLength(1);
+    expect(parseJsonTaskList(content)[0].title).toBe("Unlabeled");
+  });
+
+  it("parses a fence that closes on the same line as the array", () => {
+    const content = '```json\n[{"id":1,"title":"Same line","description":"d","status":"backlog"}]```';
+    expect(parseJsonTaskList(content)[0]?.title).toBe("Same line");
+  });
+
+  it("coerces string ids to numbers", () => {
+    const content = '```json\n[{"id":"3","title":"String id","description":"d","status":"backlog"}]\n```';
+    expect(parseJsonTaskList(content)[0]).toMatchObject({ id: 3, title: "String id" });
+  });
+
+  it("strips trailing commas before parse", () => {
+    const content = '```json\n[{"id":1,"title":"Trailing","description":"d","status":"backlog",}]\n```';
+    expect(parseJsonTaskList(content)[0]?.title).toBe("Trailing");
+  });
+
+  it("parses a raw unfenced JSON array", () => {
+    const content = 'Preamble\n[{"id":8,"title":"Raw array","description":"d","status":"backlog"}]\nThanks';
+    expect(parseJsonTaskList(content)[0]?.title).toBe("Raw array");
+  });
+
+  it("prefers the last fenced array when several are present", () => {
+    const first = '```json\n[{"id":1,"title":"First","description":"d","status":"backlog"}]\n```';
+    const second = '```json\n[{"id":2,"title":"Second","description":"d","status":"backlog"}]\n```';
+    expect(parseJsonTaskList(`${first}\n${second}`)[0]?.title).toBe("Second");
+  });
+
   it("returns empty array when fenced block contains malformed JSON", () => {
     const content = "```json\n{ not valid json [\n```";
     expect(parseJsonTaskList(content)).toEqual([]);

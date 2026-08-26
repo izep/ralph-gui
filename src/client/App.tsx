@@ -4,7 +4,7 @@ import { KanbanColumn } from "./components/KanbanColumn";
 import { ControlPanel } from "./components/ControlPanel";
 import { LogViewer } from "./components/LogViewer";
 import { ErrorBanner } from "./components/ErrorBanner";
-import { COLUMNS, groupTasks, sortTasks, type Settings } from "./types";
+import { COLUMNS, groupTasks, sortTasksForColumn, formatInFlightHeader, type Settings } from "./types";
 import "./App.css";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -17,6 +17,7 @@ const STATUS_LABELS: Record<string, string> = {
 export default function App() {
   const ralph = useRalph();
   const [showSettings, setShowSettings] = useState(false);
+  const setupOpenedRef = useRef(false);
   const [showLog, setShowLog] = useState(false);
   const [errorDismissed, setErrorDismissed] = useState(false);
   const [panelWidth, setPanelWidth] = useState(400);
@@ -55,7 +56,13 @@ export default function App() {
     ralph.readiness.repoConfigured &&
     ralph.readiness.requirementsFound &&
     ralph.readiness.epicConfigured;
-  const settingsVisible = showSettings || !isReady;
+  useEffect(() => {
+    if (!isReady && !setupOpenedRef.current) {
+      setupOpenedRef.current = true;
+      setShowSettings(true);
+    }
+  }, [isReady]);
+  const settingsVisible = showSettings;
 
   useEffect(() => {
     if (!settingsVisible) {
@@ -95,7 +102,9 @@ export default function App() {
         <div className="app-header__stats">
           <div className="stat">
             <span className="stat__label">Task</span>
-            <span className="stat__value">#{ralph.tasks.currentTaskNum || 0}</span>
+            <span className="stat__value">
+              {formatInFlightHeader(ralph.tasks.tasks, ralph.tasks.currentTaskNum)}
+            </span>
           </div>
           <div className="stat">
             <span className="stat__label">LLM Calls</span>
@@ -152,7 +161,7 @@ export default function App() {
           </button>
           <button
             className={`icon-btn ${settingsVisible ? "icon-btn--active" : ""}`}
-            onClick={() => setShowSettings(!settingsVisible)}
+            onClick={() => setShowSettings(!showSettings)}
             title="Settings"
           >
             {"\u2699"}
@@ -190,7 +199,11 @@ export default function App() {
             <KanbanColumn
               key={col.key}
               column={col}
-              tasks={sortTasks(groups[col.key] || [], ralph.settings.taskColumnSort)}
+              tasks={sortTasksForColumn(
+                col.key,
+                groups[col.key] || [],
+                settingsDraft.taskColumnSort,
+              )}
             />
           ))}
         </main>
