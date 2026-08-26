@@ -463,20 +463,33 @@ export class LLMCaller {
             break;
           }
           case "claude": {
-            assertPromptFitsArgv(prompt, backend);
-            args = [
-              "-p",
-              normalizePromptForArgv(prompt),
-              "--model",
-              model,
-              ...CLAUDE_NON_INTERACTIVE_FLAGS,
-              "--output-format",
-              "text",
-            ];
+            if (prompt.length <= ARG_PROMPT_MAX_CHARS) {
+              args = [
+                "-p",
+                normalizePromptForArgv(prompt),
+                "--model",
+                model,
+                ...CLAUDE_NON_INTERACTIVE_FLAGS,
+                "--output-format",
+                "text",
+              ];
+              writeStdin = null;
+            } else {
+              // Large prompts exceed argv limits; claude reads the prompt from stdin
+              // when -p is passed without an inline argument.
+              args = [
+                "-p",
+                "--model",
+                model,
+                ...CLAUDE_NON_INTERACTIVE_FLAGS,
+                "--output-format",
+                "text",
+              ];
+              writeStdin = prompt;
+            }
             if (reasoningEffort) {
               args.push("--effort", reasoningEffort);
             }
-            writeStdin = null;
             break;
           }
           case "gemini": {

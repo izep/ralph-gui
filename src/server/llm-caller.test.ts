@@ -493,16 +493,44 @@ describe("LLMCaller.call", () => {
     await expect(resultPromise).resolves.toBe("ok");
   });
 
-  it("fails with a clear error for oversized argv prompts", async () => {
+  it("writes oversized claude prompts to stdin instead of failing argv limits", async () => {
     process.env.CLAUDE_BIN = await makeExecutable("claude");
     const caller = new LLMCaller(() => true);
 
     const hugePrompt = "x".repeat(50_000);
+    const resultPromise = caller.call(hugePrompt, "claude-sonnet-4-6", tmpDir, {
+      agentBackend: "claude",
+      reasoningEffort: "high",
+    });
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
+    const [, args] = spawnMock.mock.calls[0] as [string, string[]];
+    const proc = spawnMock.mock.results[0].value as MockChildProcess;
+
+    expect(args).toEqual([
+      "-p",
+      "--model", "claude-sonnet-4-6",
+      "--permission-mode", "bypassPermissions",
+      "--output-format", "text",
+      "--effort", "high",
+    ]);
+    expect(proc.stdin.write).toHaveBeenCalledWith(hugePrompt);
+
+    proc.stdout.emit("data", Buffer.from("ok"));
+    proc.emit("close", 0);
+    await expect(resultPromise).resolves.toBe("ok");
+  });
+
+  it("fails with a clear error for oversized gemini argv prompts", async () => {
+    process.env.GEMINI_BIN = await makeExecutable("gemini");
+    const caller = new LLMCaller(() => true);
+
+    const hugePrompt = "x".repeat(50_000);
     await expect(
-      caller.call(hugePrompt, "claude-sonnet-4-6", tmpDir, {
-        agentBackend: "claude",
+      caller.call(hugePrompt, "gemini-2.5-pro", tmpDir, {
+        agentBackend: "gemini",
       }),
-    ).rejects.toThrow("Prompt too large to pass via argv for claude");
+    ).rejects.toThrow("Prompt too large to pass via argv for gemini");
 
     expect(spawnMock).not.toHaveBeenCalled();
   });

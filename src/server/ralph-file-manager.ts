@@ -15,7 +15,7 @@ export class RalphFileManager {
     dev: string,
     qa: string,
     memory: string,
-    epic: string,
+    _epic: string,
     defaultSettings: string
   ): Promise<void> {
     await mkdir(this.ralphDir, { recursive: true });
@@ -23,7 +23,6 @@ export class RalphFileManager {
     await this.writeIfMissing("dev-prompt.md", dev);
     await this.writeIfMissing("qa-prompt.md", qa);
     await this.writeIfMissing("memory.md", memory);
-    await this.writeIfMissing("epic.md", epic);
     await this.migrateGoalsToEpic();
     await this.writeIfMissing("settings.json", defaultSettings);
   }

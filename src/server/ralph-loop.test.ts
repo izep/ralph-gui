@@ -80,12 +80,20 @@ describe("RalphLoop.bootstrap", () => {
       "dev-prompt.md",
       "qa-prompt.md",
       "memory.md",
-      "epic.md",
       "settings.json",
     ];
     for (const f of expectedFiles) {
       await access(path.join(ralphDir, f), constants.R_OK);
     }
+  });
+
+  it("does not auto-create ralph/epic.md or a requirements file", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+
+    await expect(access(path.join(tmpDir, "ralph", "epic.md"), constants.R_OK)).rejects.toThrow();
+    await expect(access(path.join(tmpDir, "requirements.md"), constants.R_OK)).rejects.toThrow();
   });
 
   it("does not overwrite existing files", async () => {
@@ -429,6 +437,136 @@ describe("RalphLoop.refreshBacklog", () => {
   });
 });
 
+describe("RalphLoop plan Kanban sync", () => {
+  it("writes parsed plan JSON into task-status.json and pauses for review", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic("# Epic\n\nKanban sync.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+    await writeFile(
+      path.join(tmpDir, "ralph", "settings.json"),
+      JSON.stringify({ ...DEFAULT_SETTINGS, pauseAfterPlan: true, minBacklogSize: 1 }),
+      "utf-8",
+    );
+
+    const llmMod = await import("./llm-caller.js");
+    vi.spyOn(llmMod.LLMCaller.prototype, "call").mockResolvedValue(
+      '```json\n[{"id":1,"title":"First task","description":"Do it","status":"backlog"},{"id":2,"title":"Second task","description":"Then this","status":"backlog"}]\n```',
+    );
+
+    const startRes = await loop.start();
+    expect(startRes.ok).toBe(true);
+    await new Promise((r) => setTimeout(r, 150));
+
+    const status = JSON.parse(
+      await readFile(path.join(tmpDir, "ralph", "task-status.json"), "utf-8"),
+    );
+    expect(status.tasks).toHaveLength(2);
+    expect(status.tasks.map((t: { title: string }) => t.title)).toEqual([
+      "First task",
+      "Second task",
+    ]);
+    expect(cb.logs.some((l) => l.includes("Synced 2 tasks from plan output (json)"))).toBe(true);
+    loop.stop();
+  });
+
+  it("retries once and logs when the first plan output is not parseable", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic("# Epic\n\nParse retry.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+    await writeFile(
+      path.join(tmpDir, "ralph", "settings.json"),
+      JSON.stringify({ ...DEFAULT_SETTINGS, pauseAfterPlan: true, minBacklogSize: 1 }),
+      "utf-8",
+    );
+
+    const llmMod = await import("./llm-caller.js");
+    const call = vi.spyOn(llmMod.LLMCaller.prototype, "call");
+    call
+      .mockResolvedValueOnce("I planned some work but forgot the JSON.")
+      .mockResolvedValueOnce(
+        '```json\n[{"id":1,"title":"Recovered task","description":"After retry","status":"backlog"}]\n```',
+      );
+
+    const startRes = await loop.start();
+    expect(startRes.ok).toBe(true);
+    await new Promise((r) => setTimeout(r, 200));
+
+    expect(cb.logs.some((l) => l.includes("Kanban not updated"))).toBe(true);
+    expect(cb.logs.some((l) => l.includes("Retrying plan once"))).toBe(true);
+    const status = JSON.parse(
+      await readFile(path.join(tmpDir, "ralph", "task-status.json"), "utf-8"),
+    );
+    expect(status.tasks[0].title).toBe("Recovered task");
+    loop.stop();
+  });
+
+  it("moves a task backlog -> inProgress -> inQa -> done on serial dev/QA", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic("# Epic\n\nSerial statuses.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+    await writeFile(
+      path.join(tmpDir, "ralph", "settings.json"),
+      JSON.stringify({ ...DEFAULT_SETTINGS, minBacklogSize: 0, planFrequency: 99, maxLLMCalls: 10 }),
+      "utf-8",
+    );
+
+    const llmMod = await import("./llm-caller.js");
+    vi.spyOn(llmMod.LLMCaller.prototype, "call").mockImplementation(
+      async (_p: string, _m: string, _r: string, opts?: LLMCallOpts) => {
+        if (opts?.phase === "plan") {
+          return '<status>complete</status>';
+        }
+        if (opts?.phase === "dev") return "<status>done</status>";
+        return "<status>verified</status>";
+      },
+    );
+
+    const now = new Date().toISOString();
+    await writeFile(
+      path.join(tmpDir, "ralph", "task-status.json"),
+      JSON.stringify({
+        tasks: [
+          {
+            id: 1,
+            title: "Ship it",
+            description: "Do the work",
+            status: "backlog",
+            devIterations: 0,
+            createdAt: now,
+            updatedAt: now,
+          },
+        ],
+        currentTaskNum: 0,
+        totalLLMCalls: 0,
+        maxLLMCalls: 10,
+        nextTask: { taskId: null, content: "", updatedAt: now },
+        feedback: { taskId: null, content: "", updatedAt: now },
+        lastUpdated: now,
+      }),
+      "utf-8",
+    );
+
+    const startRes = await loop.start();
+    expect(startRes.ok).toBe(true);
+    await new Promise((r) => setTimeout(r, 400));
+
+    const statuses = cb.taskUpdates.map((u) => {
+      const data = u as { tasks?: { status: string }[] };
+      return data.tasks?.[0]?.status;
+    });
+    expect(statuses).toContain("inProgress");
+    expect(statuses).toContain("inQa");
+    expect(statuses).toContain("done");
+    loop.stop();
+  });
+});
+
 // ---------------------------------------------------------------------------
 // readRalphFile / writeRalphFile
 // ---------------------------------------------------------------------------
@@ -749,6 +887,13 @@ describe("RalphLoop parallel dispatch", () => {
     expect(llmMod.LLMCaller.prototype.call).toHaveBeenCalled();
     expect((llmMod.LLMCaller.prototype.call as any).mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(concurrency.max).toBeGreaterThanOrEqual(2);
+
+    const twoInProgress = cb.taskUpdates.some((u) => {
+      const data = u as { tasks?: { status: string }[] };
+      return (data.tasks ?? []).filter((t) => t.status === "inProgress").length >= 2;
+    });
+    expect(twoInProgress).toBe(true);
+    expect(cb.logs.some((l) => l.includes("Kanban: 2 tasks in flight"))).toBe(true);
 
     // Wait for loop to settle
     await new Promise((r) => setTimeout(r, 200));

@@ -15,6 +15,8 @@ import {
   parseBlockedInfo,
   parseJsonTaskList,
   parseResearchPrompts,
+  snippetForLog,
+  PLAN_PARSE_RETRY_INSTRUCTION,
 } from "./parse-output.js";
 import { RalphFileManager } from "./ralph-file-manager.js";
 import { SettingsManager, DEFAULT_SETTINGS, type Settings } from "./settings-manager.js";
@@ -417,17 +419,27 @@ export class RalphLoop {
         await this.taskManager.writeStatus(data);
         this.cb.onLog("[ralph] Backlog refresh: project appears complete");
       } else {
-        const parsedTasks = parseJsonTaskList(output);
-        if (parsedTasks.length > 0) {
-          await this.taskManager.syncBacklogTasks(parsedTasks);
-          this.cb.onLog(`[ralph] Backlog refreshed: ${parsedTasks.length} tasks`);
-        } else {
-          const remainingTasks = parseRemainingTasks(output);
-          if (remainingTasks.length > 0) {
-            await this.taskManager.syncBacklogTasksByTitle(remainingTasks);
-            this.cb.onLog(`[ralph] Backlog refreshed: ${remainingTasks.length} tasks`);
+        let synced = await this.persistPlanTaskList(output, "[ralph] Backlog refresh:");
+        if (synced === 0) {
+          const retryOutput = await this.llmCaller.call(
+            fullPlanPrompt + "\n---\n" + PLAN_PARSE_RETRY_INSTRUCTION,
+            settings.planModel,
+            this.repoRoot,
+            this.buildLlmCallOpts(settings, "backlog"),
+          );
+          if (retryOutput.includes("<status>complete</status>")) {
+            const data = await this.taskManager.readStatus();
+            data.tasks = data.tasks.filter((t) => t.status !== "backlog");
+            await this.taskManager.writeStatus(data);
+            this.cb.onLog("[ralph] Backlog refresh: project appears complete");
           } else {
-            this.cb.onLog("[ralph] Backlog refresh: no tasks parsed from output");
+            synced = await this.persistPlanTaskList(
+              retryOutput,
+              "[ralph] Backlog refresh:",
+            );
+            if (synced === 0) {
+              this.cb.onLog("[ralph] Backlog refresh: no tasks parsed from output");
+            }
           }
         }
       }
@@ -448,6 +460,40 @@ export class RalphLoop {
     if (ms < 1000) return `${ms}ms`;
     if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
     return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
+  }
+
+  /** Parse plan stdout and write backlog. Returns how many tasks were synced. */
+  private async persistPlanTaskList(output: string, logPrefix: string): Promise<number> {
+    const parsedTaskList = parseJsonTaskList(output);
+    if (parsedTaskList.length > 0) {
+      await this.taskManager.syncBacklogTasks(parsedTaskList);
+      this.cb.onLog(
+        `${logPrefix} Synced ${parsedTaskList.length} tasks from plan output (json)`,
+      );
+      return parsedTaskList.length;
+    }
+    const remainingTasks = parseRemainingTasks(output);
+    if (remainingTasks.length > 0) {
+      await this.taskManager.syncBacklogTasksByTitle(remainingTasks);
+      this.cb.onLog(
+        `${logPrefix} Synced ${remainingTasks.length} tasks from plan output`,
+      );
+      return remainingTasks.length;
+    }
+    this.cb.onLog(
+      `[ralph] Plan output had no parseable task list — Kanban not updated. Snippet: ${snippetForLog(output)}`,
+    );
+    return 0;
+  }
+
+  private async logKanbanInFlight(): Promise<void> {
+    const data = await this.taskManager.readStatus();
+    const inflight = data.tasks.filter(
+      (t) => t.status === "inProgress" || t.status === "inQa" || t.status === "blocked",
+    );
+    if (inflight.length <= 1) return;
+    const ids = inflight.map((t) => `#${t.id} ${t.status}`).join(", ");
+    this.cb.onLog(`[ralph] Kanban: ${inflight.length} tasks in flight (${ids})`);
   }
 
   // --- Main Loop ---
@@ -596,16 +642,35 @@ export class RalphLoop {
         break;
       }
 
-      // Sync remaining tasks from plan output to ensure backlog is preserved
-      // This acts as a fallback if the plan agent didn't write task-status.json correctly
-      const remainingTasks = parseRemainingTasks(nextTaskContent);
-      const parsedTaskList = parseJsonTaskList(nextTaskContent);
-      if (parsedTaskList.length > 0) {
-        await this.taskManager.syncBacklogTasks(parsedTaskList);
-        this.cb.onLog(`[ralph] Synced ${parsedTaskList.length} tasks from plan output (json)`);
-      } else if (remainingTasks.length > 0) {
-        await this.taskManager.syncBacklogTasksByTitle(remainingTasks);
-        this.cb.onLog(`[ralph] Synced ${remainingTasks.length} tasks from plan output`);
+      // Loop engine owns task-status.json: parse plan stdout and persist backlog.
+      let synced = await this.persistPlanTaskList(nextTaskContent, "[ralph]");
+      if (synced === 0) {
+        this.cb.onLog("[ralph] Retrying plan once with a JSON-only correction prompt.");
+        const retryStart = Date.now();
+        try {
+          nextTaskContent = await this.llmCaller.call(
+            planPrompt + "\n---\n" + PLAN_PARSE_RETRY_INSTRUCTION,
+            settings.planModel,
+            this.repoRoot,
+            this.buildLlmCallOpts(settings, "plan"),
+          );
+        } catch (err) {
+          throw new Error(`Plan retry failed: ${err}`);
+        }
+        totalLLMCalls++;
+        this.cb.onLog(
+          `[ralph] Plan retry finished in ${this.elapsed(retryStart)}`,
+        );
+        if (nextTaskContent.includes("<status>complete</status>")) {
+          this.cb.onLog(`[ralph] All tasks completed after ${iteration - 1} tasks.`);
+          this.completedEpic = true;
+          const statusData = await this.taskManager.readStatus();
+          statusData.tasks = statusData.tasks.filter((t) => t.status !== "backlog");
+          statusData.totalLLMCalls = totalLLMCalls;
+          await this.taskManager.writeStatus(statusData);
+          break;
+        }
+        synced = await this.persistPlanTaskList(nextTaskContent, "[ralph]");
       }
 
       // --- Parallel plan research sub-jobs (stretch, gated by dockerPlanParallel) ---
@@ -731,6 +796,7 @@ export class RalphLoop {
           inFlight.push(p);
         }
 
+        await this.logKanbanInFlight();
         await Promise.all(inFlight);
         continue;
       }

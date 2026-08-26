@@ -1,38 +1,15 @@
 // Parsing utilities for LLM output
-import type { TaskEntry } from "./task-manager.js";
+export {
+  parseJsonTaskList,
+  snippetForLog,
+  PLAN_PARSE_RETRY_INSTRUCTION,
+} from "../shared/parseTaskList.js";
 
 export interface ParsedBlockedInfo {
   summary: string;
   impact: string;
   nextStep: string;
   needs: string;
-}
-
-export function parseJsonTaskList(
-  content: string
-): Pick<TaskEntry, "id" | "title" | "description" | "status">[] {
-  const m = content.match(/```[Jj][Ss][Oo][Nn]\s*\n([\s\S]*?)\n```/);
-  if (!m) return [];
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(m[1]);
-  } catch {
-    return [];
-  }
-  if (!Array.isArray(parsed)) return [];
-  const results: Pick<TaskEntry, "id" | "title" | "description" | "status">[] = [];
-  for (const item of parsed) {
-    if (item === null || typeof item !== "object") continue;
-    const obj = item as Record<string, unknown>;
-    if (typeof obj["id"] !== "number" || typeof obj["title"] !== "string" || !obj["title"]) continue;
-    results.push({
-      id: obj["id"] as number,
-      title: (obj["title"] as string).trim(),
-      description: typeof obj["description"] === "string" && obj["description"] ? obj["description"] : "",
-      status: typeof obj["status"] === "string" && obj["status"] ? obj["status"] : "backlog",
-    });
-  }
-  return results;
 }
 
 export function parseTaskId(content: string): number | null {

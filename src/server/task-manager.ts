@@ -75,7 +75,7 @@ export class TaskManager {
         tasks: normalizedTasks,
         currentTaskNum: typeof parsed.currentTaskNum === "number" ? parsed.currentTaskNum : 0,
         totalLLMCalls: typeof parsed.totalLLMCalls === "number" ? parsed.totalLLMCalls : 0,
-        maxLLMCalls: typeof parsed.maxLLMCalls === "number" ? parsed.maxLLMCalls : 100,
+        maxLLMCalls: typeof parsed.maxLLMCalls === "number" ? parsed.maxLLMCalls : 500,
         nextTask: {
           taskId: parsed.nextTask && typeof parsed.nextTask.taskId === "number"
             ? parsed.nextTask.taskId
@@ -105,7 +105,7 @@ export class TaskManager {
         tasks: [],
         currentTaskNum: 0,
         totalLLMCalls: 0,
-        maxLLMCalls: 100,
+        maxLLMCalls: 500,
         nextTask: {
           taskId: null,
           content: "",

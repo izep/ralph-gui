@@ -68,17 +68,17 @@ export interface Settings {
 }
 
 export const DEFAULT_SETTINGS: Settings = {
-  maxLLMCalls: 100,
-  planModel: "claude-sonnet-4.6",
+  maxLLMCalls: 500,
+  planModel: "claude-sonnet-5",
   devModel: "gpt-5.4-mini",
   qaModel: "gpt-5.4-mini",
   devReasoningEffort: "xhigh",
   qaReasoningEffort: "high",
-  autoCommit: false,
+  autoCommit: true,
   planFrequency: 1,
   minBacklogSize: 3,
   agentBackend: "copilot",
-  fleetMode: false,
+  fleetMode: true,
   useDocker: false,
   dockerComposeFile: "",
   dockerService: "ralph-agent",
@@ -96,7 +96,7 @@ export const DEFAULT_SETTINGS: Settings = {
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,
-  taskColumnSort: "idAsc",
+  taskColumnSort: "updatedAtDesc",
   savedModelsByBackend: {},
 };
 

@@ -5,7 +5,7 @@ const EMPTY_TASKS: TaskStatusData = {
   tasks: [],
   currentTaskNum: 0,
   totalLLMCalls: 0,
-  maxLLMCalls: 100,
+  maxLLMCalls: 500,
   nextTask: {
     taskId: null,
     content: "",
@@ -22,17 +22,17 @@ const EMPTY_TASKS: TaskStatusData = {
 // Fallback defaults — the server sends real settings on WebSocket init.
 // Keep in sync with settings-manager.ts DEFAULT_SETTINGS.
 const DEFAULT_SETTINGS: Settings = {
-  maxLLMCalls: 100,
-  planModel: "claude-sonnet-4.6",
+  maxLLMCalls: 500,
+  planModel: "claude-sonnet-5",
   devModel: "gpt-5.4-mini",
   qaModel: "gpt-5.4-mini",
   devReasoningEffort: "xhigh",
   qaReasoningEffort: "high",
-  autoCommit: false,
+  autoCommit: true,
   planFrequency: 1,
   minBacklogSize: 3,
   agentBackend: "copilot",
-  fleetMode: false,
+  fleetMode: true,
   useDocker: false,
   dockerComposeFile: "",
   dockerService: "ralph-agent",
@@ -50,7 +50,7 @@ const DEFAULT_SETTINGS: Settings = {
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,
-  taskColumnSort: "idAsc",
+  taskColumnSort: "updatedAtDesc",
   savedModelsByBackend: {},
 };
 
@@ -76,13 +76,19 @@ export function useRalph() {
   const reconnectRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    let disposed = false;
     function connect() {
+      if (disposed) return;
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
       const ws = new WebSocket(`${protocol}//${window.location.host}/ws`);
 
-      ws.onopen = () => setConnected(true);
+      ws.onopen = () => {
+        if (disposed || wsRef.current !== ws) return;
+        setConnected(true);
+      };
 
       ws.onmessage = (event) => {
+        if (disposed || wsRef.current !== ws) return;
         try {
           const msg: ServerMessage = JSON.parse(event.data);
           switch (msg.type) {
@@ -121,8 +127,9 @@ export function useRalph() {
       };
 
       ws.onclose = () => {
+        if (wsRef.current === ws) wsRef.current = null;
+        if (disposed) return;
         setConnected(false);
-        wsRef.current = null;
         reconnectRef.current = setTimeout(connect, WS_RECONNECT_DELAY);
       };
 
@@ -132,8 +139,11 @@ export function useRalph() {
 
     connect();
     return () => {
-      wsRef.current?.close();
+      disposed = true;
       if (reconnectRef.current) clearTimeout(reconnectRef.current);
+      const ws = wsRef.current;
+      wsRef.current = null;
+      ws?.close();
     };
   }, []);
 

@@ -141,6 +141,26 @@ export function groupTasks(tasks: Task[]): Record<TaskStatusValue, Task[]> {
   return groups;
 }
 
+/** Tasks currently on the board (dev, QA, or blocked). */
+export function inFlightTasks(tasks: Task[]): Task[] {
+  return tasks.filter(
+    (t) => t.status === "inProgress" || t.status === "inQa" || t.status === "blocked",
+  );
+}
+
+export function formatInFlightHeader(tasks: Task[], fallbackTaskNum = 0): string {
+  const inflight = inFlightTasks(tasks);
+  if (inflight.length === 0) {
+    const fallback = tasks.find((t) => t.id === fallbackTaskNum);
+    if (fallback && fallback.status !== "done") return `#${fallbackTaskNum}`;
+    return "#0";
+  }
+  if (inflight.length === 1) {
+    return `#${inflight[0]!.id}`;
+  }
+  return inflight.map((t) => `#${t.id}`).join(" ");
+}
+
 export function sortTasks(tasks: Task[], taskColumnSort: TaskColumnSort): Task[] {
   const sorted = [...tasks];
   sorted.sort((a, b) => {
@@ -164,6 +184,15 @@ export function sortTasks(tasks: Task[], taskColumnSort: TaskColumnSort): Task[]
     }
   });
   return sorted;
+}
+
+/** Backlog is always numeric id order; other columns use the project sort setting. */
+export function sortTasksForColumn(
+  columnKey: TaskStatusValue,
+  tasks: Task[],
+  taskColumnSort: TaskColumnSort,
+): Task[] {
+  return sortTasks(tasks, columnKey === "backlog" ? "idAsc" : taskColumnSort);
 }
 
 export const COLUMNS: ColumnDef[] = [

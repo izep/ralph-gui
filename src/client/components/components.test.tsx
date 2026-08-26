@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeAll, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, waitFor, within } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 import { ErrorBanner } from "./ErrorBanner";
 import { KanbanColumn } from "./KanbanColumn";
@@ -125,7 +125,7 @@ describe("LogViewer", () => {
     render(
       <LogViewer
         lines={["[ralph] Started", "[dev] Working on task"]}
-        onClose={() => {}}
+        onClose={() => { }}
       />
     );
     expect(screen.getByTitle("[ralph] Started")).toBeInTheDocument();
@@ -141,7 +141,7 @@ describe("LogViewer", () => {
           "[ralph] Planning iteration #1...",
           "[dev] Working on task",
         ]}
-        onClose={() => {}}
+        onClose={() => { }}
       />
     );
     expect(document.querySelector(".log-line__header-art--ralph")).toBeInTheDocument();
@@ -153,7 +153,7 @@ describe("LogViewer", () => {
     render(
       <LogViewer
         lines={["[system] Ralph loop started"]}
-        onClose={() => {}}
+        onClose={() => { }}
       />
     );
     expect(document.querySelector(".log-line__header-art--ralph")).toBeInTheDocument();
@@ -290,17 +290,17 @@ describe("TaskCard", () => {
 // ---------------------------------------------------------------------------
 
 const defaultSettings: Settings = {
-  maxLLMCalls: 100,
+  maxLLMCalls: 500,
   planModel: "claude-sonnet-4.6",
   devModel: "gpt-5.4-mini",
   qaModel: "gpt-5.4-mini",
   devReasoningEffort: "xhigh",
   qaReasoningEffort: "high",
-  autoCommit: false,
+  autoCommit: true,
   planFrequency: 1,
   minBacklogSize: 3,
   agentBackend: "copilot",
-  fleetMode: false,
+  fleetMode: true,
   useDocker: false,
   dockerComposeFile: "",
   dockerService: "ralph-agent",
@@ -318,7 +318,7 @@ const defaultSettings: Settings = {
   epicFile: "ralph/epic.md",
   requirementsFile: "",
   pauseAfterPlan: false,
-  taskColumnSort: "idAsc",
+  taskColumnSort: "updatedAtDesc",
   savedModelsByBackend: {},
 };
 
@@ -398,7 +398,7 @@ describe("ControlPanel", () => {
         onValidateDocker={noopDocker}
         onMergeEpicWork={noopMerge}
         isRunning={false}
-        onClose={() => {}}
+        onClose={() => { }}
       />
     );
     expect(screen.getByText("Copilot Log Format")).toBeInTheDocument();
@@ -423,7 +423,7 @@ describe("ControlPanel", () => {
         onValidateDocker={noopDocker}
         onMergeEpicWork={noopMerge}
         isRunning={false}
-        onClose={() => {}}
+        onClose={() => { }}
       />
     );
     expect(screen.queryByText("Copilot Log Format")).not.toBeInTheDocument();
@@ -440,7 +440,7 @@ describe("ControlPanel", () => {
     expect(screen.getByText("Docker Agents")).toBeInTheDocument();
   });
 
-  it("fleet checkbox disabled when agent backend is not copilot", () => {
+  it("fleet checkbox enabled when agent backend is claude", () => {
     render(
       <ControlPanel
         settings={{ ...defaultSettings, agentBackend: "claude" }}
@@ -462,7 +462,7 @@ describe("ControlPanel", () => {
       />
     );
     const checkbox = screen.getByRole("checkbox", { name: /fleet mode/i });
-    expect(checkbox).toBeDisabled();
+    expect(checkbox).toBeEnabled();
   });
 
   it("fleet checkbox enabled when agent backend is copilot", () => {
@@ -656,6 +656,96 @@ describe("ControlPanel", () => {
     expect((planParallel as HTMLInputElement).disabled).toBe(false);
   });
 
+  it("keeps a dirty epic draft when the server epic prop changes", () => {
+    const { rerender } = render(
+      <ControlPanel
+        settings={defaultSettings}
+        epic="Server A"
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={async () => { }}
+        onSaveEpic={async () => { }}
+        onSavePrompt={async () => { }}
+        onSetRepo={async () => ({ ok: true })}
+        onRefreshBacklog={async () => ({ ok: true })}
+        onSetEpicFile={async () => ({ ok: true, content: "" })}
+        onCreateEpicFile={async () => ({ ok: true, content: "" })}
+        onValidateDocker={async () => ({ ok: true })}
+        onMergeEpicWork={async () => ({ ok: true })}
+        isRunning={false}
+        onClose={() => { }}
+      />,
+    );
+    const ta = screen.getByPlaceholderText(/Describe the current epic/i);
+    fireEvent.change(ta, { target: { value: "My unsaved draft" } });
+    rerender(
+      <ControlPanel
+        settings={defaultSettings}
+        epic="Server B from websocket"
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={async () => { }}
+        onSaveEpic={async () => { }}
+        onSavePrompt={async () => { }}
+        onSetRepo={async () => ({ ok: true })}
+        onRefreshBacklog={async () => ({ ok: true })}
+        onSetEpicFile={async () => ({ ok: true, content: "" })}
+        onCreateEpicFile={async () => ({ ok: true, content: "" })}
+        onValidateDocker={async () => ({ ok: true })}
+        onMergeEpicWork={async () => ({ ok: true })}
+        isRunning={false}
+        onClose={() => { }}
+      />,
+    );
+    expect(screen.getByPlaceholderText(/Describe the current epic/i)).toHaveValue("My unsaved draft");
+  });
+
+  it("loads plan prompt text when prompts arrive after mount", () => {
+    const { rerender } = render(
+      <ControlPanel
+        settings={defaultSettings}
+        epic=""
+        prompts={{}}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={async () => { }}
+        onSaveEpic={async () => { }}
+        onSavePrompt={async () => { }}
+        onSetRepo={async () => ({ ok: true })}
+        onRefreshBacklog={async () => ({ ok: true })}
+        onSetEpicFile={async () => ({ ok: true, content: "" })}
+        onCreateEpicFile={async () => ({ ok: true, content: "" })}
+        onValidateDocker={async () => ({ ok: true })}
+        onMergeEpicWork={async () => ({ ok: true })}
+        isRunning={false}
+        onClose={() => { }}
+      />,
+    );
+    rerender(
+      <ControlPanel
+        settings={defaultSettings}
+        epic=""
+        prompts={{ "plan-prompt.md": "# Plan\n\nSurvey the codebase." }}
+        repoRoot="/test/repo"
+        readiness={readyState}
+        onSaveSettings={async () => { }}
+        onSaveEpic={async () => { }}
+        onSavePrompt={async () => { }}
+        onSetRepo={async () => ({ ok: true })}
+        onRefreshBacklog={async () => ({ ok: true })}
+        onSetEpicFile={async () => ({ ok: true, content: "" })}
+        onCreateEpicFile={async () => ({ ok: true, content: "" })}
+        onValidateDocker={async () => ({ ok: true })}
+        onMergeEpicWork={async () => ({ ok: true })}
+        isRunning={false}
+        onClose={() => { }}
+      />,
+    );
+    expect(screen.getByDisplayValue(/Survey the codebase/)).toBeInTheDocument();
+  });
+
 
   it("Epic Set button calls set-file API and loads content", async () => {
     const onSetEpicFile = vi.fn(async (_path: string) => ({ ok: true, content: "# Epic content" }));
@@ -744,7 +834,7 @@ describe("LoopConfigSection model dropdowns", () => {
     // Verify the Plan Model label and a copilot-specific option text are present
     expect(screen.getByText("Plan Model")).toBeInTheDocument();
     expect(
-      screen.getByText(/\(claude-sonnet-4\.6\) Claude Sonnet 4\.6 -- recommended for planning/),
+      screen.getByText(/\(claude-sonnet-5\) Claude Sonnet 5 -- recommended for planning/),
     ).toBeInTheDocument();
   });
 
@@ -827,7 +917,7 @@ describe("LoopConfigSection model dropdowns", () => {
     const settings: Settings = {
       ...defaultSettings,
       agentBackend: "claude",
-      planModel: "claude-sonnet-4-6",
+      planModel: "claude-sonnet-5",
       devModel: "claude-haiku-4-5",
       qaModel: "claude-haiku-4-5",
     };
@@ -840,7 +930,7 @@ describe("LoopConfigSection model dropdowns", () => {
       />,
     );
     expect(
-      screen.getByText(/\(claude-sonnet-4-6\) Claude Sonnet 4\.6 -- recommended for planning/),
+      screen.getByText(/\(claude-sonnet-5\) Claude Sonnet 5 -- recommended for planning/),
     ).toBeInTheDocument();
   });
 
@@ -962,10 +1052,18 @@ describe("ControlPanel Phase 5: collapsible and dirty/save/reset UX", () => {
   it("clicking a section header toggles only that section", () => {
     renderPanel();
     const dockerHeader = screen.getByRole("button", { name: /docker agents/i });
-    fireEvent.click(dockerHeader);
-    expect(dockerHeader).toHaveAttribute("aria-expanded", "false");
     const loopHeader = screen.getByRole("button", { name: /loop configuration/i });
-    expect(loopHeader).toHaveAttribute("aria-expanded", "true");
+    const epicHeader = screen.getByRole("button", { name: /current epic/i });
+    const promptsHeader = screen.getByRole("button", { name: /prompts/i });
+    expect(dockerHeader).toHaveAttribute("aria-expanded", "false");
+    expect(loopHeader).toHaveAttribute("aria-expanded", "false");
+    expect(epicHeader).toHaveAttribute("aria-expanded", "false");
+    expect(promptsHeader).toHaveAttribute("aria-expanded", "false");
+    fireEvent.click(dockerHeader);
+    expect(dockerHeader).toHaveAttribute("aria-expanded", "true");
+    expect(loopHeader).toHaveAttribute("aria-expanded", "false");
+    expect(epicHeader).toHaveAttribute("aria-expanded", "false");
+    expect(promptsHeader).toHaveAttribute("aria-expanded", "false");
   });
 
   // --- Save buttons disabled when pristine ---
@@ -990,6 +1088,42 @@ describe("ControlPanel Phase 5: collapsible and dirty/save/reset UX", () => {
     expect(screen.getByRole("button", { name: /save plan prompt/i })).toBeDisabled();
   });
 
+  it("switching Plan/Dev/QA tabs shows that persona's saved prompt", () => {
+    renderPanel({}, {
+      prompts: {
+        "plan-prompt.md": "# Plan prompt body",
+        "dev-prompt.md": "# Dev prompt body",
+        "qa-prompt.md": "# QA prompt body",
+      },
+    });
+    expect(screen.getByLabelText("Plan prompt")).toHaveValue("# Plan prompt body");
+    fireEvent.click(screen.getByRole("button", { name: /^dev$/i }));
+    expect(screen.getByLabelText("Dev prompt")).toHaveValue("# Dev prompt body");
+    fireEvent.click(screen.getByRole("button", { name: /^qa$/i }));
+    expect(screen.getByLabelText("QA prompt")).toHaveValue("# QA prompt body");
+  });
+
+  it("alerts and stays on the current persona when the prompt is unsaved", () => {
+    const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => { });
+    renderPanel({}, {
+      prompts: {
+        "plan-prompt.md": "# Plan prompt body",
+        "dev-prompt.md": "# Dev prompt body",
+        "qa-prompt.md": "# QA prompt body",
+      },
+    });
+    fireEvent.change(screen.getByLabelText("Plan prompt"), {
+      target: { value: "unsaved plan draft" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^dev$/i }));
+    expect(alertSpy).toHaveBeenCalledWith(
+      "Save or reset the Plan prompt before switching to Dev.",
+    );
+    expect(screen.getByLabelText("Plan prompt")).toHaveValue("unsaved plan draft");
+    expect(screen.getByRole("button", { name: /^plan$/i })).toHaveClass("cp-tab--active");
+    alertSpy.mockRestore();
+  });
+
   // --- Editing a docker field enables Save Docker only ---
 
   it("editing dockerPoolSize enables Save Docker but not Save loop settings", () => {
@@ -1004,7 +1138,8 @@ describe("ControlPanel Phase 5: collapsible and dirty/save/reset UX", () => {
 
   it("editing maxLLMCalls enables Save loop settings but not Save Docker", () => {
     renderPanel();
-    const maxCallsInput = screen.getByDisplayValue("100");
+    const maxCallsInput = screen.getByLabelText(/max llm calls/i);
+    expect(maxCallsInput).toHaveValue(500);
     fireEvent.change(maxCallsInput, { target: { value: "50" } });
     expect(screen.getByRole("button", { name: /save loop settings/i })).not.toBeDisabled();
     expect(screen.getByRole("button", { name: /save docker/i })).toBeDisabled();
@@ -1030,10 +1165,8 @@ describe("ControlPanel Phase 5: collapsible and dirty/save/reset UX", () => {
     fireEvent.change(poolInput, { target: { value: "3" } });
     expect(screen.getByRole("button", { name: /save docker/i })).not.toBeDisabled();
 
-    // Find Docker Reset button
-    const resetButtons = screen.getAllByRole("button", { name: /^reset$/i });
-    // The docker reset is the first Reset button (in Docker section footer)
-    fireEvent.click(resetButtons[0]);
+    const dockerSection = screen.getByRole("button", { name: /docker agents/i }).closest("section")!;
+    fireEvent.click(within(dockerSection).getByRole("button", { name: /^reset$/i }));
     expect(screen.getByRole("button", { name: /save docker/i })).toBeDisabled();
   });
 
@@ -1041,13 +1174,12 @@ describe("ControlPanel Phase 5: collapsible and dirty/save/reset UX", () => {
 
   it("Reset for Loop reverts loop draft and disables Save loop settings", () => {
     renderPanel();
-    const maxCallsInput = screen.getByDisplayValue("100");
+    const maxCallsInput = screen.getByLabelText(/max llm calls/i);
     fireEvent.change(maxCallsInput, { target: { value: "50" } });
     expect(screen.getByRole("button", { name: /save loop settings/i })).not.toBeDisabled();
 
-    const resetButtons = screen.getAllByRole("button", { name: /^reset$/i });
-    // Loop reset is the second Reset button (in Loop section footer)
-    fireEvent.click(resetButtons[1]);
+    const loopSection = screen.getByRole("button", { name: /loop configuration/i }).closest("section")!;
+    fireEvent.click(within(loopSection).getByRole("button", { name: /^reset$/i }));
     expect(screen.getByRole("button", { name: /save loop settings/i })).toBeDisabled();
   });
 
