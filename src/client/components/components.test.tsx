@@ -917,9 +917,9 @@ describe("LoopConfigSection model dropdowns", () => {
     const settings: Settings = {
       ...defaultSettings,
       agentBackend: "claude",
-      planModel: "claude-sonnet-5",
-      devModel: "claude-haiku-4-5",
-      qaModel: "claude-haiku-4-5",
+      planModel: "claude-opus-4-5",
+      devModel: "claude-sonnet-5",
+      qaModel: "claude-sonnet-5",
     };
     render(
       <LoopConfigSection
@@ -930,8 +930,11 @@ describe("LoopConfigSection model dropdowns", () => {
       />,
     );
     expect(
-      screen.getByText(/\(claude-sonnet-5\) Claude Sonnet 5 -- recommended for planning/),
+      screen.getByText(/\(claude-opus-4-5\) Claude Opus 4.5 -- recommended for planning/),
     ).toBeInTheDocument();
+    expect(
+      screen.getAllByText(/\(claude-sonnet-5\) Claude Sonnet 5 -- recommended for (dev|qa)/).length,
+    ).toBeGreaterThan(0);
   });
 
   it("shows opencode Zen free model options when agentBackend is opencode", () => {

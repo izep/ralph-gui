@@ -34,7 +34,11 @@ describe('agent-models catalog', () => {
   });
 
   it('claude backend uses hyphenated Claude Code CLI IDs', () => {
-    expect(getPreferredModels('claude').planModel).toBe('claude-sonnet-5');
+    expect(getPreferredModels('claude')).toEqual({
+      planModel: 'claude-opus-4-5',
+      devModel: 'claude-sonnet-5',
+      qaModel: 'claude-sonnet-5',
+    });
     expect(isModelInCatalog('claude', 'claude-sonnet-4.6')).toBe(false);
     expect(isModelInCatalog('claude', 'claude-sonnet-4-6')).toBe(true);
     expect(isModelInCatalog('claude', 'claude-sonnet-5')).toBe(true);
@@ -75,9 +79,13 @@ describe('agent-models catalog', () => {
   });
 
   it('formatModelOptionLabel uses (id) Model -- recommendation', () => {
-    const entry = AGENT_MODEL_CATALOG.claude.find((e) => e.id === 'claude-sonnet-5')!;
-    expect(formatModelOptionLabel(entry, 'Planning')).toBe(
-      '(claude-sonnet-5) Claude Sonnet 5 -- recommended for planning',
+    const planEntry = AGENT_MODEL_CATALOG.claude.find((e) => e.id === 'claude-opus-4-5')!;
+    expect(formatModelOptionLabel(planEntry, 'Planning')).toBe(
+      '(claude-opus-4-5) Claude Opus 4.5 -- recommended for planning',
+    );
+    const devEntry = AGENT_MODEL_CATALOG.claude.find((e) => e.id === 'claude-sonnet-5')!;
+    expect(formatModelOptionLabel(devEntry, 'Dev')).toBe(
+      '(claude-sonnet-5) Claude Sonnet 5 -- recommended for dev',
     );
   });
 
