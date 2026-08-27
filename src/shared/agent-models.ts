@@ -120,11 +120,11 @@ export const AGENT_MODEL_CATALOG: Record<AgentBackendId, AgentModelEntry[]> = {
   ],
 
   claude: [
-    { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', strength: 'Fast, lightweight tasks', tier: 'fast/cheap', multiplier: 'low', yoloMode: 'Yes (`--dangerously-skip-permissions`)', fleetMode: 'Yes', preferredFor: ['Dev', 'QA'] },
+    { id: 'claude-haiku-4-5', label: 'Claude Haiku 4.5', strength: 'Fast, lightweight tasks', tier: 'fast/cheap', multiplier: 'low', yoloMode: 'Yes (`--dangerously-skip-permissions`)', fleetMode: 'Yes', preferredFor: [] },
     { id: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5', strength: 'General-purpose, reasoning', tier: 'standard', multiplier: '1×', yoloMode: 'Yes (`--dangerously-skip-permissions`)', fleetMode: 'Yes', preferredFor: [] },
     { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', strength: 'General-purpose + deeper reasoning', tier: 'standard', multiplier: '1×', yoloMode: 'Yes (`--dangerously-skip-permissions`)', fleetMode: 'Yes', preferredFor: [] },
-    { id: 'claude-sonnet-5', label: 'Claude Sonnet 5', strength: 'Latest Sonnet, best speed/intelligence mix', tier: 'standard', multiplier: '1×', yoloMode: 'Yes (`--dangerously-skip-permissions`)', fleetMode: 'Yes', preferredFor: ['Planning'] },
-    { id: 'claude-opus-4-5', label: 'Claude Opus 4.5', strength: 'Deep reasoning, complex problems', tier: 'premium', multiplier: 'high', yoloMode: 'Yes (`--dangerously-skip-permissions`)', fleetMode: 'Yes', preferredFor: [] },
+    { id: 'claude-sonnet-5', label: 'Claude Sonnet 5', strength: 'Latest Sonnet, best speed/intelligence mix', tier: 'standard', multiplier: '1×', yoloMode: 'Yes (`--dangerously-skip-permissions`)', fleetMode: 'Yes', preferredFor: ['Dev', 'QA'] },
+    { id: 'claude-opus-4-5', label: 'Claude Opus 4.5', strength: 'Deep reasoning, complex problems', tier: 'premium', multiplier: 'high', yoloMode: 'Yes (`--dangerously-skip-permissions`)', fleetMode: 'Yes', preferredFor: ['Planning'] },
     { id: 'claude-opus-4-6', label: 'Claude Opus 4.6', strength: 'Deep reasoning (fast mode)', tier: 'premium', multiplier: 'high', yoloMode: 'Yes (`--dangerously-skip-permissions`)', fleetMode: 'Yes', preferredFor: [] },
     { id: 'claude-opus-4-7', label: 'Claude Opus 4.7', strength: 'Prior-gen most powerful', tier: 'premium', multiplier: 'high', yoloMode: 'Yes (`--dangerously-skip-permissions`)', fleetMode: 'Yes', preferredFor: [] },
     { id: 'claude-opus-5', label: 'Claude Opus 5', strength: "Anthropic's most powerful, complex agentic coding", tier: 'premium', multiplier: 'high', yoloMode: 'Yes (`--dangerously-skip-permissions`)', fleetMode: 'Yes', preferredFor: [] },
@@ -148,7 +148,7 @@ export const AGENT_MODEL_CATALOG: Record<AgentBackendId, AgentModelEntry[]> = {
 export const PREFERRED_MODELS_BY_BACKEND: Record<AgentBackendId, SavedModelsTriple> = {
   copilot: { planModel: 'claude-sonnet-5', devModel: 'gpt-5.4-mini', qaModel: 'gpt-5.4-mini' },
   'cursor-agent': { planModel: 'claude-sonnet-5-thinking-high', devModel: 'gpt-5.4-mini-medium', qaModel: 'gpt-5.4-mini-medium' },
-  claude: { planModel: 'claude-sonnet-5', devModel: 'claude-haiku-4-5', qaModel: 'claude-haiku-4-5' },
+  claude: { planModel: 'claude-opus-4-5', devModel: 'claude-sonnet-5', qaModel: 'claude-sonnet-5' },
   gemini: { planModel: 'gemini-3-pro-preview', devModel: 'gemini-3-flash-preview', qaModel: 'gemini-3-flash-preview' },
   opencode: { planModel: 'opencode/big-pickle', devModel: 'opencode/deepseek-v4-flash-free', qaModel: 'opencode/deepseek-v4-flash-free' },
 };
