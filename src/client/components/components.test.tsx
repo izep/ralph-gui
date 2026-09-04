@@ -320,6 +320,9 @@ const defaultSettings: Settings = {
   pauseAfterPlan: false,
   taskColumnSort: "updatedAtDesc",
   savedModelsByBackend: {},
+  agentIdleTimeoutMinutes: 10,
+  agentTimeoutMinutes: 0,
+  agentMaxConsecutiveRepeats: 10,
 };
 
 const readyState: Readiness = {
@@ -834,7 +837,7 @@ describe("LoopConfigSection model dropdowns", () => {
     // Verify the Plan Model label and a copilot-specific option text are present
     expect(screen.getByText("Plan Model")).toBeInTheDocument();
     expect(
-      screen.getByText(/\(claude-sonnet-5\) Claude Sonnet 5 -- recommended for planning/),
+      screen.getByText(/\(claude-opus-4.5\) Claude Opus 4.5 -- recommended for planning/),
     ).toBeInTheDocument();
   });
 

@@ -65,13 +65,39 @@ export interface Settings {
   taskColumnSort: TaskColumnSort;
   /** Per-agent-backend plan/dev/qa model IDs last saved for that platform */
   savedModelsByBackend: SavedModelsByBackend;
+  /**
+   * Kill a host Copilot CLI process that emits no stdout/stderr for this many minutes.
+   * Heartbeats do not count as activity. `0` disables. Default 10.
+   */
+  agentIdleTimeoutMinutes: number;
+  /**
+   * Kill a host Copilot CLI process after this many minutes regardless of activity.
+   * `0` disables.
+   */
+  agentTimeoutMinutes: number;
+  /**
+   * Kill a host Copilot CLI process if the same tool start repeats this many times.
+   * `0` disables.
+   */
+  agentMaxConsecutiveRepeats: number;
+}
+
+export function timeoutMinutesToMs(minutes: number): number | undefined {
+  if (!Number.isFinite(minutes) || minutes <= 0) return undefined;
+  return Math.floor(minutes) * 60_000;
+}
+
+function normalizeNonNegativeInt(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? Math.floor(value)
+    : fallback;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   maxLLMCalls: 500,
-  planModel: "claude-sonnet-5",
-  devModel: "gpt-5.4-mini",
-  qaModel: "gpt-5.4-mini",
+  planModel: "claude-opus-4.5",
+  devModel: "claude-sonnet-5",
+  qaModel: "claude-sonnet-5",
   devReasoningEffort: "xhigh",
   qaReasoningEffort: "high",
   autoCommit: true,
@@ -98,6 +124,9 @@ export const DEFAULT_SETTINGS: Settings = {
   pauseAfterPlan: false,
   taskColumnSort: "updatedAtDesc",
   savedModelsByBackend: {},
+  agentIdleTimeoutMinutes: 10,
+  agentTimeoutMinutes: 0,
+  agentMaxConsecutiveRepeats: 10,
 };
 
 export class SettingsManager {
@@ -150,6 +179,18 @@ export class SettingsManager {
       merged.qaModel = normalizedModels.qaModel;
       merged.savedModelsByBackend = normalizedModels.savedModelsByBackend;
       merged.dockerMergeStrategy = normalizeDockerMergeStrategy(parsed.dockerMergeStrategy);
+      merged.agentIdleTimeoutMinutes = normalizeNonNegativeInt(
+        parsed.agentIdleTimeoutMinutes,
+        DEFAULT_SETTINGS.agentIdleTimeoutMinutes,
+      );
+      merged.agentTimeoutMinutes = normalizeNonNegativeInt(
+        parsed.agentTimeoutMinutes,
+        DEFAULT_SETTINGS.agentTimeoutMinutes,
+      );
+      merged.agentMaxConsecutiveRepeats = normalizeNonNegativeInt(
+        parsed.agentMaxConsecutiveRepeats,
+        DEFAULT_SETTINGS.agentMaxConsecutiveRepeats,
+      );
 
       return merged;
     } catch {
@@ -162,6 +203,18 @@ export class SettingsManager {
     normalized.agentBackend = normalizeAgentBackend(settings.agentBackend);
     normalized.copilotOutputFormat = normalizeCopilotOutputFormat(
       settings.copilotOutputFormat,
+    );
+    normalized.agentIdleTimeoutMinutes = normalizeNonNegativeInt(
+      settings.agentIdleTimeoutMinutes,
+      DEFAULT_SETTINGS.agentIdleTimeoutMinutes,
+    );
+    normalized.agentTimeoutMinutes = normalizeNonNegativeInt(
+      settings.agentTimeoutMinutes,
+      DEFAULT_SETTINGS.agentTimeoutMinutes,
+    );
+    normalized.agentMaxConsecutiveRepeats = normalizeNonNegativeInt(
+      settings.agentMaxConsecutiveRepeats,
+      DEFAULT_SETTINGS.agentMaxConsecutiveRepeats,
     );
     await writeFile(
       path.join(this.ralphDir, "settings.json"),

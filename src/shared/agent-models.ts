@@ -68,7 +68,7 @@ export const LEGACY_MODEL_ALIASES: Partial<Record<AgentBackendId, Record<string,
 export const AGENT_MODEL_CATALOG: Record<AgentBackendId, AgentModelEntry[]> = {
   copilot: [
     { id: 'gpt-5-mini', label: 'GPT-5 mini', strength: 'Reliable coding & writing, fast', tier: 'Standard (included)', multiplier: '0×', yoloMode: 'Yes', fleetMode: 'Yes (`/fleet`)', preferredFor: [] },
-    { id: 'gpt-5.4-mini', label: 'GPT-5.4 mini', strength: 'Fast responses, lightweight code', tier: 'Standard (included)', multiplier: '~0×', yoloMode: 'Yes', fleetMode: 'Yes (`/fleet`)', preferredFor: ['Dev', 'QA'] },
+    { id: 'gpt-5.4-mini', label: 'GPT-5.4 mini', strength: 'Fast responses, lightweight code', tier: 'Standard (included)', multiplier: '~0×', yoloMode: 'Yes', fleetMode: 'Yes (`/fleet`)', preferredFor: [] },
     { id: 'mai-code-1-flash-picker', label: 'MAI-Code-1-Flash', strength: 'Fast, lightweight code (Microsoft AI)', tier: 'Standard (included)', multiplier: '~0×', yoloMode: 'Yes', fleetMode: 'Yes (`/fleet`)', preferredFor: [] },
     { id: 'mai-code-1.1-flash', label: 'MAI-Code-1.1-Flash', strength: 'Fast, lightweight code (Microsoft AI)', tier: 'Standard (included)', multiplier: '~0×', yoloMode: 'Yes', fleetMode: 'Yes (`/fleet`)', preferredFor: [] },
     { id: 'claude-haiku-4.5', label: 'Claude Haiku 4.5', strength: 'Fastest Anthropic, simple tasks', tier: 'Standard (included)', multiplier: '~0.25×', yoloMode: 'Yes', fleetMode: 'Yes (`/fleet`)', preferredFor: [] },
@@ -77,7 +77,7 @@ export const AGENT_MODEL_CATALOG: Record<AgentBackendId, AgentModelEntry[]> = {
     { id: 'gemini-3.7-flash', label: 'Gemini 3.7 Flash', strength: 'Fastest context processing (latest gen)', tier: 'Standard (included)', multiplier: '~0×', yoloMode: 'Yes', fleetMode: 'Yes (`/fleet`)', preferredFor: [] },
     { id: 'claude-sonnet-4.5', label: 'Claude Sonnet 4.5', strength: 'Balanced reasoning & code', tier: 'Standard+', multiplier: '~1×', yoloMode: 'Yes', fleetMode: 'Yes (`/fleet`)', preferredFor: [] },
     { id: 'claude-sonnet-4.6', label: 'Claude Sonnet 4.6', strength: 'Smarter reasoning, reliable completions', tier: 'Standard+', multiplier: '~1×', yoloMode: 'Yes', fleetMode: 'Yes (`/fleet`)', preferredFor: [] },
-    { id: 'claude-sonnet-5', label: 'Claude Sonnet 5', strength: 'Latest Sonnet, best speed/intelligence mix', tier: 'Standard+', multiplier: '~1×', yoloMode: 'Yes', fleetMode: 'Yes (`/fleet`)', preferredFor: ['Planning'] },
+    { id: 'claude-sonnet-5', label: 'Claude Sonnet 5', strength: 'Latest Sonnet, best speed/intelligence mix', tier: 'Standard+', multiplier: '~1×', yoloMode: 'Yes', fleetMode: 'Yes (`/fleet`)', preferredFor: ['Dev', 'QA'] },
     { id: 'gpt-5.3-codex', label: 'GPT-5.3-Codex', strength: 'Complex engineering, tests, refactors', tier: 'Standard+', multiplier: '~2×', yoloMode: 'Yes', fleetMode: 'Yes (`/fleet`)', preferredFor: [] },
     { id: 'gpt-5.4', label: 'GPT-5.4', strength: 'Deep reasoning, multi-file tasks', tier: 'Standard+', multiplier: '~2×', yoloMode: 'Yes', fleetMode: 'Yes (`/fleet`)', preferredFor: [] },
     { id: 'gemini-3.1-pro-preview', label: 'Gemini 3.1 Pro', strength: 'Massive context, advanced reasoning', tier: 'Standard+', multiplier: '~1×', yoloMode: 'Yes', fleetMode: 'Yes (`/fleet`)', preferredFor: [] },
@@ -85,7 +85,7 @@ export const AGENT_MODEL_CATALOG: Record<AgentBackendId, AgentModelEntry[]> = {
     { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol', strength: 'Latest GPT, deep reasoning & architecture', tier: 'Premium', multiplier: 'high', yoloMode: 'Yes', fleetMode: 'Yes (`/fleet`)', preferredFor: [] },
     { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra', strength: 'Latest GPT, general-purpose reasoning', tier: 'Premium', multiplier: 'high', yoloMode: 'Yes', fleetMode: 'Yes (`/fleet`)', preferredFor: [] },
     { id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna', strength: 'Latest GPT, fast lightweight reasoning', tier: 'Standard+', multiplier: '~1×', yoloMode: 'Yes', fleetMode: 'Yes (`/fleet`)', preferredFor: [] },
-    { id: 'claude-opus-4.5', label: 'Claude Opus 4.5', strength: 'Anthropic flagship, deep reasoning', tier: 'Premium', multiplier: '~5×', yoloMode: 'Yes', fleetMode: 'Yes (`/fleet`)', preferredFor: [] },
+    { id: 'claude-opus-4.5', label: 'Claude Opus 4.5', strength: 'Anthropic flagship, deep reasoning', tier: 'Premium', multiplier: '~5×', yoloMode: 'Yes', fleetMode: 'Yes (`/fleet`)', preferredFor: ['Planning'] },
     { id: 'claude-opus-4.6', label: 'Claude Opus 4.6', strength: 'Improved Opus reasoning', tier: 'Premium', multiplier: '~5×', yoloMode: 'Yes', fleetMode: 'Yes (`/fleet`)', preferredFor: [] },
     { id: 'claude-opus-4.7', label: 'Claude Opus 4.7', strength: 'Prior-gen most powerful Anthropic model', tier: 'Premium', multiplier: '~5×', yoloMode: 'Yes', fleetMode: 'Yes (`/fleet`)', preferredFor: [] },
     { id: 'claude-opus-4.8', label: 'Claude Opus 4.8', strength: 'Prior-gen Anthropic flagship', tier: 'Premium', multiplier: '~5×', yoloMode: 'Yes', fleetMode: 'Yes (`/fleet`)', preferredFor: [] },
@@ -146,7 +146,7 @@ export const AGENT_MODEL_CATALOG: Record<AgentBackendId, AgentModelEntry[]> = {
 };
 
 export const PREFERRED_MODELS_BY_BACKEND: Record<AgentBackendId, SavedModelsTriple> = {
-  copilot: { planModel: 'claude-sonnet-5', devModel: 'gpt-5.4-mini', qaModel: 'gpt-5.4-mini' },
+  copilot: { planModel: 'claude-opus-4.5', devModel: 'claude-sonnet-5', qaModel: 'claude-sonnet-5' },
   'cursor-agent': { planModel: 'claude-sonnet-5-thinking-high', devModel: 'gpt-5.4-mini-medium', qaModel: 'gpt-5.4-mini-medium' },
   claude: { planModel: 'claude-opus-4-5', devModel: 'claude-sonnet-5', qaModel: 'claude-sonnet-5' },
   gemini: { planModel: 'gemini-3-pro-preview', devModel: 'gemini-3-flash-preview', qaModel: 'gemini-3-flash-preview' },

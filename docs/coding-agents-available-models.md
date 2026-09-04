@@ -61,7 +61,7 @@ Use `-m` / `--model` with these IDs (`gemini-2.0-*` returns 404 on current CLI).
 | Model                  | ID                      | Strength                                          | Tier                | Multiplier   | YOLO Mode | Fleet Mode     | Preferred For |
 | ---------------------- | ----------------------- | ------------------------------------------------- | ------------------- | ------------ | --------- | -------------- | ------------- |
 | GPT-5 mini             | gpt-5-mini              | Reliable coding & writing, fast                   | Standard (included) | 0×           | Yes       | Yes (`/fleet`) |
-| GPT-5.4 mini           | gpt-5.4-mini            | Fast responses, lightweight code                  | Standard (included) | ~0×          | Yes       | Yes (`/fleet`) | Dev, QA       |
+| GPT-5.4 mini           | gpt-5.4-mini            | Fast responses, lightweight code                  | Standard (included) | ~0×          | Yes       | Yes (`/fleet`) |
 | MAI-Code-1-Flash       | mai-code-1-flash-picker | Fast, lightweight code (Microsoft AI)             | Standard (included) | ~0×          | Yes       | Yes (`/fleet`) |
 | MAI-Code-1.1-Flash     | mai-code-1.1-flash      | Fast, lightweight code (Microsoft AI)             | Standard (included) | ~0×          | Yes       | Yes (`/fleet`) |
 | Claude Haiku 4.5       | claude-haiku-4.5        | Fastest Anthropic, simple tasks                   | Standard (included) | ~0.25×       | Yes       | Yes (`/fleet`) |
@@ -70,7 +70,7 @@ Use `-m` / `--model` with these IDs (`gemini-2.0-*` returns 404 on current CLI).
 | Gemini 3.7 Flash       | gemini-3.7-flash        | Fastest context processing (latest gen)           | Standard (included) | ~0×          | Yes       | Yes (`/fleet`) |
 | Claude Sonnet 4.5      | claude-sonnet-4.5       | Balanced reasoning & code                         | Standard+           | ~1×          | Yes       | Yes (`/fleet`) |
 | Claude Sonnet 4.6      | claude-sonnet-4.6       | Smarter reasoning, reliable completions           | Standard+           | ~1×          | Yes       | Yes (`/fleet`) |
-| Claude Sonnet 5        | claude-sonnet-5         | Latest Sonnet, best speed/intelligence mix        | Standard+           | ~1×          | Yes       | Yes (`/fleet`) | Planning      |
+| Claude Sonnet 5        | claude-sonnet-5         | Latest Sonnet, best speed/intelligence mix        | Standard+           | ~1×          | Yes       | Yes (`/fleet`) | Dev, QA       |
 | GPT-5.3-Codex          | gpt-5.3-codex           | Complex engineering, tests, refactors             | Standard+           | ~2×          | Yes       | Yes (`/fleet`) |
 | GPT-5.4                | gpt-5.4                 | Deep reasoning, multi-file tasks                  | Standard+           | ~2×          | Yes       | Yes (`/fleet`) |
 | Gemini 3.1 Pro         | gemini-3.1-pro-preview  | Massive context, advanced reasoning               | Standard+           | ~1×          | Yes       | Yes (`/fleet`) |
@@ -78,7 +78,7 @@ Use `-m` / `--model` with these IDs (`gemini-2.0-*` returns 404 on current CLI).
 | GPT-5.6 Sol            | gpt-5.6-sol             | Latest GPT, deep reasoning & architecture         | Premium             | high         | Yes       | Yes (`/fleet`) |
 | GPT-5.6 Terra          | gpt-5.6-terra           | Latest GPT, general-purpose reasoning             | Premium             | high         | Yes       | Yes (`/fleet`) |
 | GPT-5.6 Luna           | gpt-5.6-luna            | Latest GPT, fast lightweight reasoning            | Standard+           | ~1×          | Yes       | Yes (`/fleet`) |
-| Claude Opus 4.5        | claude-opus-4.5         | Anthropic flagship, deep reasoning                | Premium             | ~5×          | Yes       | Yes (`/fleet`) |
+| Claude Opus 4.5        | claude-opus-4.5         | Anthropic flagship, deep reasoning                | Premium             | ~5×          | Yes       | Yes (`/fleet`) | Planning      |
 | Claude Opus 4.6        | claude-opus-4.6         | Improved Opus reasoning                           | Premium             | ~5×          | Yes       | Yes (`/fleet`) |
 | Claude Opus 4.7        | claude-opus-4.7         | Prior-gen most powerful Anthropic model           | Premium             | ~5×          | Yes       | Yes (`/fleet`) |
 | Claude Opus 4.8        | claude-opus-4.8         | Prior-gen Anthropic flagship                      | Premium             | ~5×          | Yes       | Yes (`/fleet`) |

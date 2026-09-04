@@ -101,4 +101,20 @@ describe("extractCopilotJsonOutput", () => {
             "<status>complete</status>",
         );
     });
+
+    it("collects session.task_complete and result payloads", () => {
+        const lines = [
+            JSON.stringify({
+                type: "session.task_complete",
+                data: { summary: "<status>complete</status>" },
+            }),
+            JSON.stringify({
+                type: "result",
+                data: { content: "```json\n[]\n```" },
+            }),
+        ].join("\n");
+        const extracted = extractCopilotJsonOutput(lines);
+        expect(extracted).toContain("<status>complete</status>");
+        expect(extracted).toContain("[]");
+    });
 });

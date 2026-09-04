@@ -35,4 +35,6 @@ npm run exp -- <slug>
 
 **List slugs:** `./start.sh exp` (omit `<slug>`) or `npm run exp` alone (no slug; no `--` needed).
 
+**Headless exit POC** (stub agent, process must exit): `npm run poc:headless-exit` — see [`experiments/headless-exit/`](headless-exit/).
+
 Optional: symlink `~/experiments/<slug>` to this repo’s `experiments/<slug>` if you prefer that path; the launcher always resolves the real directory inside ralph-gui.

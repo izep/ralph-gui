@@ -126,9 +126,9 @@ Use `start.sh` with a repo and optional settings overrides. The UI is still ther
   --repo /absolute/path/to/target-repo \
   --start \
   --agent-backend copilot \
-  --plan-model claude-sonnet-5 \
-  --dev-model gpt-5-mini \
-  --qa-model gpt-5-mini \
+  --plan-model claude-opus-4.5 \
+  --dev-model claude-sonnet-5 \
+  --qa-model claude-sonnet-5 \
   --dev-reasoning-effort xhigh \
   --qa-reasoning-effort high \
   --max-llm-calls 300 \
@@ -145,7 +145,12 @@ Behavior:
 - starts server
 - starts loop only when `--start` is passed
 - `--start` requires `--repo`, and `ralph/epic.md` must be filled out (not default placeholder)
-- optionally exits server when epic completes via `--exit-when-complete`
+- `--start` prints agent log lines (including idle heartbeats) to the terminal
+- live progress is also written to `ralph/run-status.json` and `ralph/run.log` in the target repo
+- empty or unparseable plan output no longer re-plans forever: an empty JSON array or `<status>complete</status>` ends the epic; a failed parse after one retry stops the loop
+- `--exit-when-complete` exits the server when the loop finishes (epic complete, max LLM calls, or pause) or when it errors (non-zero exit)
+
+To prove the process actually exits (stub Copilot, no LLM login): `npm run poc:headless-exit`
 
 Use `./start.sh --help` for options.
 
@@ -335,9 +340,12 @@ Ralph distinguishes between "Docker not installed" and "Docker daemon not runnin
 Default loop settings are:
 
 - `maxLLMCalls: 500`
-- `planModel: claude-sonnet-5`
-- `devModel: gpt-5-mini`
-- `qaModel: gpt-5-mini`
+- `agentIdleTimeoutMinutes: 10` — kill a silent host Copilot process after this many minutes with no stdout/stderr (`0` disables). Heartbeats do not count as activity.
+- `agentTimeoutMinutes: 0` — optional wall-clock cap on a single Copilot call (`0` disables)
+- `agentMaxConsecutiveRepeats: 10` — kill Copilot if the same tool start repeats this many times (`0` disables)
+- `planModel: claude-opus-4.5`
+- `devModel: claude-sonnet-5`
+- `qaModel: claude-sonnet-5`
 - `devReasoningEffort: xhigh`
 - `qaReasoningEffort: high`
 - `autoCommit: true`

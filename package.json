@@ -11,7 +11,8 @@
     "test": "vitest --config config/vitest.config.ts",
     "test:ci": "vitest run --config config/vitest.config.ts",
     "typecheck": "tsc -b config/tsconfig.json --noEmit",
-    "exp": "node scripts/run-experiment.mjs"
+    "exp": "node scripts/run-experiment.mjs",
+    "poc:headless-exit": "node scripts/poc-headless-exit.mjs"
   },
   "dependencies": {
     "express": "^4.21.0",

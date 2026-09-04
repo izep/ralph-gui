@@ -1,6 +1,9 @@
 // Parsing utilities for LLM output
 export {
   parseJsonTaskList,
+  parsePlanBacklog,
+  planOutputIsComplete,
+  epicFrontmatterIsComplete,
   snippetForLog,
   PLAN_PARSE_RETRY_INSTRUCTION,
 } from "../shared/parseTaskList.js";

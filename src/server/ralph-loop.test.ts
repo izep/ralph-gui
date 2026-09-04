@@ -30,6 +30,7 @@ import { constants } from "fs";
 import { RalphLoop } from "./ralph-loop.js";
 import type { LoopCallbacks } from "./ralph-loop.js";
 import { DEFAULT_SETTINGS } from "./templates.js";
+import { timeoutMinutesToMs } from "./settings-manager.js";
 import type { LLMCallOpts } from "./llm-caller.js";
 
 function makeCallbacks(): LoopCallbacks & {
@@ -49,6 +50,19 @@ function makeCallbacks(): LoopCallbacks & {
       statuses.push({ status, error }),
     onTasksUpdated: (data: object) => taskUpdates.push(data),
   };
+}
+
+/**
+ * Polls `check` until it returns true or `timeoutMs` elapses, instead of a
+ * fixed sleep. Avoids flakiness under slow/CI environments where a hardcoded
+ * delay may not be enough for async work (docker pool + git mocks) to settle.
+ */
+async function waitFor(check: () => boolean, timeoutMs = 2000, intervalMs = 20): Promise<void> {
+  const start = Date.now();
+  while (!check()) {
+    if (Date.now() - start >= timeoutMs) return; // let the assertion below report the failure
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
 }
 
 let tmpDir: string;
@@ -140,6 +154,22 @@ describe("RalphLoop.readSettings", () => {
     expect(settings.maxLLMCalls).toBe(50);
     expect(settings.planModel).toBe(DEFAULT_SETTINGS.planModel);
     expect(settings.autoCommit).toBe(DEFAULT_SETTINGS.autoCommit);
+    expect(settings.agentIdleTimeoutMinutes).toBe(DEFAULT_SETTINGS.agentIdleTimeoutMinutes);
+  });
+
+  it("preserves agentIdleTimeoutMinutes 0 from settings.json", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+
+    await writeFile(
+      path.join(tmpDir, "ralph", "settings.json"),
+      JSON.stringify({ agentIdleTimeoutMinutes: 0 }),
+      "utf-8",
+    );
+
+    const settings = await loop.readSettings();
+    expect(settings.agentIdleTimeoutMinutes).toBe(0);
   });
 
   it("handles corrupted JSON gracefully", async () => {
@@ -155,6 +185,14 @@ describe("RalphLoop.readSettings", () => {
 
     const settings = await loop.readSettings();
     expect(settings).toEqual(DEFAULT_SETTINGS);
+  });
+});
+
+describe("timeoutMinutesToMs", () => {
+  it("converts positive minutes and treats 0 as disabled", () => {
+    expect(timeoutMinutesToMs(10)).toBe(600_000);
+    expect(timeoutMinutesToMs(0)).toBeUndefined();
+    expect(timeoutMinutesToMs(-1)).toBeUndefined();
   });
 });
 
@@ -501,6 +539,75 @@ describe("RalphLoop plan Kanban sync", () => {
       await readFile(path.join(tmpDir, "ralph", "task-status.json"), "utf-8"),
     );
     expect(status.tasks[0].title).toBe("Recovered task");
+    loop.stop();
+  });
+
+  it("treats an empty plan JSON array as epic complete", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic("# Epic\n\nAlready shipped.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+    await writeFile(
+      path.join(tmpDir, "ralph", "settings.json"),
+      JSON.stringify({ ...DEFAULT_SETTINGS, minBacklogSize: 3, maxLLMCalls: 10 }),
+      "utf-8",
+    );
+
+    const llmMod = await import("./llm-caller.js");
+    const call = vi.spyOn(llmMod.LLMCaller.prototype, "call").mockResolvedValue("```json\n[]\n```");
+
+    expect((await loop.start()).ok).toBe(true);
+    await vi.waitFor(() => expect(loop.didCompleteEpic).toBe(true));
+    expect(call).toHaveBeenCalledTimes(1);
+    loop.stop();
+  });
+
+  it("stops after an unparseable plan instead of replanning forever", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic("# Epic\n\nParse failure should not loop.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+    await writeFile(
+      path.join(tmpDir, "ralph", "settings.json"),
+      JSON.stringify({ ...DEFAULT_SETTINGS, minBacklogSize: 3, maxLLMCalls: 10 }),
+      "utf-8",
+    );
+
+    const llmMod = await import("./llm-caller.js");
+    const call = vi
+      .spyOn(llmMod.LLMCaller.prototype, "call")
+      .mockResolvedValue("I planned some work but forgot the JSON.");
+
+    expect((await loop.start()).ok).toBe(true);
+    await vi.waitFor(() =>
+      expect(cb.statuses.some((s) => s.status === "error")).toBe(true),
+    );
+    expect(call.mock.calls.length).toBe(2);
+    loop.stop();
+  });
+
+  it("skips agents when epic frontmatter is already complete", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic(`---
+name: Done epic
+status: complete
+---
+
+# Body
+`);
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+
+    const llmMod = await import("./llm-caller.js");
+    const call = vi.spyOn(llmMod.LLMCaller.prototype, "call");
+
+    expect((await loop.start()).ok).toBe(true);
+    await vi.waitFor(() => expect(loop.didCompleteEpic).toBe(true));
+    expect(call).not.toHaveBeenCalled();
+    expect(cb.logs.some((l) => l.includes("skipping agents"))).toBe(true);
     loop.stop();
   });
 
@@ -1378,7 +1485,7 @@ describe("RalphLoop epic-base-per-task merge strategy", () => {
 
     const startRes = await loop.start();
     expect(startRes.ok).toBe(true);
-    await new Promise((r) => setTimeout(r, 400));
+    await waitFor(() => mergeWorktreeSpy.mock.calls.length > 0);
 
     expect(mergeWorktreeSpy).toHaveBeenCalled();
     for (const [, base, target] of mergeWorktreeSpy.mock.calls) {

@@ -22,4 +22,5 @@ export interface ProviderRuntimeContext {
   setCurrentProcess: (proc: ChildProcess | null) => void;
   timeoutMs?: number;
   maxConsecutiveRepeats?: number;
+  idleTimeoutMs?: number;
 }

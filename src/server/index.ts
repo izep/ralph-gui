@@ -6,6 +6,8 @@ import { fileURLToPath } from "url";
 import { RalphLoop } from "./ralph-loop.js";
 import { DEFAULT_SETTINGS } from "./templates.js";
 import { getArg, hasFlag, applyCliSettingsOverrides } from "./cli-args.js";
+import { headlessShutdownForLoopStatus } from "./headless-shutdown.js";
+import { RalphRunTracker } from "./run-tracker.js";
 import {
   checkDockerHost,
   ensureDockerAgentRunning,
@@ -28,11 +30,16 @@ let loopStatus: "idle" | "running" | "error" | "stopped" = "idle";
 let loopError: string | null = null;
 let logBuffer: string[] = [];
 const MAX_LOG_LINES = 1000;
-let requestShutdown: ((reason: string) => Promise<void>) | null = null;
+let requestShutdown: ((reason: string, exitCode?: number) => Promise<void>) | null = null;
+let runTracker: RalphRunTracker | null = null;
 
 function addLog(line: string) {
   logBuffer.push(line);
   if (logBuffer.length > MAX_LOG_LINES) logBuffer = logBuffer.slice(-MAX_LOG_LINES);
+  if (cliStart) {
+    console.log(line);
+  }
+  runTracker?.record(line);
   broadcast(JSON.stringify({ type: "log", data: line }));
 }
 
@@ -46,13 +53,22 @@ function makeCallbacks(isActive: () => boolean, getActiveLoop: () => RalphLoop |
       if (!isActive()) return;
       loopStatus = status as typeof loopStatus;
       loopError = error;
+      runTracker?.setLoopStatus(loopStatus);
       broadcast(JSON.stringify({ type: "loopStatus", data: { status: loopStatus, error: loopError } }));
 
-      if (exitWhenComplete && loopStatus === "idle" && getActiveLoop()?.didCompleteEpic) {
-        addLog("[ralph] Epic complete, exiting server (--exit-when-complete).");
-        setTimeout(() => {
-          void requestShutdown?.("epic-complete");
-        }, 100);
+      if (exitWhenComplete) {
+        const decision = headlessShutdownForLoopStatus(
+          loopStatus,
+          getActiveLoop()?.didCompleteEpic ?? false,
+        );
+        if (decision) {
+          addLog(
+            `[ralph] Loop ended (${decision.reason}), exiting server (--exit-when-complete).`,
+          );
+          setTimeout(() => {
+            void requestShutdown?.(decision.reason, decision.exitCode);
+          }, 100);
+        }
       }
     },
     onTasksUpdated: (data: object) => {
@@ -112,6 +128,7 @@ async function setRepo(repoPath: string): Promise<{ ok: boolean; error?: string 
     nextLoop = new RalphLoop(repoPath, makeCallbacks(() => loop === nextLoop, () => nextLoop));
     await nextLoop.bootstrap();
     loop = nextLoop;
+    runTracker = new RalphRunTracker(loop.ralphDir);
     logBuffer = [];
     loopStatus = "idle";
     loopError = null;
@@ -563,7 +580,7 @@ function closeHttpServer(): Promise<void> {
   });
 }
 
-async function shutdownServer(reason: string): Promise<void> {
+async function shutdownServer(reason: string, exitCode = 0): Promise<void> {
   if (shutdownServer.inProgress) {
     return;
   }
@@ -592,7 +609,7 @@ async function shutdownServer(reason: string): Promise<void> {
       }
       process.exit(1);
     }
-    process.exit(0);
+    process.exit(exitCode);
   } catch (err) {
     console.error(`Shutdown failed: ${String(err)}`);
     process.exit(1);
