@@ -237,6 +237,62 @@ export function LoopConfigSection({
           />
         </label>
 
+        <label className="cp-field">
+          <span>Agent idle timeout (minutes)</span>
+          <input
+            type="number"
+            min={0}
+            max={180}
+            value={localSettings.agentIdleTimeoutMinutes}
+            onChange={(e) =>
+              onChangeSettings({
+                ...localSettings,
+                agentIdleTimeoutMinutes: Number(e.target.value),
+              })
+            }
+          />
+        </label>
+        <p className="cp-hint">
+          Kill the host Copilot process if it produces no output for this long (thinking of a few
+          minutes is normal). 0 disables. Live progress is written to ralph/run-status.json.
+        </p>
+
+        <label className="cp-field">
+          <span>Agent wall-clock timeout (minutes)</span>
+          <input
+            type="number"
+            min={0}
+            max={720}
+            value={localSettings.agentTimeoutMinutes}
+            onChange={(e) =>
+              onChangeSettings({
+                ...localSettings,
+                agentTimeoutMinutes: Number(e.target.value),
+              })
+            }
+          />
+        </label>
+        <p className="cp-hint">Hard cap on a single Copilot call. 0 disables.</p>
+
+        <label className="cp-field">
+          <span>Stuck-loop repeats</span>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            value={localSettings.agentMaxConsecutiveRepeats}
+            onChange={(e) =>
+              onChangeSettings({
+                ...localSettings,
+                agentMaxConsecutiveRepeats: Number(e.target.value),
+              })
+            }
+          />
+        </label>
+        <p className="cp-hint">
+          Kill Copilot if the same tool start repeats this many times in a row. 0 disables.
+        </p>
+
         {renderModelSelect("Planning", "Plan Model", "planModel", planIsCustom, (v) =>
           setCustomFlags((f) => ({ ...f, planIsCustom: v })),
         )}

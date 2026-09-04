@@ -46,6 +46,12 @@ export async function applyCliSettingsOverrides(loop: {
     ...(getNumberArg("--max-llm-calls") !== undefined ? { maxLLMCalls: getNumberArg("--max-llm-calls")! } : {}),
     ...(getNumberArg("--plan-frequency") !== undefined ? { planFrequency: getNumberArg("--plan-frequency")! } : {}),
     ...(getNumberArg("--min-backlog-size") !== undefined ? { minBacklogSize: getNumberArg("--min-backlog-size")! } : {}),
+    ...(getNumberArg("--agent-idle-timeout-minutes") !== undefined
+      ? { agentIdleTimeoutMinutes: getNumberArg("--agent-idle-timeout-minutes")! }
+      : {}),
+    ...(getNumberArg("--agent-timeout-minutes") !== undefined
+      ? { agentTimeoutMinutes: getNumberArg("--agent-timeout-minutes")! }
+      : {}),
     ...(getBooleanArg("--auto-commit") !== undefined ? { autoCommit: getBooleanArg("--auto-commit")! } : {}),
     ...(agentBackendOverride ? { agentBackend: agentBackendOverride } : {}),
     ...(getBooleanArg("--fleet") !== undefined ? { fleetMode: getBooleanArg("--fleet")! } : {}),

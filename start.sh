@@ -52,7 +52,7 @@ Common options:
   --repo <path>                  Target repository (required with --start)
   --start                        Start loop after server boot
   --port <port>                  API/UI port (default: 3001)
-  --exit-when-complete           Exit server when epic completes
+  --exit-when-complete           Exit server when the loop finishes or errors
 
 Settings overrides (persisted to ralph/settings.json):
   --plan-model <name>
@@ -64,6 +64,8 @@ Settings overrides (persisted to ralph/settings.json):
   --max-llm-calls <n>
   --plan-frequency <n>
   --min-backlog-size <n>
+  --agent-idle-timeout-minutes <n>  (0 disables; default 10)
+  --agent-timeout-minutes <n>       (0 disables wall-clock cap)
   --auto-commit <true|false>
 EOF
   exit 0

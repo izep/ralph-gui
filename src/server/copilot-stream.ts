@@ -138,6 +138,27 @@ export function formatCopilotStreamLine(
     return `${tag} ${type}`;
 }
 
+function copilotEventText(ev: CopilotEvent): string | null {
+    const data = ev.data ?? {};
+    const type = ev.type ?? "";
+
+    if (type === "assistant.message" || type === "assistant.message_delta") {
+        const content = data.content;
+        return typeof content === "string" && content.trim() ? content : null;
+    }
+    if (type === "session.task_complete") {
+        const summary = data.summary;
+        return typeof summary === "string" && summary.trim() ? summary : null;
+    }
+    if (type === "result") {
+        if (typeof data.content === "string" && data.content.trim()) return data.content;
+        if (typeof data.text === "string" && data.text.trim()) return data.text;
+        if (typeof data.result === "string" && data.result.trim()) return data.result;
+        if (typeof data.summary === "string" && data.summary.trim()) return data.summary;
+    }
+    return null;
+}
+
 /** Collect assistant text from Copilot JSONL for loop status-tag parsing. */
 export function extractCopilotJsonOutput(raw: string): string {
     const parts: string[] = [];
@@ -146,12 +167,8 @@ export function extractCopilotJsonOutput(raw: string): string {
         if (!trimmed) continue;
         try {
             const ev = JSON.parse(trimmed) as CopilotEvent;
-            if (ev.type === "assistant.message") {
-                const content = ev.data?.content;
-                if (typeof content === "string" && content.trim()) {
-                    parts.push(content);
-                }
-            }
+            const text = copilotEventText(ev);
+            if (text) parts.push(text);
         } catch {
             parts.push(trimmed);
         }

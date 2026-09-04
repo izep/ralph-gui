@@ -1,0 +1,17 @@
+{
+  "tasks": [],
+  "currentTaskNum": 0,
+  "totalLLMCalls": 1,
+  "maxLLMCalls": 5,
+  "nextTask": {
+    "taskId": null,
+    "content": "",
+    "updatedAt": "2026-09-04T21:21:27.000Z"
+  },
+  "feedback": {
+    "taskId": null,
+    "content": "",
+    "updatedAt": "2026-09-04T21:21:27.000Z"
+  },
+  "lastUpdated": "2026-09-04T21:21:27.000Z"
+}

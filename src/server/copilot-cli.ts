@@ -63,6 +63,7 @@ export function runCopilotCall(
         setCurrentProcess: ctx.setCurrentProcess,
         timeoutMs: ctx.timeoutMs,
         maxConsecutiveRepeats: ctx.maxConsecutiveRepeats,
+        idleTimeoutMs: ctx.idleTimeoutMs,
         passPromptOnStdin: false,
         metaArgSummary: summarizeArgsForMetaLog(args, "-p"),
         formatLine: useJsonl

@@ -5,6 +5,8 @@ import {
   parseTaskDescription,
   parseRemainingTasks,
   parseJsonTaskList,
+  planOutputIsComplete,
+  epicFrontmatterIsComplete,
   parseBlockedInfo,
 } from "./parse-output.js";
 
@@ -248,6 +250,46 @@ describe("parseJsonTaskList", () => {
 
   it("returns empty array for empty content", () => {
     expect(parseJsonTaskList("")).toEqual([]);
+  });
+});
+
+describe("planOutputIsComplete", () => {
+  it("detects the complete status tag", () => {
+    expect(planOutputIsComplete("All done.\n<status>complete</status>\n")).toBe(true);
+  });
+
+  it("detects a fenced empty JSON array", () => {
+    expect(planOutputIsComplete("```json\n[]\n```")).toBe(true);
+  });
+
+  it("does not treat missing JSON as complete", () => {
+    expect(planOutputIsComplete("I planned some work but forgot the JSON.")).toBe(false);
+  });
+
+  it("does not treat a task array as complete", () => {
+    expect(
+      planOutputIsComplete(
+        '```json\n[{"id":1,"title":"Work","description":"d","status":"backlog"}]\n```',
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("epicFrontmatterIsComplete", () => {
+  it("reads status complete from YAML frontmatter", () => {
+    const epic = `---
+name: Example
+status: complete
+---
+
+# Body
+`;
+    expect(epicFrontmatterIsComplete(epic)).toBe(true);
+  });
+
+  it("is false for pending epics", () => {
+    expect(epicFrontmatterIsComplete("---\nstatus: pending\n---\n# Body\n")).toBe(false);
+    expect(epicFrontmatterIsComplete("# No frontmatter\n")).toBe(false);
   });
 });
 

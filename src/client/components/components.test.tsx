@@ -320,6 +320,9 @@ const defaultSettings: Settings = {
   pauseAfterPlan: false,
   taskColumnSort: "updatedAtDesc",
   savedModelsByBackend: {},
+  agentIdleTimeoutMinutes: 10,
+  agentTimeoutMinutes: 0,
+  agentMaxConsecutiveRepeats: 10,
 };
 
 const readyState: Readiness = {

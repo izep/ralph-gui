@@ -56,18 +56,19 @@ function tasksFromParsed(parsed: unknown): ParsedTaskListItem[] {
   return results;
 }
 
-function tryParseTaskArray(raw: string): ParsedTaskListItem[] {
+function tryParseJsonArray(raw: string): unknown[] | null {
   const trimmed = raw.trim();
-  if (!trimmed) return [];
+  if (!trimmed) return null;
   const candidates = [trimmed, stripTrailingCommas(trimmed)];
   for (const candidate of candidates) {
     try {
-      return tasksFromParsed(JSON.parse(candidate));
+      const parsed = JSON.parse(candidate) as unknown;
+      if (Array.isArray(parsed)) return parsed;
     } catch {
       /* try next */
     }
   }
-  return [];
+  return null;
 }
 
 function fencedBodies(content: string): string[] {
@@ -102,22 +103,59 @@ function rawJsonArraySlices(content: string): string[] {
   return slices;
 }
 
-export function parseJsonTaskList(content: string): ParsedTaskListItem[] {
-  if (!content) return [];
+export function parsePlanBacklog(content: string): {
+  tasks: ParsedTaskListItem[];
+  sawJsonArray: boolean;
+} {
+  if (!content) return { tasks: [], sawJsonArray: false };
+
+  const consider = (
+    raw: string,
+  ): { tasks: ParsedTaskListItem[]; sawJsonArray: boolean } | null => {
+    const arr = tryParseJsonArray(raw);
+    if (arr === null) return null;
+    return { tasks: tasksFromParsed(arr), sawJsonArray: true };
+  };
 
   const fenced = fencedBodies(content);
   for (let i = fenced.length - 1; i >= 0; i--) {
-    const tasks = tryParseTaskArray(fenced[i]!);
-    if (tasks.length > 0) return tasks;
+    const hit = consider(fenced[i]!);
+    if (hit) return hit;
   }
 
   const slices = rawJsonArraySlices(content);
   for (let i = slices.length - 1; i >= 0; i--) {
-    const tasks = tryParseTaskArray(slices[i]!);
-    if (tasks.length > 0) return tasks;
+    const hit = consider(slices[i]!);
+    if (hit) return hit;
   }
 
-  return [];
+  return { tasks: [], sawJsonArray: false };
+}
+
+export function parseJsonTaskList(content: string): ParsedTaskListItem[] {
+  return parsePlanBacklog(content).tasks;
+}
+
+/** Plan agent says the epic is done: complete tag or an empty fenced/raw JSON array. */
+export function planOutputIsComplete(content: string): boolean {
+  if (/<status>\s*complete\s*<\/status>/i.test(content)) return true;
+
+  const fenced = fencedBodies(content);
+  for (let i = fenced.length - 1; i >= 0; i--) {
+    const arr = tryParseJsonArray(fenced[i]!);
+    if (arr === null) continue;
+    return arr.length === 0;
+  }
+
+  const arr = tryParseJsonArray(content.trim());
+  return arr !== null && arr.length === 0;
+}
+
+/** YAML frontmatter `status: complete` on the epic file. */
+export function epicFrontmatterIsComplete(epic: string): boolean {
+  const m = epic.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  if (!m) return false;
+  return /^status:\s*complete\s*$/m.test(m[1]!);
 }
 
 /** Compact a model reply for error logs. */
@@ -134,4 +172,5 @@ export const PLAN_PARSE_RETRY_INSTRUCTION = [
   "Output only a fenced JSON array of remaining backlog tasks.",
   'Each object must have numeric id, title, description, and status "backlog".',
   "Do not wrap the JSON in extra prose after the closing fence.",
+  "If no epic work remains, output only <status>complete</status>.",
 ].join("\n");

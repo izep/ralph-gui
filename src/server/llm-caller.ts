@@ -48,6 +48,9 @@ export interface LLMCallOpts {
   phase?: "plan" | "dev" | "qa";
   copilotOutputFormat?: "text" | "json" | "streaming";
   mcpConfig?: string;
+  timeoutMs?: number;
+  idleTimeoutMs?: number;
+  maxConsecutiveRepeats?: number;
 }
 
 /** @deprecated Use LLMCallOpts instead */
@@ -417,6 +420,9 @@ export class LLMCaller {
                   }
                 }
               },
+              timeoutMs: opts.timeoutMs,
+              idleTimeoutMs: opts.idleTimeoutMs,
+              maxConsecutiveRepeats: opts.maxConsecutiveRepeats,
             },
           );
           resolve(output);

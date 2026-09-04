@@ -52,6 +52,9 @@ const DEFAULT_SETTINGS: Settings = {
   pauseAfterPlan: false,
   taskColumnSort: "updatedAtDesc",
   savedModelsByBackend: {},
+  agentIdleTimeoutMinutes: 10,
+  agentTimeoutMinutes: 0,
+  agentMaxConsecutiveRepeats: 10,
 };
 
 const WS_RECONNECT_DELAY = 3000;

@@ -27,6 +27,7 @@ describe("runCopilotCall argv", () => {
         passPromptOnStdin?: boolean;
         formatLine?: (line: string) => string | null;
         stuckKeyFromLine?: (line: string) => string | null;
+        idleTimeoutMs?: number;
     }> {
         const { runCliPromptProcess } = await import("./process-runner.js");
         const runMock = vi.mocked(runCliPromptProcess);
@@ -37,10 +38,11 @@ describe("runCopilotCall argv", () => {
             repoRoot: "/tmp/repo",
             command: "copilot",
             isRunning: () => true,
-            onLog: () => {},
-            setCurrentProcess: () => {},
+            onLog: () => { },
+            setCurrentProcess: () => { },
             timeoutMs: 5000,
             maxConsecutiveRepeats: 10,
+            idleTimeoutMs: 600_000,
         };
         await runCopilotCall(opts, ctx);
         const call = runMock.mock.calls[0][0];
@@ -50,6 +52,7 @@ describe("runCopilotCall argv", () => {
             passPromptOnStdin: call.passPromptOnStdin,
             formatLine: call.formatLine,
             stuckKeyFromLine: call.stuckKeyFromLine,
+            idleTimeoutMs: call.idleTimeoutMs as number | undefined,
         };
     }
 
@@ -83,7 +86,7 @@ describe("runCopilotCall argv", () => {
     });
 
     it("uses JSONL streaming by default", async () => {
-        const { args, formatLine, stuckKeyFromLine } = await capture({
+        const { args, formatLine, stuckKeyFromLine, idleTimeoutMs } = await capture({
             phase: "plan",
             model: "m",
         });
@@ -93,5 +96,6 @@ describe("runCopilotCall argv", () => {
         expect(args).toContain("on");
         expect(formatLine).toBeTypeOf("function");
         expect(stuckKeyFromLine).toBeTypeOf("function");
+        expect(idleTimeoutMs).toBe(600_000);
     });
 });

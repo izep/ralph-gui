@@ -14,12 +14,14 @@ import {
   parseRemainingTasks,
   parseBlockedInfo,
   parseJsonTaskList,
+  planOutputIsComplete,
+  epicFrontmatterIsComplete,
   parseResearchPrompts,
   snippetForLog,
   PLAN_PARSE_RETRY_INSTRUCTION,
 } from "./parse-output.js";
 import { RalphFileManager } from "./ralph-file-manager.js";
-import { SettingsManager, DEFAULT_SETTINGS, type Settings } from "./settings-manager.js";
+import { SettingsManager, DEFAULT_SETTINGS, timeoutMinutesToMs, type Settings } from "./settings-manager.js";
 import { GitManager } from "./git-manager.js";
 import {
   checkDockerHost,
@@ -114,6 +116,9 @@ export class RalphLoop {
       dockerService: s.dockerService,
       dockerContainerIndex: slot?.containerIndex,
       dockerWorktreeCwd: slot?.worktreeCwd,
+      timeoutMs: timeoutMinutesToMs(s.agentTimeoutMinutes),
+      idleTimeoutMs: timeoutMinutesToMs(s.agentIdleTimeoutMinutes),
+      maxConsecutiveRepeats: s.agentMaxConsecutiveRepeats,
       onProgress: (line, stream) => {
         const suffix = stream === "stderr" ? " (stderr)" : "";
         const scope = s.useDocker
@@ -412,7 +417,7 @@ export class RalphLoop {
         this.buildLlmCallOpts(settings, "backlog"),
       );
 
-      if (output.includes("<status>complete</status>")) {
+      if (output.includes("<status>complete</status>") || planOutputIsComplete(output)) {
         // Project complete — clear backlog
         const data = await this.taskManager.readStatus();
         data.tasks = data.tasks.filter((t) => t.status !== "backlog");
@@ -427,7 +432,7 @@ export class RalphLoop {
             this.repoRoot,
             this.buildLlmCallOpts(settings, "backlog"),
           );
-          if (retryOutput.includes("<status>complete</status>")) {
+          if (retryOutput.includes("<status>complete</status>") || planOutputIsComplete(retryOutput)) {
             const data = await this.taskManager.readStatus();
             data.tasks = data.tasks.filter((t) => t.status !== "backlog");
             await this.taskManager.writeStatus(data);
@@ -460,6 +465,25 @@ export class RalphLoop {
     if (ms < 1000) return `${ms}ms`;
     if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
     return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
+  }
+
+  private async completeEpicFromPlan(totalLLMCalls: number, logLine: string): Promise<void> {
+    this.cb.onLog(logLine);
+    this.completedEpic = true;
+    const statusData = await this.taskManager.readStatus();
+    statusData.tasks = statusData.tasks.filter((t) => t.status !== "backlog");
+    statusData.totalLLMCalls = totalLLMCalls;
+    statusData.nextTask = {
+      taskId: null,
+      content: "",
+      updatedAt: new Date().toISOString(),
+    };
+    statusData.feedback = {
+      taskId: null,
+      content: "",
+      updatedAt: new Date().toISOString(),
+    };
+    await this.taskManager.writeStatus(statusData);
   }
 
   /** Parse plan stdout and write backlog. Returns how many tasks were synced. */
@@ -547,6 +571,21 @@ export class RalphLoop {
       tasksSincePlan = 1;
     }
 
+    const boardAfterResume = await this.taskManager.readStatus();
+    const remainingAfterResume = boardAfterResume.tasks.filter(
+      (t) => t.status === "backlog" || t.status === "inProgress" || t.status === "inQa",
+    );
+    if (
+      remainingAfterResume.length === 0 &&
+      epicFrontmatterIsComplete(await this.readEpic())
+    ) {
+      this.cb.onLog(
+        "[ralph] Epic is already marked complete with no remaining board work — skipping agents.",
+      );
+      this.completedEpic = true;
+      return;
+    }
+
     while (this.running) {
       // Re-read settings each iteration to pick up control panel changes
       const settings = await this.settingsManager.read();
@@ -619,26 +658,11 @@ export class RalphLoop {
       totalLLMCalls++;
       this.cb.onLog(`[ralph] Planning iteration #${iteration} finished in ${this.elapsed(planStart)}`);
 
-      // Check if all tasks are done
-      if (nextTaskContent.includes("<status>complete</status>")) {
-        this.cb.onLog(`[ralph] All tasks completed after ${iteration - 1} tasks.`);
-        this.completedEpic = true;
-        const statusData = await this.taskManager.readStatus();
-        statusData.tasks = statusData.tasks.filter(
-          (t) => t.status !== "backlog"
+      if (planOutputIsComplete(nextTaskContent)) {
+        await this.completeEpicFromPlan(
+          totalLLMCalls,
+          `[ralph] All tasks completed after ${iteration - 1} tasks.`,
         );
-        statusData.totalLLMCalls = totalLLMCalls;
-        statusData.nextTask = {
-          taskId: null,
-          content: "",
-          updatedAt: new Date().toISOString(),
-        };
-        statusData.feedback = {
-          taskId: null,
-          content: "",
-          updatedAt: new Date().toISOString(),
-        };
-        await this.taskManager.writeStatus(statusData);
         break;
       }
 
@@ -661,16 +685,27 @@ export class RalphLoop {
         this.cb.onLog(
           `[ralph] Plan retry finished in ${this.elapsed(retryStart)}`,
         );
-        if (nextTaskContent.includes("<status>complete</status>")) {
-          this.cb.onLog(`[ralph] All tasks completed after ${iteration - 1} tasks.`);
-          this.completedEpic = true;
-          const statusData = await this.taskManager.readStatus();
-          statusData.tasks = statusData.tasks.filter((t) => t.status !== "backlog");
-          statusData.totalLLMCalls = totalLLMCalls;
-          await this.taskManager.writeStatus(statusData);
+        if (planOutputIsComplete(nextTaskContent)) {
+          await this.completeEpicFromPlan(
+            totalLLMCalls,
+            `[ralph] All tasks completed after ${iteration - 1} tasks.`,
+          );
           break;
         }
         synced = await this.persistPlanTaskList(nextTaskContent, "[ralph]");
+        if (synced === 0) {
+          const existing = await this.taskManager.readStatus();
+          const hasBacklog = existing.tasks.some((t) => t.status === "backlog");
+          if (hasBacklog) {
+            this.cb.onLog(
+              "[ralph] Plan output was unparseable after retry; keeping existing backlog.",
+            );
+          } else {
+            throw new Error(
+              "Plan produced no parseable task list after retry — stopping to avoid a replan loop.",
+            );
+          }
+        }
       }
 
       // --- Parallel plan research sub-jobs (stretch, gated by dockerPlanParallel) ---
@@ -730,8 +765,9 @@ export class RalphLoop {
       const taskEntry = statusData.tasks.find((t) => t.status === "backlog");
 
       if (!taskEntry) {
-        this.cb.onLog("[ralph] Warning: no backlog task found after planning — skipping dev loop.");
-        continue;
+        throw new Error(
+          "Plan synced tasks but no backlog item was found — stopping to avoid a replan loop.",
+        );
       }
 
       // Pause after first planning phase if configured

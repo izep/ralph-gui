@@ -102,6 +102,9 @@ export interface Settings {
   savedModelsByBackend: Partial<
     Record<AgentBackendId, { planModel: string; devModel: string; qaModel: string }>
   >;
+  agentIdleTimeoutMinutes: number;
+  agentTimeoutMinutes: number;
+  agentMaxConsecutiveRepeats: number;
 }
 
 export interface Readiness {

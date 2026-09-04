@@ -106,6 +106,13 @@ export async function runCliPromptProcess(params: {
   timeoutMs?: number;
   maxConsecutiveRepeats?: number;
   /**
+   * Kill the child if it emits no stdout/stderr for this long.
+   * Heartbeat lines do not count as child activity. `0` / unset disables.
+   */
+  idleTimeoutMs?: number;
+  /** Override the 60s heartbeat (tests). */
+  heartbeatIntervalMs?: number;
+  /**
    * When `false`, stdin is not connected to the process (prompt is passed in `args`, e.g. `olv -p ...`).
    * @default true
    */
@@ -138,6 +145,8 @@ export async function runCliPromptProcess(params: {
     setCurrentProcess,
     timeoutMs,
     maxConsecutiveRepeats = 0,
+    idleTimeoutMs,
+    heartbeatIntervalMs = HEARTBEAT_INTERVAL_MS,
     passPromptOnStdin = true,
     metaArgSummary,
     stderrLineTag: stderrLineTagParam,
@@ -194,20 +203,26 @@ export async function runCliPromptProcess(params: {
             ? maxConsecutiveRepeats
             : 0;
 
-        // --- Wall-clock timeout ---
         let wallTimer: ReturnType<typeof setTimeout> | null = null;
+        let heartbeat: ReturnType<typeof setInterval> | null = null;
+
+        function abort(reasonLog: string, error: Error): void {
+            if (settled) return;
+            settled = true;
+            if (wallTimer) clearTimeout(wallTimer);
+            if (heartbeat) clearInterval(heartbeat);
+            emit(onLog, reasonLog);
+            killGracefully(proc, onLog, logPrefix);
+            setCurrentProcess(null);
+            reject(error);
+        }
+
+        // --- Wall-clock timeout ---
         if (timeoutMs && timeoutMs > 0) {
             wallTimer = setTimeout(() => {
-                if (settled) return;
-                settled = true;
                 const mins = Math.round(timeoutMs / 60_000);
-                emit(
-                    onLog,
+                abort(
                     `[${logPrefix}] meta: kill timeout ${mins}m`,
-                );
-                killGracefully(proc, onLog, logPrefix);
-                setCurrentProcess(null);
-                reject(
                     new Error(
                         `Process killed: exceeded wall-clock timeout (${mins}m)`,
                     ),
@@ -215,14 +230,29 @@ export async function runCliPromptProcess(params: {
             }, timeoutMs);
         }
 
-        const heartbeat = setInterval(() => {
+        const idleLimitMs = idleTimeoutMs && idleTimeoutMs > 0 ? idleTimeoutMs : 0;
+        const tickMs = Math.max(50, heartbeatIntervalMs);
+
+        heartbeat = setInterval(() => {
             const elapsed = formatElapsed(Date.now() - startTime);
-            const silent = formatElapsed(Date.now() - lastActivityTime);
+            const silentMs = Date.now() - lastActivityTime;
+            const silent = formatElapsed(silentMs);
+            const idleBudget = idleLimitMs > 0
+                ? `; kill after ${formatElapsed(idleLimitMs)} idle`
+                : "";
             emit(
                 onLog,
-                `[${logPrefix}] meta: … ${elapsed} (idle ${silent})`,
+                `[${logPrefix}] meta: … ${elapsed} (idle ${silent}${idleBudget})`,
             );
-        }, HEARTBEAT_INTERVAL_MS);
+            if (idleLimitMs > 0 && silentMs >= idleLimitMs) {
+                abort(
+                    `[${logPrefix}] meta: kill idle ${formatElapsed(idleLimitMs)}`,
+                    new Error(
+                        `Process killed: no output for ${formatElapsed(idleLimitMs)}`,
+                    ),
+                );
+            }
+        }, tickMs);
 
         function checkStuck(line: string): void {
             if (repeatThreshold <= 0) return;
@@ -237,16 +267,9 @@ export async function runCliPromptProcess(params: {
             }
             if (normalized === lastNormalizedLine) {
                 consecutiveCount++;
-                if (consecutiveCount >= repeatThreshold && !settled) {
-                    settled = true;
-                    if (wallTimer) clearTimeout(wallTimer);
-                    emit(
-                        onLog,
+                if (consecutiveCount >= repeatThreshold) {
+                    abort(
                         `[${logPrefix}] meta: kill stuck x${consecutiveCount}`,
-                    );
-                    killGracefully(proc, onLog, logPrefix);
-                    setCurrentProcess(null);
-                    reject(
                         new Error(
                             `Process killed: stuck loop detected (same output repeated ${consecutiveCount} times)`,
                         ),
@@ -291,7 +314,7 @@ export async function runCliPromptProcess(params: {
         }
 
         proc.on("close", (code) => {
-            clearInterval(heartbeat);
+            if (heartbeat) clearInterval(heartbeat);
             if (wallTimer) clearTimeout(wallTimer);
             if (settled) return; // already rejected by timeout or stuck detection
             setCurrentProcess(null);
@@ -334,7 +357,7 @@ export async function runCliPromptProcess(params: {
         });
 
         proc.on("error", (err) => {
-            clearInterval(heartbeat);
+            if (heartbeat) clearInterval(heartbeat);
             if (wallTimer) clearTimeout(wallTimer);
             if (settled) return;
             setCurrentProcess(null);
