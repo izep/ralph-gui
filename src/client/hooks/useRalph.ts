@@ -23,9 +23,9 @@ const EMPTY_TASKS: TaskStatusData = {
 // Keep in sync with settings-manager.ts DEFAULT_SETTINGS.
 const DEFAULT_SETTINGS: Settings = {
   maxLLMCalls: 500,
-  planModel: "claude-sonnet-5",
-  devModel: "gpt-5.4-mini",
-  qaModel: "gpt-5.4-mini",
+  planModel: "claude-opus-4.5",
+  devModel: "claude-sonnet-5",
+  qaModel: "claude-sonnet-5",
   devReasoningEffort: "xhigh",
   qaReasoningEffort: "high",
   autoCommit: true,

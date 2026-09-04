@@ -49,7 +49,11 @@ describe('agent-models catalog', () => {
     expect(isModelInCatalog('copilot', 'claude-sonnet-4.6')).toBe(true);
     expect(isModelInCatalog('copilot', 'claude-sonnet-4-6')).toBe(false);
     expect(isModelInCatalog('copilot', 'claude-sonnet-5')).toBe(true);
-    expect(getPreferredModels('copilot').planModel).toBe('claude-sonnet-5');
+    expect(getPreferredModels('copilot')).toEqual({
+      planModel: 'claude-opus-4.5',
+      devModel: 'claude-sonnet-5',
+      qaModel: 'claude-sonnet-5',
+    });
   });
 
   it('gemini catalog uses Gemini 3 preview IDs for preferred roles', () => {

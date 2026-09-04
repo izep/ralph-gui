@@ -126,9 +126,9 @@ Use `start.sh` with a repo and optional settings overrides. The UI is still ther
   --repo /absolute/path/to/target-repo \
   --start \
   --agent-backend copilot \
-  --plan-model claude-sonnet-5 \
-  --dev-model gpt-5-mini \
-  --qa-model gpt-5-mini \
+  --plan-model claude-opus-4.5 \
+  --dev-model claude-sonnet-5 \
+  --qa-model claude-sonnet-5 \
   --dev-reasoning-effort xhigh \
   --qa-reasoning-effort high \
   --max-llm-calls 300 \
@@ -343,9 +343,9 @@ Default loop settings are:
 - `agentIdleTimeoutMinutes: 10` — kill a silent host Copilot process after this many minutes with no stdout/stderr (`0` disables). Heartbeats do not count as activity.
 - `agentTimeoutMinutes: 0` — optional wall-clock cap on a single Copilot call (`0` disables)
 - `agentMaxConsecutiveRepeats: 10` — kill Copilot if the same tool start repeats this many times (`0` disables)
-- `planModel: claude-sonnet-5`
-- `devModel: gpt-5-mini`
-- `qaModel: gpt-5-mini`
+- `planModel: claude-opus-4.5`
+- `devModel: claude-sonnet-5`
+- `qaModel: claude-sonnet-5`
 - `devReasoningEffort: xhigh`
 - `qaReasoningEffort: high`
 - `autoCommit: true`

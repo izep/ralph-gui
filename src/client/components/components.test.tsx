@@ -837,7 +837,7 @@ describe("LoopConfigSection model dropdowns", () => {
     // Verify the Plan Model label and a copilot-specific option text are present
     expect(screen.getByText("Plan Model")).toBeInTheDocument();
     expect(
-      screen.getByText(/\(claude-sonnet-5\) Claude Sonnet 5 -- recommended for planning/),
+      screen.getByText(/\(claude-opus-4.5\) Claude Opus 4.5 -- recommended for planning/),
     ).toBeInTheDocument();
   });
 
