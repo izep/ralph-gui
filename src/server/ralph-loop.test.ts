@@ -52,6 +52,19 @@ function makeCallbacks(): LoopCallbacks & {
   };
 }
 
+/**
+ * Polls `check` until it returns true or `timeoutMs` elapses, instead of a
+ * fixed sleep. Avoids flakiness under slow/CI environments where a hardcoded
+ * delay may not be enough for async work (docker pool + git mocks) to settle.
+ */
+async function waitFor(check: () => boolean, timeoutMs = 2000, intervalMs = 20): Promise<void> {
+  const start = Date.now();
+  while (!check()) {
+    if (Date.now() - start >= timeoutMs) return; // let the assertion below report the failure
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+}
+
 let tmpDir: string;
 
 beforeEach(async () => {
@@ -1472,7 +1485,7 @@ describe("RalphLoop epic-base-per-task merge strategy", () => {
 
     const startRes = await loop.start();
     expect(startRes.ok).toBe(true);
-    await new Promise((r) => setTimeout(r, 400));
+    await waitFor(() => mergeWorktreeSpy.mock.calls.length > 0);
 
     expect(mergeWorktreeSpy).toHaveBeenCalled();
     for (const [, base, target] of mergeWorktreeSpy.mock.calls) {
