@@ -95,7 +95,7 @@ function normalizeNonNegativeInt(value: unknown, fallback: number): number {
 
 export const DEFAULT_SETTINGS: Settings = {
   maxLLMCalls: 500,
-  planModel: "claude-opus-4.5",
+  planModel: "claude-opus-5",
   devModel: "claude-sonnet-5",
   qaModel: "claude-sonnet-5",
   devReasoningEffort: "xhigh",

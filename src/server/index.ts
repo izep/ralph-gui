@@ -5,7 +5,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { RalphLoop } from "./ralph-loop.js";
 import { DEFAULT_SETTINGS } from "./templates.js";
-import { getArg, hasFlag, applyCliSettingsOverrides } from "./cli-args.js";
+import { getArg, hasFlag, applyCliSettingsOverrides, resolveListenPort } from "./cli-args.js";
 import { headlessShutdownForLoopStatus } from "./headless-shutdown.js";
 import { RalphRunTracker } from "./run-tracker.js";
 import {
@@ -21,8 +21,16 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const cliRepo = getArg("--repo");
 const cliStart = hasFlag("--start");
 const exitWhenComplete = hasFlag("--exit-when-complete");
-const parsedPort = Number(getArg("--port") ?? 3001);
-const PORT = Number.isInteger(parsedPort) && parsedPort > 0 && parsedPort <= 65535 ? parsedPort : 3001;
+const portWasChosen =
+  getArg("--port") !== undefined ||
+  (process.env.PORT !== undefined && process.env.PORT !== "");
+let PORT: number;
+try {
+  PORT = resolveListenPort(getArg("--port"), process.env.PORT);
+} catch (err) {
+  console.error(err instanceof Error ? err.message : String(err));
+  process.exit(1);
+}
 
 // --- State ---
 let loop: RalphLoop | null = null;
@@ -161,6 +169,8 @@ async function getInitData() {
       tasks: [],
       currentTaskNum: 0,
       totalLLMCalls: 0,
+      activeRunId: null,
+      runTaskIterations: 0,
       maxLLMCalls: 500,
       nextTask: { taskId: null, content: "", updatedAt: "" },
       feedback: { taskId: null, content: "", updatedAt: "" },
@@ -229,6 +239,8 @@ app.get("/api/tasks", async (_req, res) => {
         tasks: [],
         currentTaskNum: 0,
         totalLLMCalls: 0,
+        activeRunId: null,
+        runTaskIterations: 0,
         maxLLMCalls: 500,
         nextTask: { taskId: null, content: "", updatedAt: "" },
         feedback: { taskId: null, content: "", updatedAt: "" },
@@ -549,7 +561,13 @@ const wss = new WebSocketServer({ server, path: "/ws" });
 
 function broadcast(message: string) {
   wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) client.send(message);
+    if (client.readyState === WebSocket.OPEN) {
+      try {
+        client.send(message);
+      } catch (err) {
+        console.error(`[ralph] broadcast send failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
   });
 }
 
@@ -627,6 +645,25 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   });
 }
 
+process.on("uncaughtException", (err) => {
+  const msg = `[ralph] uncaughtException: ${err?.stack ?? err}`;
+  console.error(msg);
+  try {
+    addLog(msg);
+  } catch {
+    /* ignore */
+  }
+});
+process.on("unhandledRejection", (reason) => {
+  const msg = `[ralph] unhandledRejection: ${reason instanceof Error ? reason.stack : String(reason)}`;
+  console.error(msg);
+  try {
+    addLog(msg);
+  } catch {
+    /* ignore */
+  }
+});
+
 // SPA fallback (never serve the Kanban app for API or models-reference)
 app.get("*", (req, res, next) => {
   if (req.path.startsWith("/api/") || req.path === "/models-reference") {
@@ -637,7 +674,12 @@ app.get("*", (req, res, next) => {
 });
 
 // --- Start ---
-server.listen(PORT, async () => {
+const PORT_FALLBACK_LIMIT = 50;
+let fallbackTries = 0;
+let listeningStarted = false;
+
+async function onListening(): Promise<void> {
+  listeningStarted = true;
   console.log(`Ralph Control Panel: http://localhost:${PORT}`);
 
   if (cliStart && !cliRepo) {
@@ -660,4 +702,41 @@ server.listen(PORT, async () => {
   } else {
     console.log("No --repo provided. Configure the repository from the Control Panel.");
   }
-});
+}
+
+function handleListenError(err: NodeJS.ErrnoException): void {
+  if (listeningStarted) {
+    console.error(err);
+    return;
+  }
+  if (err.code === "EADDRINUSE") {
+    if (!portWasChosen && fallbackTries < PORT_FALLBACK_LIMIT) {
+      fallbackTries += 1;
+      const next = PORT + 1;
+      console.log(`Port ${PORT} is in use, trying ${next}...`);
+      PORT = next;
+      server.listen(PORT, () => {
+        void onListening();
+      });
+      return;
+    }
+    console.error(
+      `Port ${PORT} is already in use. Pass --port <n> (or PORT) to run another instance.`,
+    );
+    process.exit(1);
+  }
+  console.error(err);
+  process.exit(1);
+}
+
+server.on("error", handleListenError);
+// ws re-emits HTTP listen errors; swallow so they are not uncaughtException.
+wss.on("error", () => {});
+
+try {
+  server.listen(PORT, () => {
+    void onListening();
+  });
+} catch (err) {
+  handleListenError(err as NodeJS.ErrnoException);
+}

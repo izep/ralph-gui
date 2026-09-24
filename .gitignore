@@ -3,6 +3,7 @@ node_modules/
 
 # Build outputs
 dist/
+.ralph-gui-build.lock
 build/
 out/
 *.tsbuildinfo
@@ -48,4 +49,5 @@ Thumbs.db
 ralph/task-status.json
 ralph/run-status.json
 ralph/run.log
+ralph/loop.lock
 ralph/epic.md

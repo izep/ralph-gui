@@ -20,6 +20,7 @@ export interface Task {
     resolvedAt?: string;
   };
   devIterations: number;
+  lastRunId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -28,6 +29,8 @@ export interface TaskStatusData {
   tasks: Task[];
   currentTaskNum: number;
   totalLLMCalls: number;
+  activeRunId: string | null;
+  runTaskIterations: number;
   maxLLMCalls: number;
   nextTask: {
     taskId: number | null;

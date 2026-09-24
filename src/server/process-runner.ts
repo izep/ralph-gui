@@ -291,13 +291,20 @@ export async function runCliPromptProcess(params: {
             stdoutState.remainder = parts.pop() ?? "";
             for (const line of parts) {
                 if (line.trim().length > 0) {
-                    if (formatLine) {
-                        const formatted = formatLine(line);
-                        if (formatted !== null) emit(onLog, formatted);
-                    } else {
-                        emit(onLog, `[${logPrefix}:stdout] ${line}`);
+                    try {
+                        if (formatLine) {
+                            const formatted = formatLine(line);
+                            if (formatted !== null) emit(onLog, formatted);
+                        } else {
+                            emit(onLog, `[${logPrefix}:stdout] ${line}`);
+                        }
+                        checkStuck(line);
+                    } catch (err) {
+                        emit(
+                            onLog,
+                            `[${logPrefix}] meta: formatLine error: ${err instanceof Error ? err.message : String(err)}`,
+                        );
                     }
-                    checkStuck(line);
                 }
             }
         });

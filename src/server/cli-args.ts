@@ -27,6 +27,27 @@ export function getNumberArg(name: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
+export const DEFAULT_LISTEN_PORT = 3001;
+
+function parseListenPort(value: string, source: "--port" | "PORT"): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65535) {
+    throw new Error(`Invalid ${source} "${value}". Expected an integer 1–65535.`);
+  }
+  return parsed;
+}
+
+/** CLI `--port` wins over `PORT`; default 3001. Throws on an invalid explicit value. */
+export function resolveListenPort(cliValue?: string, envValue?: string): number {
+  if (cliValue !== undefined) {
+    return parseListenPort(cliValue, "--port");
+  }
+  if (envValue !== undefined && envValue !== "") {
+    return parseListenPort(envValue, "PORT");
+  }
+  return DEFAULT_LISTEN_PORT;
+}
+
 export async function applyCliSettingsOverrides(loop: {
   readSettings(): Promise<Settings>;
   writeSettings(s: Settings): Promise<void>;

@@ -44,7 +44,7 @@ export default function App() {
   const groups = groupTasks(ralph.tasks.tasks);
   const pct =
     ralph.tasks.maxLLMCalls > 0
-      ? Math.round((ralph.tasks.totalLLMCalls / ralph.tasks.maxLLMCalls) * 100)
+      ? Math.round((ralph.tasks.runTaskIterations / ralph.tasks.maxLLMCalls) * 100)
       : 0;
 
   const isRunning = ralph.loopStatus.status === "running";
@@ -109,7 +109,7 @@ export default function App() {
           <div className="stat">
             <span className="stat__label">LLM Calls</span>
             <span className="stat__value">
-              {ralph.tasks.totalLLMCalls}/{ralph.tasks.maxLLMCalls}
+              {ralph.tasks.runTaskIterations}/{ralph.tasks.maxLLMCalls}
             </span>
           </div>
           <div className="stat">

@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import path from "path";
 import { readFile, writeFile, mkdir } from "fs/promises";
 import {
@@ -30,6 +31,7 @@ import {
   resolveDockerSocketPath,
 } from "./docker-runner.js";
 import { DockerPool, ensureDockerPool } from "./docker-pool.js";
+import { acquireRepoLoopLock, releaseRepoLoopLock } from "./loop-lock.js";
 import {
   isProtectedEpicBaseBranch,
   mergesPerTaskToEpicBase,
@@ -49,6 +51,7 @@ export interface LoopCallbacks {
 export class RalphLoop {
   readonly repoRoot: string;
   readonly ralphDir: string;
+  private readonly loopOwnerId = randomUUID();
   private running = false;
   private activeRunPromise: Promise<void> | null = null;
   private runGeneration = 0;
@@ -327,6 +330,12 @@ export class RalphLoop {
       });
     }
 
+    try {
+      acquireRepoLoopLock(this.repoRoot, this.loopOwnerId);
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+
     const runId = ++this.runGeneration;
     this.epicBaseMergePaused = false;
     this.running = true;
@@ -362,6 +371,7 @@ export class RalphLoop {
     this.llmCaller.stop();
     this.dockerPool?.stopAll();
     this.dockerPool = null;
+    releaseRepoLoopLock(this.repoRoot, this.loopOwnerId);
     this.cb.onLoopStatus("stopped", null);
     this.cb.onLog("[ralph] Ralph loop stopped by user");
     return { ok: true };
@@ -527,14 +537,15 @@ export class RalphLoop {
 
     let iteration = 0;
     let totalLLMCalls = 0;
+    const activeRunId = randomUUID();
 
     // Initialize — preserve existing tasks, only reset session counters
     const initSettings = await this.settingsManager.read();
     const existingStatus = await this.taskManager.readStatus();
+    await this.taskManager.beginRun(activeRunId, initSettings.maxLLMCalls);
+    const statusAfterBeginRun = await this.taskManager.readStatus();
     await this.taskManager.writeStatus({
-      ...existingStatus,
-      totalLLMCalls: 0,
-      maxLLMCalls: initSettings.maxLLMCalls,
+      ...statusAfterBeginRun,
       nextTask: {
         taskId: null,
         content: "",
@@ -566,6 +577,7 @@ export class RalphLoop {
         taskContent,
         totalLLMCalls,
         isQa,
+        activeRunId,
       );
       totalLLMCalls = resumeResult.totalLLMCalls;
       tasksSincePlan = 1;
@@ -631,6 +643,8 @@ export class RalphLoop {
             title,
             nextTaskContent,
             totalLLMCalls,
+            false,
+            activeRunId,
           );
           totalLLMCalls = devResult.totalLLMCalls;
           tasksSincePlan++;
@@ -812,7 +826,7 @@ export class RalphLoop {
           );
 
           const slotOpts = { containerIndex: slot, worktreeCwd };
-          const p = this.runDevQALoop(taskId, taskTitle, taskContent, totalLLMCalls, false, slotOpts)
+          const p = this.runDevQALoop(taskId, taskTitle, taskContent, totalLLMCalls, false, activeRunId, slotOpts)
             .then(async (r) => {
               totalLLMCalls = r.totalLLMCalls;
               tasksSincePlan++;
@@ -856,6 +870,8 @@ export class RalphLoop {
         title,
         effectiveTaskContent,
         totalLLMCalls,
+        false,
+        activeRunId,
       );
       totalLLMCalls = devResult.totalLLMCalls;
       tasksSincePlan++;
@@ -868,20 +884,29 @@ export class RalphLoop {
     nextTaskContent: string,
     totalLLMCalls: number,
     startAtQa = false,
+    activeRunId = "",
     slotOpts?: { containerIndex?: number; worktreeCwd?: string },
   ): Promise<{ totalLLMCalls: number }> {
     let feedback = "";
+    // Seed from persisted count so resume/re-entry does not reset the badge to 1.
+    const existingStatus = await this.taskManager.readStatus();
+    const saved =
+      existingStatus.tasks.find((t) => t.id === effectiveTaskId)?.devIterations ?? 0;
     if (startAtQa) {
       // Resuming interrupted QA — preserve any existing feedback so the QA
       // loop can continue from where it left off rather than starting fresh.
-      const existingStatus = await this.taskManager.readStatus();
       if (existingStatus.feedback.taskId === effectiveTaskId) {
         feedback = existingStatus.feedback.content;
       }
     } else {
       await this.taskManager.setFeedbackContent(effectiveTaskId, "");
     }
-    let devIteration = 1;
+    // Mid-QA resume: stored value is the current cycle. Mid-dev resume after a
+    // failed QA: board still has that completed cycle N, next Dev is N+1.
+    // Fresh tasks (saved === 0) start at 1.
+    let devIteration = startAtQa
+      ? Math.max(1, saved)
+      : Math.max(1, saved === 0 ? 1 : saved + 1);
 
     while (this.running && !feedback.includes("<status>verified</status>")) {
       const s = await this.settingsManager.read();
@@ -935,7 +960,8 @@ export class RalphLoop {
                 nextStep: blockedInfo.nextStep,
                 needs: blockedInfo.needs,
                 capturedAt,
-              }
+              },
+              activeRunId
             ),
           );
           this.cb.onLog(
@@ -963,7 +989,9 @@ export class RalphLoop {
           s.maxLLMCalls,
           "",
           "",
-          devIteration
+          devIteration,
+          undefined,
+          activeRunId
         ),
       );
 
@@ -995,7 +1023,9 @@ export class RalphLoop {
             s.maxLLMCalls,
             "",
             "",
-            devIteration
+            devIteration,
+            undefined,
+            activeRunId
           ),
         );
         this.cb.onLog(`Task #${effectiveTaskId} verified!`);
@@ -1009,7 +1039,9 @@ export class RalphLoop {
             s.maxLLMCalls,
             "",
             "",
-            devIteration
+            devIteration,
+            undefined,
+            activeRunId
           ),
         );
         if (
@@ -1286,6 +1318,7 @@ export class RalphLoop {
     }
 
     this.running = false;
+    releaseRepoLoopLock(this.repoRoot, this.loopOwnerId);
 
     if (wasStopped) {
       return;

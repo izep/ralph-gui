@@ -5,6 +5,7 @@ import { access } from "fs/promises";
 import path from "path";
 import {
   buildDockerSpawn,
+  dockerComposeEnv,
   resolveAgentCliInDockerContainer,
   resolveComposeFile,
 } from "./docker-runner.js";
@@ -553,9 +554,7 @@ export class LLMCaller {
           cwd: spawnCwd,
           shell: opts.useDocker ? false : shouldUseShellForCommand(command),
           stdio: ["pipe", "pipe", "pipe"],
-          env: opts.useDocker
-            ? { ...process.env, RALPH_REPO_ROOT: repoRoot }
-            : process.env,
+          env: opts.useDocker ? dockerComposeEnv(repoRoot) : process.env,
         });
 
         // Track by slot key so parallel Docker calls coexist without clobbering each other.
