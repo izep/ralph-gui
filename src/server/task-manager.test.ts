@@ -15,6 +15,8 @@ function withFlowState<T extends {
 }>(data: T) {
   return {
     ...data,
+    activeRunId: null,
+    runTaskIterations: 0,
     nextTask: {
       taskId: null,
       content: "",
@@ -176,6 +178,54 @@ describe("TaskManager.setTaskStatus", () => {
     await tm.setTaskStatus(1, "inQa", 2, 100, "", "", 3);
     const res = await tm.readStatus();
     expect(res.tasks[0].devIterations).toBe(3);
+  });
+
+  it("does not decrease existing devIterations", async () => {
+    const tm = new TaskManager(tmp);
+    const now = new Date().toISOString();
+    await tm.writeStatus(withFlowState({
+      tasks: [{ id: 1, title: "T", description: "", status: "inProgress", devIterations: 3, createdAt: now, updatedAt: now }],
+      currentTaskNum: 1,
+      totalLLMCalls: 4,
+      maxLLMCalls: 100,
+      lastUpdated: now,
+    }));
+
+    await tm.setTaskStatus(1, "inQa", 5, 100, "", "", 1);
+    const res = await tm.readStatus();
+    expect(res.tasks[0].devIterations).toBe(3);
+  });
+
+  it("sums only current-run task iteration values", async () => {
+    const tm = new TaskManager(tmp);
+    const now = new Date().toISOString();
+    await tm.writeStatus(withFlowState({
+      tasks: [
+        { id: 1, title: "A", description: "", status: "backlog", devIterations: 0, createdAt: now, updatedAt: now },
+        { id: 2, title: "B", description: "", status: "done", devIterations: 3, lastRunId: "old-run", createdAt: now, updatedAt: now },
+      ],
+      currentTaskNum: 0,
+      totalLLMCalls: 7,
+      maxLLMCalls: 100,
+      lastUpdated: now,
+    }));
+
+    await tm.beginRun("run-1", 100);
+    let res = await tm.readStatus();
+    expect(res.activeRunId).toBe("run-1");
+    expect(res.runTaskIterations).toBe(0);
+
+    await tm.setTaskStatus(1, "inQa", 2, 100, "", "", 2, undefined, "run-1");
+    res = await tm.readStatus();
+    expect(res.runTaskIterations).toBe(2);
+
+    await tm.setTaskStatus(2, "done", 3, 100, "", "", 4, undefined, "run-1");
+    res = await tm.readStatus();
+    expect(res.runTaskIterations).toBe(6);
+
+    await tm.beginRun("run-2", 100);
+    res = await tm.readStatus();
+    expect(res.runTaskIterations).toBe(0);
   });
 
   it("fires onUpdated callback", async () => {

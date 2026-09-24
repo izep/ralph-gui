@@ -45,12 +45,16 @@ describe('agent-models catalog', () => {
   });
 
   it('copilot keeps dotted Anthropic IDs separate from Claude CLI', () => {
-    expect(AGENT_MODEL_CATALOG.copilot.length).toBe(24);
+    expect(AGENT_MODEL_CATALOG.copilot.length).toBe(27);
     expect(isModelInCatalog('copilot', 'claude-sonnet-4.6')).toBe(true);
     expect(isModelInCatalog('copilot', 'claude-sonnet-4-6')).toBe(false);
     expect(isModelInCatalog('copilot', 'claude-sonnet-5')).toBe(true);
+    expect(isModelInCatalog('copilot', 'gpt-6-astra')).toBe(true);
+    expect(isModelInCatalog('copilot', 'claude-fable-5.1')).toBe(true);
+    expect(isModelInCatalog('copilot', 'gemini-3.8-flash')).toBe(true);
+    expect(isModelInCatalog('copilot', 'claude-opus-4.5')).toBe(false);
     expect(getPreferredModels('copilot')).toEqual({
-      planModel: 'claude-opus-4.5',
+      planModel: 'claude-opus-5',
       devModel: 'claude-sonnet-5',
       qaModel: 'claude-sonnet-5',
     });
@@ -80,6 +84,8 @@ describe('agent-models catalog', () => {
     expect(normalizeModelId('cursor-agent', 'claude-sonnet-4.6')).toBe('claude-sonnet-5-thinking-high');
     expect(normalizeModelId('claude', 'claude-sonnet-4.6')).toBe('claude-sonnet-4-6');
     expect(normalizeModelId('gemini', 'gemini-2.0-auto')).toBe('gemini-3-pro-preview');
+    expect(normalizeModelId('copilot', 'claude-opus-4.5')).toBe('claude-opus-5');
+    expect(normalizeModelId('copilot', 'mai-code-1-flash-picker')).toBe('mai-code-1.1-flash');
   });
 
   it('formatModelOptionLabel uses (id) Model -- recommendation', () => {

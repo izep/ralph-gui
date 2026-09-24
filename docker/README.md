@@ -44,6 +44,8 @@ docker compose -f docker-compose.agents.yml up -d
 
 This builds (first time) and starts the `ralph-agent` service. It stays running in the background so Ralph can run `docker compose exec` when you enable Docker in Settings.
 
+When a loop starts with Docker enabled, Ralph sets `COMPOSE_PROJECT_NAME` from the **target repo path** so two simultaneous loops do not share the same `ralph-agent` containers. A manual `docker compose -f docker-compose.agents.yml` from this directory still uses the project name `ralph-gui`.
+
 Check that it is up:
 
 ```bash
@@ -83,11 +85,11 @@ COPILOT_GITHUB_TOKEN=github_pat_paste_your_token_here
 
 `GH_TOKEN` and `GITHUB_TOKEN` also work, but `COPILOT_GITHUB_TOKEN` is clearest for Docker.
 
-| Token | Works? |
-|-------|--------|
-| Fine-grained PAT with **Copilot Requests** (`github_pat_…`) | Yes — use this |
-| OAuth from `copilot login` (`gho_…`) | Yes — paste into `.env` if you already logged in on the host |
-| Classic PAT (`ghp_…`) | **No** — Copilot CLI rejects these |
+| Token                                                       | Works?                                                       |
+| ----------------------------------------------------------- | ------------------------------------------------------------ |
+| Fine-grained PAT with **Copilot Requests** (`github_pat_…`) | Yes — use this                                               |
+| OAuth from `copilot login` (`gho_…`)                        | Yes — paste into `.env` if you already logged in on the host |
+| Classic PAT (`ghp_…`)                                       | **No** — Copilot CLI rejects these                           |
 
 You need an active **GitHub Copilot** subscription. If your org uses SAML SSO, authorize the token for that org after creating it.
 
@@ -97,12 +99,12 @@ Docs: [Authenticate Copilot CLI](https://docs.github.com/en/copilot/how-tos/copi
 
 Add the matching line to the same `.env` file. You must also install that CLI in the image (see [Step 6 — Other agent backends](#step-6--other-agent-backends-optional)).
 
-| Backend in Settings | Add to `.env` | Get the key from |
-|-------------------|---------------|------------------|
-| `claude` | `ANTHROPIC_API_KEY=sk-ant-...` | [console.anthropic.com](https://console.anthropic.com/) |
-| `gemini` | `GEMINI_API_KEY=...` | [Google AI Studio](https://aistudio.google.com/app/apikey) |
-| `cursor-agent` | `CURSOR_API_KEY=...` | [Cursor Dashboard → Integrations](https://cursor.com/dashboard) |
-| `opencode` | `OPENCODE_API_KEY=...` | [OpenCode Zen](https://opencode.ai/auth) (Create API Key) |
+| Backend in Settings | Add to `.env`                  | Get the key from                                                |
+| ------------------- | ------------------------------ | --------------------------------------------------------------- |
+| `claude`            | `ANTHROPIC_API_KEY=sk-ant-...` | [console.anthropic.com](https://console.anthropic.com/)         |
+| `gemini`            | `GEMINI_API_KEY=...`           | [Google AI Studio](https://aistudio.google.com/app/apikey)      |
+| `cursor-agent`      | `CURSOR_API_KEY=...`           | [Cursor Dashboard → Integrations](https://cursor.com/dashboard) |
+| `opencode`          | `OPENCODE_API_KEY=...`         | [OpenCode Zen](https://opencode.ai/auth) (Create API Key)       |
 
 Example `.env` with several backends (only set what you use):
 
@@ -172,13 +174,13 @@ Host and container share the same `.git` directory, so branches and commits are 
 
 The bundled `docker/Dockerfile` uses **build args** to install only the CLIs you need:
 
-| Build arg | Default | Installs |
-|-----------|---------|---------|
-| `INSTALL_COPILOT` | `true` | `@github/copilot` (pinned version) |
-| `INSTALL_CLAUDE` | `false` | `@anthropic-ai/claude-code` |
-| `INSTALL_GEMINI` | `false` | `@google/gemini-cli` |
-| `INSTALL_CURSOR` | `false` | Cursor Agent (see note below) |
-| `INSTALL_OPENCODE` | `false` | OpenCode CLI (see note below) |
+| Build arg            | Default | Installs                                            |
+| -------------------- | ------- | --------------------------------------------------- |
+| `INSTALL_COPILOT`    | `true`  | `@github/copilot` (pinned version)                  |
+| `INSTALL_CLAUDE`     | `false` | `@anthropic-ai/claude-code`                         |
+| `INSTALL_GEMINI`     | `false` | `@google/gemini-cli`                                |
+| `INSTALL_CURSOR`     | `false` | Cursor Agent (see note below)                       |
+| `INSTALL_OPENCODE`   | `false` | OpenCode CLI (see note below)                       |
 | `INSTALL_DOCKER_CLI` | `false` | Docker CLI + Compose v2 plugin (for nested compose) |
 
 ### Build examples
@@ -309,31 +311,31 @@ Mounting the host socket gives the agent **effective host-level Docker control**
 
 ### Troubleshooting nested Docker
 
-| Symptom | Fix |
-|---------|-----|
-| `docker info` fails inside agent | Ensure `INSTALL_DOCKER_CLI=true` and the image was rebuilt |
-| `permission denied /var/run/docker.sock` | Add the container user to the `docker` group, or run compose with `user: root` |
-| Task blocked "cannot create containers" | Enable **Allow agents to run Docker** or run Ralph with `useDocker: false` on the host |
-| Locked-down CI (no socket, no cgroup rights) | Task stays blocked — run on a Docker-capable runner |
+| Symptom                                      | Fix                                                                                    |
+| -------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `docker info` fails inside agent             | Ensure `INSTALL_DOCKER_CLI=true` and the image was rebuilt                             |
+| `permission denied /var/run/docker.sock`     | Add the container user to the `docker` group, or run compose with `user: root`         |
+| Task blocked "cannot create containers"      | Enable **Allow agents to run Docker** or run Ralph with `useDocker: false` on the host |
+| Locked-down CI (no socket, no cgroup rights) | Task stays blocked — run on a Docker-capable runner                                    |
 
 ---
 
 ## Troubleshooting
 
-| Symptom | What to check |
-|---------|----------------|
-| `No authentication information found` | `.env` in **ralph-gui root** with `COPILOT_GITHUB_TOKEN` (fine-grained PAT + Copilot Requests). Recreate container after editing `.env`. |
-| `copilot exited with code 1` (auth) | Not using classic `ghp_` PAT; token is on your **user**, not org-only PAT without Copilot permission. |
-| Container not running | `docker compose -f docker-compose.agents.yml ps` — run `up -d` or `up -d --force-recreate ralph-agent`. |
-| Docker daemon errors | Start Docker Desktop or `sudo systemctl start docker`. |
-| Wrong CLI in container | Rebuild after Dockerfile changes: `INSTALL_CLAUDE=true docker compose -f ... up -d --build --force-recreate`. |
-| Host login does not help | `copilot login` on the host does not authenticate the container — use `.env`. |
-| Pool not scaling | Check `docker compose ps` — some containers may be stopped; run `up -d --scale N` manually then **Set Docker** again. |
-| `--index` flag unsupported | Upgrade Docker Compose plugin: `docker compose version` should be ≥ 2.24. |
-| Exec lands on wrong index | Compose assigns `--index` in container-start order; remove and recreate the pool if indices drift. |
-| Worktree already exists | Run `git worktree remove .ralph/worktrees/slot-N` (or `--force`) from the target repo, then restart the loop. |
-| Parallel task file conflicts | Two slots modified the same file; Ralph's merge-back will stop at the conflict; resolve manually with `git mergetool`. |
-| Auto-merge failed at loop end | Check `git status` for conflicts; resolve them, then use **Merge work into epic branch** in the UI. Or set `dockerAutoMergeEpicWork: false` in Settings to always merge manually. |
+| Symptom                               | What to check                                                                                                                                                                     |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `No authentication information found` | `.env` in **ralph-gui root** with `COPILOT_GITHUB_TOKEN` (fine-grained PAT + Copilot Requests). Recreate container after editing `.env`.                                          |
+| `copilot exited with code 1` (auth)   | Not using classic `ghp_` PAT; token is on your **user**, not org-only PAT without Copilot permission.                                                                             |
+| Container not running                 | `docker compose -f docker-compose.agents.yml ps` — run `up -d` or `up -d --force-recreate ralph-agent`.                                                                           |
+| Docker daemon errors                  | Start Docker Desktop or `sudo systemctl start docker`.                                                                                                                            |
+| Wrong CLI in container                | Rebuild after Dockerfile changes: `INSTALL_CLAUDE=true docker compose -f ... up -d --build --force-recreate`.                                                                     |
+| Host login does not help              | `copilot login` on the host does not authenticate the container — use `.env`.                                                                                                     |
+| Pool not scaling                      | Check `docker compose ps` — some containers may be stopped; run `up -d --scale N` manually then **Set Docker** again.                                                             |
+| `--index` flag unsupported            | Upgrade Docker Compose plugin: `docker compose version` should be ≥ 2.24.                                                                                                         |
+| Exec lands on wrong index             | Compose assigns `--index` in container-start order; remove and recreate the pool if indices drift.                                                                                |
+| Worktree already exists               | Run `git worktree remove .ralph/worktrees/slot-N` (or `--force`) from the target repo, then restart the loop.                                                                     |
+| Parallel task file conflicts          | Two slots modified the same file; Ralph's merge-back will stop at the conflict; resolve manually with `git mergetool`.                                                            |
+| Auto-merge failed at loop end         | Check `git status` for conflicts; resolve them, then use **Merge work into epic branch** in the UI. Or set `dockerAutoMergeEpicWork: false` in Settings to always merge manually. |
 
 Verify auth inside the container (replace the variable name if needed):
 
@@ -346,18 +348,18 @@ docker compose -f docker-compose.agents.yml exec -T ralph-agent sh -lc \
 
 ## Reference — environment variables
 
-| Variable | Used by | Purpose |
-|----------|---------|---------|
-| `COPILOT_GITHUB_TOKEN` | Copilot | Preferred GitHub token for Docker |
-| `GH_TOKEN` / `GITHUB_TOKEN` | Copilot | Alternatives (same CLI) |
-| `ANTHROPIC_API_KEY` | Claude | Anthropic API |
-| `GEMINI_API_KEY` | Gemini | Google AI Studio |
-| `CURSOR_API_KEY` | Cursor Agent | Cursor API key |
-| `CURSOR_SESSION_TOKEN` | Cursor Agent | Session token (if required by Cursor) |
-| `OPENCODE_API_KEY` | OpenCode | OpenCode Zen API key (free `opencode/*` models) |
-| `DOCKER_SOCKET` | Nested Docker | Host socket path (default `/var/run/docker.sock`) |
-| `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL` | git commits | Optional override (defaults in compose) |
-| `GIT_COMMITTER_NAME` / `GIT_COMMITTER_EMAIL` | git commits | Optional override |
+| Variable                                     | Used by       | Purpose                                           |
+| -------------------------------------------- | ------------- | ------------------------------------------------- |
+| `COPILOT_GITHUB_TOKEN`                       | Copilot       | Preferred GitHub token for Docker                 |
+| `GH_TOKEN` / `GITHUB_TOKEN`                  | Copilot       | Alternatives (same CLI)                           |
+| `ANTHROPIC_API_KEY`                          | Claude        | Anthropic API                                     |
+| `GEMINI_API_KEY`                             | Gemini        | Google AI Studio                                  |
+| `CURSOR_API_KEY`                             | Cursor Agent  | Cursor API key                                    |
+| `CURSOR_SESSION_TOKEN`                       | Cursor Agent  | Session token (if required by Cursor)             |
+| `OPENCODE_API_KEY`                           | OpenCode      | OpenCode Zen API key (free `opencode/*` models)   |
+| `DOCKER_SOCKET`                              | Nested Docker | Host socket path (default `/var/run/docker.sock`) |
+| `GIT_AUTHOR_NAME` / `GIT_AUTHOR_EMAIL`       | git commits   | Optional override (defaults in compose)           |
+| `GIT_COMMITTER_NAME` / `GIT_COMMITTER_EMAIL` | git commits   | Optional override                                 |
 
 Compose also forwards `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, and `GITHUB_TOKEN` from your **shell** when you run `docker compose up`, if you prefer `export` over `.env`.
 

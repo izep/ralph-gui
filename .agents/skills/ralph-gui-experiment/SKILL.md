@@ -38,16 +38,25 @@ flowchart LR
 
 From **ralph-gui repository root**:
 
-| Command | Effect |
-|--------|--------|
+| Command                 | Effect                                                             |
+| ----------------------- | ------------------------------------------------------------------ |
 | `./start.sh exp <slug>` | Build Kanban, start server, `--repo` = `$(pwd)/experiments/<slug>` |
-| `npm run exp -- <slug>` | Same (shell forwards extra args to `start.sh`) |
-| `./start.sh exp` | Usage + list slugs (dirs with a requirements file) |
-| `npm run exp` | Same listing (run with no slug; no `--` needed) |
+| `npm run exp -- <slug>` | Same (shell forwards extra args to `start.sh`)                     |
+| `./start.sh exp`        | Usage + list slugs (dirs with a requirements file)                 |
+| `npm run exp`           | Same listing (run with no slug; no `--` needed)                    |
 
-Then open `http://localhost:3001` and start the loop from the UI, unless you passed `--start`.
+Then open `http://localhost:3001` and start the loop from the UI, unless you passed `--start`. Use `--port <n>` (or `PORT`) to listen elsewhere, e.g. `./start.sh exp <slug> --port 3002`.
 
 **Headless:** `./start.sh exp <slug> --start` (same requirements as any `--repo` + `--start` run: epic configured, Copilot, etc.).
+
+**Multiple instances:** each experiment needs its own slug / `--repo`. After the first Kanban UI build, pass `--skip-build`. Ports: omit `--port` to take the next free port from 3001, or set `--port` / `PORT` explicitly:
+
+```bash
+./start.sh exp todo --start
+./start.sh --skip-build exp other-slug --start --port 3002
+```
+
+A second loop on the same experiment folder is refused (`ralph/loop.lock`).
 
 ## Reset one experiment only
 

@@ -124,9 +124,10 @@ Use `start.sh` with a repo and optional settings overrides. The UI is still ther
 ```bash
 ./start.sh \
   --repo /absolute/path/to/target-repo \
+  --port 3001 \
   --start \
   --agent-backend copilot \
-  --plan-model claude-opus-4.5 \
+  --plan-model claude-opus-5 \
   --dev-model claude-sonnet-5 \
   --qa-model claude-sonnet-5 \
   --dev-reasoning-effort xhigh \
@@ -138,11 +139,24 @@ Use `start.sh` with a repo and optional settings overrides. The UI is still ther
   --exit-when-complete
 ```
 
+`--port` sets the API/UI listen port (default `3001`). `PORT` is used when `--port` is omitted. Invalid values exit with an error instead of falling back. If you omit both, and `3001` is already taken, the server tries `3002`, `3003`, … and prints the URL it bound.
+
+To run more than one loop at the same time, start one process per **target repo**. Use `--skip-build` after the first UI build so concurrent `./start.sh` launches do not race on `dist/`. Distinct `--port` values are optional when you omit `--port` (automatic fallback) and required if you want a known URL:
+
+```bash
+./start.sh --skip-build --repo /path/a --start --exit-when-complete
+./start.sh --skip-build --repo /path/b --start --exit-when-complete --port 3002
+```
+
+Two loops on the same repo are rejected (`ralph/loop.lock`). Docker-backed loops isolate Compose with `COMPOSE_PROJECT_NAME` derived from the repo path, so they do not share `ralph-agent` containers.
+
+If an explicit `--port` or `PORT` is already in use, the server exits and tells you to pick another.
+
 Behavior:
 
 - installs dependencies if needed
-- builds the UI assets
-- starts server
+- builds the UI assets (skip with `--skip-build` when `dist/index.html` already exists)
+- starts server on `--port` / `PORT` / 3001
 - starts loop only when `--start` is passed
 - `--start` requires `--repo`, and `ralph/epic.md` must be filled out (not default placeholder)
 - `--start` prints agent log lines (including idle heartbeats) to the terminal
@@ -343,7 +357,7 @@ Default loop settings are:
 - `agentIdleTimeoutMinutes: 10` — kill a silent host Copilot process after this many minutes with no stdout/stderr (`0` disables). Heartbeats do not count as activity.
 - `agentTimeoutMinutes: 0` — optional wall-clock cap on a single Copilot call (`0` disables)
 - `agentMaxConsecutiveRepeats: 10` — kill Copilot if the same tool start repeats this many times (`0` disables)
-- `planModel: claude-opus-4.5`
+- `planModel: claude-opus-5`
 - `devModel: claude-sonnet-5`
 - `qaModel: claude-sonnet-5`
 - `devReasoningEffort: xhigh`

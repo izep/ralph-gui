@@ -10,6 +10,7 @@ set -euo pipefail
 # Example (headless run until epic complete):
 # ./start.sh \
 #   --repo /absolute/path/to/target-repo \
+#   --port 3001 \
 #   --plan-model claude-sonnet-4.6 \
 #   --dev-model gpt-5-mini \
 #   --qa-model gpt-5-mini \
@@ -20,6 +21,8 @@ set -euo pipefail
 #   --min-backlog-size 3 \
 #   --auto-commit false \
 #   --exit-when-complete
+#
+# Second instance (after a first build): --skip-build --port 3002 --repo /other/repo
 
 cd "$(dirname "$0")"
 
@@ -51,8 +54,14 @@ Usage: ./start.sh [server-options]
 Common options:
   --repo <path>                  Target repository (required with --start)
   --start                        Start loop after server boot
-  --port <port>                  API/UI port (default: 3001)
+  --port <port>                  API/UI port (default: 3001, or PORT env)
+  --skip-build                   Skip vite build (requires dist/index.html)
   --exit-when-complete           Exit server when the loop finishes or errors
+
+  Use a unique --repo per instance. Two loops on the same repo are refused
+  (ralph/loop.lock). If --port and PORT are omitted, a free port is chosen
+  starting at 3001. After the first build, pass --skip-build so concurrent
+  launches do not race on dist/.
 
 Settings overrides (persisted to ralph/settings.json):
   --plan-model <name>
@@ -70,6 +79,17 @@ Settings overrides (persisted to ralph/settings.json):
 EOF
   exit 0
 fi
+
+SKIP_BUILD=0
+filtered=()
+for arg in "$@"; do
+  if [ "$arg" = "--skip-build" ]; then
+    SKIP_BUILD=1
+  else
+    filtered+=("$arg")
+  fi
+done
+set -- "${filtered[@]}"
 
 if [ "${1:-}" = "exp" ]; then
   if [ -z "${2:-}" ]; then
@@ -94,7 +114,15 @@ if [ ! -d "node_modules" ]; then
   npm install
 fi
 
-echo "Building web UI..."
-npx vite build --config config/vite.config.ts
+if [ "$SKIP_BUILD" -eq 1 ]; then
+  if [ ! -f dist/index.html ]; then
+    echo "error: --skip-build requires dist/index.html (run without --skip-build first)"
+    exit 1
+  fi
+  echo "Skipping UI build (--skip-build)."
+else
+  echo "Building web UI..."
+  flock .ralph-gui-build.lock npx vite build --config config/vite.config.ts
+fi
 
 exec npx tsx src/server/index.ts "$@"

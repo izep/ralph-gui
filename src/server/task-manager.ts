@@ -17,6 +17,7 @@ export interface TaskEntry {
     resolvedAt?: string;
   };
   devIterations: number;
+  lastRunId?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -27,10 +28,20 @@ function normalizeStatus(status: string): string {
   return status;
 }
 
+function sumRunTaskIterations(tasks: TaskEntry[], activeRunId: string | null): number {
+  if (!activeRunId) return 0;
+  return tasks.reduce((sum, task) => {
+    if (task.lastRunId !== activeRunId) return sum;
+    return sum + Math.max(0, task.devIterations || 0);
+  }, 0);
+}
+
 export interface StatusData {
   tasks: TaskEntry[];
   currentTaskNum: number;
   totalLLMCalls: number;
+  activeRunId: string | null;
+  runTaskIterations: number;
   maxLLMCalls: number;
   nextTask: {
     taskId: number | null;
@@ -64,17 +75,21 @@ export class TaskManager {
       const parsed = JSON.parse(raw) as Partial<StatusData>;
       const normalizedTasks = Array.isArray(parsed.tasks)
         ? parsed.tasks.map((t) => {
-            const task = t as TaskEntry;
-            return {
-              ...task,
-              status: normalizeStatus(task.status),
-            };
-          })
+          const task = t as TaskEntry;
+          return {
+            ...task,
+            devIterations: typeof task.devIterations === "number" ? task.devIterations : 0,
+            status: normalizeStatus(task.status),
+          };
+        })
         : [];
+      const activeRunId = typeof parsed.activeRunId === "string" ? parsed.activeRunId : null;
       return {
         tasks: normalizedTasks,
         currentTaskNum: typeof parsed.currentTaskNum === "number" ? parsed.currentTaskNum : 0,
         totalLLMCalls: typeof parsed.totalLLMCalls === "number" ? parsed.totalLLMCalls : 0,
+        activeRunId,
+        runTaskIterations: sumRunTaskIterations(normalizedTasks, activeRunId),
         maxLLMCalls: typeof parsed.maxLLMCalls === "number" ? parsed.maxLLMCalls : 500,
         nextTask: {
           taskId: parsed.nextTask && typeof parsed.nextTask.taskId === "number"
@@ -105,6 +120,8 @@ export class TaskManager {
         tasks: [],
         currentTaskNum: 0,
         totalLLMCalls: 0,
+        activeRunId: null,
+        runTaskIterations: 0,
         maxLLMCalls: 500,
         nextTask: {
           taskId: null,
@@ -123,6 +140,7 @@ export class TaskManager {
 
   async writeStatus(data: StatusData): Promise<void> {
     data.lastUpdated = new Date().toISOString();
+    data.runTaskIterations = sumRunTaskIterations(data.tasks, data.activeRunId ?? null);
     await writeFile(
       path.join(this.ralphDir, "task-status.json"),
       JSON.stringify(data, null, 2),
@@ -133,6 +151,15 @@ export class TaskManager {
     }
   }
 
+  async beginRun(runId: string, maxLLMCalls: number): Promise<void> {
+    const data = await this.readStatus();
+    data.activeRunId = runId;
+    data.runTaskIterations = 0;
+    data.totalLLMCalls = 0;
+    data.maxLLMCalls = maxLLMCalls;
+    await this.writeStatus(data);
+  }
+
   async setTaskStatus(
     taskId: number,
     status: string,
@@ -141,7 +168,8 @@ export class TaskManager {
     title = "",
     description = "",
     devIterations = 0,
-    blocked: TaskEntry["blocked"] | null | undefined = undefined
+    blocked: TaskEntry["blocked"] | null | undefined = undefined,
+    runId: string | null = null
   ): Promise<void> {
     const data = await this.readStatus();
     const now = new Date().toISOString();
@@ -161,7 +189,8 @@ export class TaskManager {
             t.blocked = blocked;
           }
         }
-        if (devIterations > 0) t.devIterations = devIterations;
+        if (devIterations > 0) t.devIterations = Math.max(t.devIterations, devIterations);
+        if (runId && devIterations > 0) t.lastRunId = runId;
         if (title) t.title = title;
         if (description) t.description = description;
         found = true;
@@ -176,6 +205,7 @@ export class TaskManager {
         status: normalizeStatus(status),
         ...(blocked ? { blocked } : {}),
         devIterations,
+        ...(runId && devIterations > 0 ? { lastRunId: runId } : {}),
         createdAt: now,
         updatedAt: now,
       });

@@ -1,4 +1,5 @@
 // Docker host detection, compose file resolution, and spawn builder
+import { createHash } from "crypto";
 import { existsSync } from "fs";
 import { homedir } from "os";
 import { spawn } from "child_process";
@@ -197,8 +198,26 @@ export function buildDockerSpawn(
   };
 }
 
-function dockerComposeEnv(repoRoot: string): NodeJS.ProcessEnv {
-  return { ...process.env, RALPH_REPO_ROOT: repoRoot };
+/** Unique Compose project per target repo so simultaneous loops do not share containers. */
+export function composeProjectName(repoRoot: string): string {
+  const resolved = path.resolve(repoRoot);
+  const base =
+    path
+      .basename(resolved)
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 24) || "repo";
+  const hash = createHash("sha1").update(resolved).digest("hex").slice(0, 8);
+  return `ralph-${base}-${hash}`;
+}
+
+export function dockerComposeEnv(repoRoot: string): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    RALPH_REPO_ROOT: repoRoot,
+    COMPOSE_PROJECT_NAME: composeProjectName(repoRoot),
+  };
 }
 
 /** Host path to the Docker daemon socket (Docker Desktop on macOS uses ~/.docker/run/docker.sock). */
@@ -320,7 +339,9 @@ export async function ensureDockerAgentRunning(
     });
   }
 
-  log(`[docker] Ensuring service "${service}" is up (compose: ${composeFile})…`);
+  log(
+    `[docker] Ensuring service "${service}" is up (compose: ${composeFile}, project: ${composeProjectName(repoRoot)})…`,
+  );
   let up = await composeUp(false);
 
   if (up.code !== 0) {

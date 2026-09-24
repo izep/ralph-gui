@@ -18,6 +18,8 @@ import {
   buildDockerSpawn,
   ensureDockerAgentRunning,
   resolveAgentCliInDockerContainer,
+  composeProjectName,
+  dockerComposeEnv,
 } from "./docker-runner.js";
 import type { Settings } from "./settings-manager.js";
 
@@ -188,6 +190,28 @@ describe("resolveComposeFile", () => {
       "/pkgroot",
     );
     expect(result).toBe("/absolute/compose.yml");
+  });
+});
+
+describe("composeProjectName", () => {
+  it("is stable for the same repo path", () => {
+    expect(composeProjectName("/work/app")).toBe(composeProjectName("/work/app"));
+  });
+
+  it("differs for two repos with the same folder name", () => {
+    expect(composeProjectName("/a/app")).not.toBe(composeProjectName("/b/app"));
+  });
+
+  it("is a valid Compose project name", () => {
+    expect(composeProjectName("/Work/My App!")).toMatch(/^ralph-[a-z0-9-]+-[a-f0-9]{8}$/);
+  });
+});
+
+describe("dockerComposeEnv", () => {
+  it("sets RALPH_REPO_ROOT and COMPOSE_PROJECT_NAME", () => {
+    const env = dockerComposeEnv("/work/app");
+    expect(env.RALPH_REPO_ROOT).toBe("/work/app");
+    expect(env.COMPOSE_PROJECT_NAME).toBe(composeProjectName("/work/app"));
   });
 });
 
@@ -470,12 +494,12 @@ describe("ensureDockerAgentRunning — missingClis", () => {
 describe("ensureDockerAgentRunning — validateSocketMount", () => {
   beforeEach(() => {
     // reset the mocked fs.existsSync (vi.mock provided earlier)
-  if ((fs.existsSync as any)?.mockReset) (fs.existsSync as any).mockReset();
+    if ((fs.existsSync as any)?.mockReset) (fs.existsSync as any).mockReset();
     spawnMock.mockReset();
   });
 
   afterEach(() => {
-  if ((fs.existsSync as any)?.mockReset) (fs.existsSync as any).mockReset();
+    if ((fs.existsSync as any)?.mockReset) (fs.existsSync as any).mockReset();
     spawnMock.mockReset();
   });
 

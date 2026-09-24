@@ -336,6 +336,22 @@ describe("RalphLoop.start", () => {
     loop.stop();
     await new Promise((r) => setTimeout(r, 100));
   });
+
+  it("refuses a second loop instance on the same repo", async () => {
+    const first = new RalphLoop(tmpDir, makeCallbacks());
+    const second = new RalphLoop(tmpDir, makeCallbacks());
+    await first.bootstrap();
+    await first.writeRalphFile("epic.md", "# Epic\n\nDeliver the sprint goals.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+
+    expect((await first.start()).ok).toBe(true);
+    const result = await second.start();
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/already running for this repo/);
+
+    first.stop();
+    await new Promise((r) => setTimeout(r, 100));
+  });
 });
 
 describe("RalphLoop.stop", () => {
@@ -672,6 +688,46 @@ status: complete
     expect(statuses).toContain("done");
     loop.stop();
   });
+
+  it("reports header LLM calls as current-run task iteration sum", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic("# Epic\n\nRun-scoped call display.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+    await writeFile(
+      path.join(tmpDir, "ralph", "settings.json"),
+      JSON.stringify({ ...DEFAULT_SETTINGS, minBacklogSize: 1, planFrequency: 99, maxLLMCalls: 10 }),
+      "utf-8",
+    );
+
+    const llmMod = await import("./llm-caller.js");
+    let planCalls = 0;
+    vi.spyOn(llmMod.LLMCaller.prototype, "call").mockImplementation(
+      async (_p: string, _m: string, _r: string, opts?: LLMCallOpts) => {
+        if (opts?.phase === "plan") {
+          planCalls++;
+          if (planCalls === 1) {
+            return JSON.stringify([
+              { id: 1, title: "Ship scoped metric", description: "Do it", status: "backlog" },
+            ]);
+          }
+          return "<status>complete</status>";
+        }
+        if (opts?.phase === "dev") return "<status>done</status>";
+        return "<status>verified</status>";
+      },
+    );
+
+    expect((await loop.start()).ok).toBe(true);
+    await waitFor(() => loop.didCompleteEpic);
+
+    const status = await loop.readStatusFile();
+    expect(status.totalLLMCalls).toBe(4);
+    expect(status.runTaskIterations).toBe(1);
+    expect(status.tasks.find((t) => t.id === 1)?.lastRunId).toBe(status.activeRunId);
+    loop.stop();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -903,6 +959,118 @@ describe("RalphLoop smart resume", () => {
 
     loop.stop();
     await new Promise((r) => setTimeout(r, 100));
+  });
+
+  it("preserves high iteration count when resuming mid-QA", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic("# Epic\n\nResume QA iterations.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+    await writeFile(
+      path.join(tmpDir, "ralph", "settings.json"),
+      JSON.stringify({ ...DEFAULT_SETTINGS, minBacklogSize: 0, planFrequency: 99, maxLLMCalls: 20 }),
+      "utf-8",
+    );
+
+    const llmMod = await import("./llm-caller.js");
+    vi.spyOn(llmMod.LLMCaller.prototype, "call").mockImplementation(
+      async (_p: string, _m: string, _r: string, opts?: LLMCallOpts) => {
+        if (opts?.phase === "plan") return "<status>complete</status>";
+        if (opts?.phase === "dev") return "<status>done</status>";
+        return "<status>verified</status>";
+      },
+    );
+
+    const now = new Date().toISOString();
+    await writeTaskStatus(tmpDir, [
+      {
+        id: 2,
+        title: "Review auth flow",
+        description: "Check the auth",
+        status: "inQa",
+        devIterations: 3,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+
+    expect((await loop.start()).ok).toBe(true);
+    await waitFor(() =>
+      cb.logs.some((l) => l.includes("Task #2 verified")) ||
+      cb.taskUpdates.some((u) => {
+        const data = u as { tasks?: { id: number; status: string; devIterations: number }[] };
+        return data.tasks?.some((t) => t.id === 2 && t.status === "done");
+      }),
+    );
+
+    expect(cb.logs.some((l) => l.includes("Dev iteration #3 for task #2"))).toBe(true);
+    expect(cb.logs.some((l) => l.includes("Dev iteration #1 for task #2"))).toBe(false);
+
+    const final = cb.taskUpdates.at(-1) as
+      | { tasks?: { id: number; status: string; devIterations: number }[] }
+      | undefined;
+    const task = final?.tasks?.find((t) => t.id === 2);
+    expect(task?.status).toBe("done");
+    expect(task?.devIterations).toBeGreaterThanOrEqual(3);
+
+    loop.stop();
+  });
+
+  it("continues from saved+1 when resuming mid-dev after failed QA", async () => {
+    const cb = makeCallbacks();
+    const loop = new RalphLoop(tmpDir, cb);
+    await loop.bootstrap();
+    await loop.writeEpic("# Epic\n\nResume dev iterations.");
+    await writeFile(path.join(tmpDir, "requirements.md"), "# Reqs", "utf-8");
+    await writeFile(
+      path.join(tmpDir, "ralph", "settings.json"),
+      JSON.stringify({ ...DEFAULT_SETTINGS, minBacklogSize: 0, planFrequency: 99, maxLLMCalls: 20 }),
+      "utf-8",
+    );
+
+    const llmMod = await import("./llm-caller.js");
+    vi.spyOn(llmMod.LLMCaller.prototype, "call").mockImplementation(
+      async (_p: string, _m: string, _r: string, opts?: LLMCallOpts) => {
+        if (opts?.phase === "plan") return "<status>complete</status>";
+        if (opts?.phase === "dev") return "<status>done</status>";
+        return "<status>verified</status>";
+      },
+    );
+
+    const now = new Date().toISOString();
+    await writeTaskStatus(tmpDir, [
+      {
+        id: 1,
+        title: "Implement feature",
+        description: "Do the thing",
+        status: "inProgress",
+        devIterations: 3,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+
+    expect((await loop.start()).ok).toBe(true);
+    await waitFor(() =>
+      cb.logs.some((l) => l.includes("Task #1 verified")) ||
+      cb.taskUpdates.some((u) => {
+        const data = u as { tasks?: { id: number; status: string; devIterations: number }[] };
+        return data.tasks?.some((t) => t.id === 1 && t.status === "done");
+      }),
+    );
+
+    expect(cb.logs.some((l) => l.includes("Dev iteration #4 for task #1"))).toBe(true);
+    expect(cb.logs.some((l) => l.includes("Dev iteration #1 for task #1"))).toBe(false);
+
+    const final = cb.taskUpdates.at(-1) as
+      | { tasks?: { id: number; status: string; devIterations: number }[] }
+      | undefined;
+    const task = final?.tasks?.find((t) => t.id === 1);
+    expect(task?.status).toBe("done");
+    expect(task?.devIterations).toBe(4);
+
+    loop.stop();
   });
 });
 

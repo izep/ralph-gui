@@ -1,5 +1,6 @@
 // Container pool for parallel Docker agent execution
 import { spawn } from "child_process";
+import { dockerComposeEnv } from "./docker-runner.js";
 
 interface RunResult {
   code: number;
@@ -59,7 +60,7 @@ export async function ensureDockerPool(
   poolSize: number,
   repoRoot: string,
 ): Promise<void> {
-  const env = { ...process.env, RALPH_REPO_ROOT: repoRoot };
+  const env = dockerComposeEnv(repoRoot);
 
   const up = await runPoolCommand(
     "docker",
@@ -107,7 +108,7 @@ export async function listPoolContainers(
   service: string,
   repoRoot: string,
 ): Promise<string[]> {
-  const env = { ...process.env, RALPH_REPO_ROOT: repoRoot };
+  const env = dockerComposeEnv(repoRoot);
   const result = await runPoolCommand(
     "docker",
     ["compose", "-f", composeFile, "ps", "-q", service],

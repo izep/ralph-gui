@@ -5,6 +5,8 @@ const EMPTY_TASKS: TaskStatusData = {
   tasks: [],
   currentTaskNum: 0,
   totalLLMCalls: 0,
+  activeRunId: null,
+  runTaskIterations: 0,
   maxLLMCalls: 500,
   nextTask: {
     taskId: null,
@@ -23,7 +25,7 @@ const EMPTY_TASKS: TaskStatusData = {
 // Keep in sync with settings-manager.ts DEFAULT_SETTINGS.
 const DEFAULT_SETTINGS: Settings = {
   maxLLMCalls: 500,
-  planModel: "claude-opus-4.5",
+  planModel: "claude-opus-5",
   devModel: "claude-sonnet-5",
   qaModel: "claude-sonnet-5",
   devReasoningEffort: "xhigh",
