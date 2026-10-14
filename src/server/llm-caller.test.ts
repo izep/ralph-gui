@@ -13,6 +13,7 @@ vi.mock("child_process", () => ({
 import {
   backendSupportsReasoningEffort,
   backendSupportsFleetMode,
+  buildCursorAgentSpawnEnv,
   effectiveFleetMode,
   applyCopilotFleetPrefix,
   LLMCaller,
@@ -319,6 +320,11 @@ describe("LLMCaller.call", () => {
       "-p", "cursor prompt",
       "--model", "gpt-5-mini",
       "--yolo",
+      "--trust",
+      "--sandbox",
+      "disabled",
+      "--workspace",
+      tmpDir,
       "--output-format", "text",
     ]);
     expect(proc.stdin.write).not.toHaveBeenCalled();
@@ -477,20 +483,79 @@ describe("LLMCaller.call", () => {
     });
 
     await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
-    const [, args] = spawnMock.mock.calls[0] as [string, string[]];
+    const [, args, spawnOpts] = spawnMock.mock.calls[0] as [
+      string,
+      string[],
+      { env?: NodeJS.ProcessEnv },
+    ];
     const proc = spawnMock.mock.results[0].value as MockChildProcess;
 
     expect(args).toEqual([
       "--print",
       "--model", "gpt-5-mini",
       "--yolo",
+      "--trust",
+      "--sandbox",
+      "disabled",
+      "--workspace",
+      tmpDir,
       "--output-format", "text",
     ]);
+    expect(spawnOpts.env?.CURSOR_AGENT).toBeUndefined();
+    expect(spawnOpts.env?.CURSOR_API_KEY).toBeUndefined();
+    expect(spawnOpts.env?.CURSOR_API_ENDPOINT).toBeUndefined();
     expect(proc.stdin.write).toHaveBeenCalledWith(hugePrompt);
 
     proc.stdout.emit("data", Buffer.from("ok"));
     proc.emit("close", 0);
     await expect(resultPromise).resolves.toBe("ok");
+  });
+
+  it("pins --workspace and sanitizes nested Cursor env for short cursor-agent prompts", async () => {
+    process.env.CURSOR_AGENT_BIN = await makeExecutable("cursor-agent");
+    process.env.CURSOR_AGENT = "1";
+    process.env.CURSOR_API_KEY = "invalid-from-ide";
+    process.env.VSCODE_IPC_HOOK_CLI = "/tmp/vscode-ipc.sock";
+    const caller = new LLMCaller(() => true);
+
+    const resultPromise = caller.call("short prompt", "composer-2.5", tmpDir, {
+      agentBackend: "cursor-agent",
+    });
+
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledTimes(1));
+    const [, args, spawnOpts] = spawnMock.mock.calls[0] as [
+      string,
+      string[],
+      { env?: NodeJS.ProcessEnv },
+    ];
+    const proc = spawnMock.mock.results[0].value as MockChildProcess;
+
+    expect(args).toEqual([
+      "-p",
+      "short prompt",
+      "--model",
+      "composer-2.5",
+      "--yolo",
+      "--trust",
+      "--sandbox",
+      "disabled",
+      "--workspace",
+      tmpDir,
+      "--output-format",
+      "text",
+    ]);
+    expect(spawnOpts.env?.CURSOR_AGENT).toBeUndefined();
+    expect(spawnOpts.env?.CURSOR_API_KEY).toBeUndefined();
+    expect(spawnOpts.env?.VSCODE_IPC_HOOK_CLI).toBeUndefined();
+    expect(spawnOpts.env?.CURSOR_API_ENDPOINT).toBeUndefined();
+
+    proc.stdout.emit("data", Buffer.from("ok"));
+    proc.emit("close", 0);
+    await expect(resultPromise).resolves.toBe("ok");
+
+    delete process.env.CURSOR_AGENT;
+    delete process.env.CURSOR_API_KEY;
+    delete process.env.VSCODE_IPC_HOOK_CLI;
   });
 
   it("writes oversized claude prompts to stdin instead of failing argv limits", async () => {
@@ -539,6 +604,49 @@ describe("LLMCaller.call", () => {
 // ---------------------------------------------------------------------------
 // Fleet helpers
 // ---------------------------------------------------------------------------
+
+describe("buildCursorAgentSpawnEnv", () => {
+  it("strips nested IDE agent vars and inherited CURSOR_API_KEY", () => {
+    const env = buildCursorAgentSpawnEnv({
+      PATH: "/usr/bin",
+      HOME: "/home/roy",
+      CURSOR_AGENT: "1",
+      CURSOR_API_KEY: "bad-key",
+      CURSOR_CONVERSATION_ID: "conv",
+      VSCODE_IPC_HOOK_CLI: "/tmp/ipc",
+      AGENT_TRANSCRIPTS: "/tmp/t",
+      CURSOR_API_ENDPOINT: "https://api3.cursor.sh",
+      KEEP_ME: "yes",
+    });
+
+    expect(env.CURSOR_AGENT).toBeUndefined();
+    expect(env.CURSOR_API_KEY).toBeUndefined();
+    expect(env.CURSOR_CONVERSATION_ID).toBeUndefined();
+    expect(env.VSCODE_IPC_HOOK_CLI).toBeUndefined();
+    expect(env.AGENT_TRANSCRIPTS).toBeUndefined();
+    expect(env.KEEP_ME).toBe("yes");
+    expect(env.CURSOR_API_ENDPOINT).toBeUndefined();
+  });
+
+  it("honors RALPH_CURSOR_API_KEY and RALPH_CURSOR_API_ENDPOINT", () => {
+    const env = buildCursorAgentSpawnEnv({
+      RALPH_CURSOR_API_KEY: "explicit-key",
+      RALPH_CURSOR_API_ENDPOINT: "https://api3.cursor.sh",
+      CURSOR_API_KEY: "ignored",
+    });
+
+    expect(env.CURSOR_API_KEY).toBe("explicit-key");
+    expect(env.CURSOR_API_ENDPOINT).toBe("https://api3.cursor.sh");
+  });
+
+  it("drops an inherited CURSOR_API_ENDPOINT so the CLI default is used", () => {
+    const env = buildCursorAgentSpawnEnv({
+      PATH: "/usr/bin",
+      CURSOR_API_ENDPOINT: "https://api3.cursor.sh",
+    });
+    expect(env.CURSOR_API_ENDPOINT).toBeUndefined();
+  });
+});
 
 describe("backendSupportsFleetMode", () => {
   it("returns true for copilot", () => {
