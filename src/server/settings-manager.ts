@@ -2,7 +2,7 @@
 import { readFile, writeFile } from "fs/promises";
 import path from "path";
 import { normalizeAgentBackend, type AgentBackendId } from "./llm-caller.js";
-import { normalizeSettingsModels, type SavedModelsByBackend } from "../shared/agent-models.js";
+import { getPreferredModels, normalizeReasoningEffort, normalizeSettingsModels, type ReasoningEffort, type SavedModelsByBackend } from "../shared/agent-models.js";
 import {
   DEFAULT_DOCKER_MERGE_STRATEGY,
   normalizeDockerMergeStrategy,
@@ -26,8 +26,8 @@ export interface Settings {
   planModel: string;
   devModel: string;
   qaModel: string;
-  devReasoningEffort: string;
-  qaReasoningEffort: string;
+  devReasoningEffort: ReasoningEffort | "";
+  qaReasoningEffort: ReasoningEffort | "";
   autoCommit: boolean;
   planFrequency: number;
   minBacklogSize: number;
@@ -95,9 +95,7 @@ function normalizeNonNegativeInt(value: unknown, fallback: number): number {
 
 export const DEFAULT_SETTINGS: Settings = {
   maxLLMCalls: 500,
-  planModel: "claude-opus-5",
-  devModel: "claude-sonnet-5",
-  qaModel: "claude-sonnet-5",
+  ...getPreferredModels("copilot"),
   devReasoningEffort: "xhigh",
   qaReasoningEffort: "high",
   autoCommit: true,
@@ -148,18 +146,21 @@ export class SettingsManager {
       };
       const merged: Settings = {
         ...DEFAULT_SETTINGS,
+        ...getPreferredModels(normalizeAgentBackend(parsed.agentBackend)),
         ...parsed,
         agentBackend: normalizeAgentBackend(parsed.agentBackend),
         copilotOutputFormat: normalizeCopilotOutputFormat(parsed.copilotOutputFormat),
       };
 
       // Backward compatibility for older settings.json files.
-      if (!parsed.devReasoningEffort && parsed.reasoningEffort) {
-        merged.devReasoningEffort = parsed.reasoningEffort;
+      if (parsed.devReasoningEffort === undefined && parsed.reasoningEffort) {
+        merged.devReasoningEffort = normalizeReasoningEffort(parsed.reasoningEffort);
       }
-      if (!parsed.qaReasoningEffort) {
+      if (parsed.qaReasoningEffort === undefined) {
         merged.qaReasoningEffort = merged.devReasoningEffort;
       }
+      merged.devReasoningEffort = normalizeReasoningEffort(merged.devReasoningEffort);
+      merged.qaReasoningEffort = normalizeReasoningEffort(merged.qaReasoningEffort);
       if (!parsed.qaModel) {
         merged.qaModel = merged.devModel;
       }
@@ -201,6 +202,8 @@ export class SettingsManager {
   async write(settings: Settings): Promise<void> {
     const normalized = { ...DEFAULT_SETTINGS, ...settings };
     normalized.agentBackend = normalizeAgentBackend(settings.agentBackend);
+    normalized.devReasoningEffort = normalizeReasoningEffort(settings.devReasoningEffort);
+    normalized.qaReasoningEffort = normalizeReasoningEffort(settings.qaReasoningEffort);
     normalized.copilotOutputFormat = normalizeCopilotOutputFormat(
       settings.copilotOutputFormat,
     );

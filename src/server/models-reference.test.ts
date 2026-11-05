@@ -54,6 +54,9 @@ describe("buildModelsReferenceHtml", () => {
     expect(html).toContain("<th>Model</th>");
     expect(html).toContain("<th>ID</th>");
     expect(html).toContain("<th>Preferred For</th>");
+    expect(html).toContain("<th>Reasoning Effort</th>");
+    expect(html).toContain("Verified: 2026-11-05");
+    expect(html).toContain("low, medium, high, xhigh, max");
   });
 
   it("defaults to copilot catalog when backend is unknown", () => {

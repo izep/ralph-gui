@@ -429,7 +429,7 @@ describe("LLMCaller.call", () => {
     await expect(resultPromise).resolves.toBe("ok");
   });
 
-  it("uses opencode run with stdin and dangerously-skip-permissions for opencode backend", async () => {
+  it("uses opencode run with stdin and auto permissions for opencode backend", async () => {
     process.env.OPENCODE_BIN = await makeExecutable("opencode");
     const caller = new LLMCaller(() => true);
 
@@ -445,7 +445,7 @@ describe("LLMCaller.call", () => {
     expect(args).toEqual([
       "run",
       "-m", "opencode/big-pickle",
-      "--dangerously-skip-permissions",
+      "--auto",
       "--format", "default",
     ]);
     expect(proc.stdin.write).toHaveBeenCalledWith("opencode prompt");

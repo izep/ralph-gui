@@ -11,9 +11,10 @@ import {
 } from "./docker-runner.js";
 import type { Settings } from "./settings-manager.js";
 import { runCopilotCall } from "./copilot-cli.js";
+import { AGENT_BACKENDS, getReasoningEfforts, resolveReasoningEffort, type AgentBackendId, type ReasoningEffort } from "../shared/agent-models.js";
 
-export const AGENT_BACKENDS = ["copilot", "cursor-agent", "claude", "gemini", "opencode"] as const;
-export type AgentBackendId = (typeof AGENT_BACKENDS)[number];
+export { AGENT_BACKENDS };
+export type { AgentBackendId };
 
 export const FLEET_CAPABLE_BACKENDS = ["copilot"] as const satisfies readonly AgentBackendId[];
 
@@ -33,7 +34,7 @@ export function applyCopilotFleetPrefix(prompt: string, enabled: boolean): strin
 
 export interface LLMCallOpts {
   agentBackend?: AgentBackendId;
-  reasoningEffort?: string;
+  reasoningEffort?: ReasoningEffort | "";
   fleetMode?: boolean;
   useDocker?: boolean;
   dockerComposeFile?: string;
@@ -67,7 +68,7 @@ export function normalizeAgentBackend(value: string | undefined): AgentBackendId
 }
 
 export function backendSupportsReasoningEffort(backend: AgentBackendId): boolean {
-  return backend === "copilot" || backend === "claude";
+  return getReasoningEfforts(backend).length > 0;
 }
 
 function getAgentBackendOverrideFromEnv(): AgentBackendId | null {
@@ -299,7 +300,7 @@ const ARG_PROMPT_MAX_CHARS = 16_000;
 const CURSOR_AGENT_NON_INTERACTIVE_FLAGS = ["--yolo", "--trust", "--sandbox", "disabled"] as const;
 const CLAUDE_NON_INTERACTIVE_FLAGS = ["--permission-mode", "bypassPermissions"] as const;
 const GEMINI_NON_INTERACTIVE_FLAGS = ["--yolo"] as const;
-const OPENCODE_NON_INTERACTIVE_FLAGS = ["--dangerously-skip-permissions"] as const;
+const OPENCODE_NON_INTERACTIVE_FLAGS = ["--auto"] as const;
 /**
  * Nested Cursor IDE / Agent sessions inject env that breaks headless
  * `cursor-agent` tools (`Tool failed; this may be temporary`). Strip those
@@ -456,7 +457,7 @@ export class LLMCaller {
         }
 
         const cli = backendCliLabel(backend);
-        const reasoningEffort = backendSupportsReasoningEffort(backend) ? opts.reasoningEffort : undefined;
+        const reasoningEffort = resolveReasoningEffort(backend, model, opts.reasoningEffort);
 
         if (backend === "copilot" && !useDocker) {
           const output = await runCopilotCall(

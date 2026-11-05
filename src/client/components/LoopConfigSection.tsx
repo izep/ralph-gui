@@ -3,7 +3,9 @@ import type { Settings, AgentBackendId, TaskColumnSort } from "../types";
 import {
   AGENT_MODEL_CATALOG,
   formatModelOptionLabel,
+  getReasoningEfforts,
   isModelInCatalog,
+  normalizeReasoningEffort,
   resolveModelsForBackend,
   withSavedModelsForBackend,
   type ModelRole,
@@ -19,7 +21,7 @@ export function normalizeAgentBackend(value: string | undefined): AgentBackendId
   return "copilot";
 }
 
-export const FLEET_CAPABLE_BACKENDS = ["copilot", "claude"] as const satisfies readonly AgentBackendId[];
+export const FLEET_CAPABLE_BACKENDS = ["copilot"] as const satisfies readonly AgentBackendId[];
 
 export function backendSupportsFleetMode(backend: AgentBackendId): boolean {
   return (FLEET_CAPABLE_BACKENDS as readonly string[]).includes(backend);
@@ -162,6 +164,28 @@ export function LoopConfigSection({
     );
   }
 
+  function renderReasoningSelect(label: string, key: "devReasoningEffort" | "qaReasoningEffort", model: string) {
+    const efforts = getReasoningEfforts(localSettings.agentBackend, model);
+    const stored = localSettings[key];
+    return (
+      <label className="cp-field">
+        <span>{label}</span>
+        <select
+          value={efforts.some((effort) => effort === stored) ? stored : ""}
+          disabled={efforts.length === 0}
+          onChange={(event) => onChangeSettings({ ...localSettings, [key]: normalizeReasoningEffort(event.target.value) })}
+        >
+          <option value="">Default</option>
+          {efforts.map((effort) => (
+            <option key={effort} value={effort}>
+              {effort === "xhigh" ? "Extra High" : effort.charAt(0).toUpperCase() + effort.slice(1)}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  }
+
   return (
     <section className="control-panel__section">
       {!suppressHeader && <h3>Loop Configuration</h3>}
@@ -197,10 +221,8 @@ export function LoopConfigSection({
         </label>
         {!backendSupportsFleetMode(localSettings.agentBackend) ? (
           <p className="cp-hint">
-            Only available for agents whose Fleet Mode is Yes (GitHub Copilot CLI and Claude Code).
+            Only available for GitHub Copilot CLI.
           </p>
-        ) : localSettings.agentBackend === "claude" ? (
-          <p className="cp-hint">Uses Claude Code parallel subagents on dev/QA.</p>
         ) : (
           <p className="cp-hint">Uses Copilot /fleet on dev/QA; may increase premium request usage.</p>
         )}
@@ -316,35 +338,8 @@ export function LoopConfigSection({
           </a>
         </p>
 
-        <label className="cp-field">
-          <span>Dev Reasoning Effort</span>
-          <select
-            value={localSettings.devReasoningEffort}
-            onChange={(e) =>
-              onChangeSettings({ ...localSettings, devReasoningEffort: e.target.value })
-            }
-          >
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-            <option value="xhigh">Extra High</option>
-          </select>
-        </label>
-
-        <label className="cp-field">
-          <span>QA Reasoning Effort</span>
-          <select
-            value={localSettings.qaReasoningEffort}
-            onChange={(e) =>
-              onChangeSettings({ ...localSettings, qaReasoningEffort: e.target.value })
-            }
-          >
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-            <option value="xhigh">Extra High</option>
-          </select>
-        </label>
+        {renderReasoningSelect("Dev Reasoning Effort", "devReasoningEffort", localSettings.devModel)}
+        {renderReasoningSelect("QA Reasoning Effort", "qaReasoningEffort", localSettings.qaModel)}
 
         <label className="cp-field">
           <span>Plan Frequency (every N tasks)</span>

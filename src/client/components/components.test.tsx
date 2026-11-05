@@ -443,7 +443,7 @@ describe("ControlPanel", () => {
     expect(screen.getByText("Docker Agents")).toBeInTheDocument();
   });
 
-  it("fleet checkbox enabled when agent backend is claude", () => {
+  it("fleet checkbox disabled when the runner does not implement fleet for claude", () => {
     render(
       <ControlPanel
         settings={{ ...defaultSettings, agentBackend: "claude" }}
@@ -465,7 +465,7 @@ describe("ControlPanel", () => {
       />
     );
     const checkbox = screen.getByRole("checkbox", { name: /fleet mode/i });
-    expect(checkbox).toBeEnabled();
+    expect(checkbox).toBeDisabled();
   });
 
   it("fleet checkbox enabled when agent backend is copilot", () => {
@@ -824,6 +824,63 @@ describe("ControlPanel", () => {
 import { LoopConfigSection } from "./LoopConfigSection";
 
 describe("LoopConfigSection model dropdowns", () => {
+  it.each(["cursor-agent", "gemini", "opencode"] as const)("disables separate effort controls for %s", (agentBackend) => {
+    render(
+      <LoopConfigSection
+        localSettings={{ ...defaultSettings, agentBackend }}
+        onChangeSettings={() => { }}
+        repoLocked={false}
+        onSaveSettings={() => { }}
+      />,
+    );
+    expect(screen.getByLabelText("Dev Reasoning Effort")).toBeDisabled();
+    expect(screen.getByLabelText("QA Reasoning Effort")).toBeDisabled();
+  });
+
+  it("filters effort options separately for the selected dev and QA models", () => {
+    render(
+      <LoopConfigSection
+        localSettings={{ ...defaultSettings, devModel: "mai-code-1.1-flash", qaModel: "claude-sonnet-5.5" }}
+        onChangeSettings={() => { }}
+        repoLocked={false}
+        onSaveSettings={() => { }}
+      />,
+    );
+    const dev = screen.getByLabelText("Dev Reasoning Effort") as HTMLSelectElement;
+    const qa = screen.getByLabelText("QA Reasoning Effort") as HTMLSelectElement;
+    expect(Array.from(dev.options, (option) => option.value)).toEqual(["", "low", "medium", "high"]);
+    expect(dev).toHaveValue("");
+    expect(Array.from(qa.options, (option) => option.value)).toContain("max");
+    expect(qa).toHaveValue("high");
+  });
+
+  it("uses CLI defaults for Auto and models without effort support", () => {
+    render(
+      <LoopConfigSection
+        localSettings={{ ...defaultSettings, devModel: "auto", qaModel: "claude-haiku-4.5" }}
+        onChangeSettings={() => { }}
+        repoLocked={false}
+        onSaveSettings={() => { }}
+      />,
+    );
+    expect(screen.getByLabelText("Dev Reasoning Effort")).toBeDisabled();
+    expect(screen.getByLabelText("QA Reasoning Effort")).toBeDisabled();
+  });
+
+  it("saves newly supported max effort for Claude", () => {
+    const onChangeSettings = vi.fn();
+    render(
+      <LoopConfigSection
+        localSettings={{ ...defaultSettings, agentBackend: "claude", devModel: "claude-sonnet-5-5" }}
+        onChangeSettings={onChangeSettings}
+        repoLocked={false}
+        onSaveSettings={() => { }}
+      />,
+    );
+    fireEvent.change(screen.getByLabelText("Dev Reasoning Effort"), { target: { value: "max" } });
+    expect(onChangeSettings).toHaveBeenCalledWith(expect.objectContaining({ devReasoningEffort: "max" }));
+  });
+
   it("shows copilot model options when agentBackend is copilot", () => {
     const settings: Settings = { ...defaultSettings, agentBackend: "copilot", planModel: "claude-sonnet-4.6", devModel: "gpt-5.4-mini", qaModel: "gpt-5.4-mini" };
     render(
@@ -837,15 +894,15 @@ describe("LoopConfigSection model dropdowns", () => {
     // Verify the Plan Model label and a copilot-specific option text are present
     expect(screen.getByText("Plan Model")).toBeInTheDocument();
     expect(
-      screen.getByText(/\(claude-opus-5\) Claude Opus 5 -- recommended for planning/),
+      screen.getByText(/\(claude-opus-5\.5\) Claude Opus 5.5 -- recommended for planning/),
     ).toBeInTheDocument();
   });
 
   it("restores saved copilot models when switching back from another backend", async () => {
     const copilotModels = {
-      planModel: "claude-sonnet-4.6",
-      devModel: "gpt-5.4-mini",
-      qaModel: "gpt-5.4-mini",
+      planModel: "claude-sonnet-5",
+      devModel: "gpt-6-luna",
+      qaModel: "gpt-6-luna",
     };
     let settings: Settings = {
       ...defaultSettings,
@@ -887,9 +944,9 @@ describe("LoopConfigSection model dropdowns", () => {
     });
     await waitFor(() => {
       expect(settings.agentBackend).toBe("copilot");
-      expect(settings.planModel).toBe("claude-sonnet-4.6");
-      expect(settings.devModel).toBe("gpt-5.4-mini");
-      expect(settings.qaModel).toBe("gpt-5.4-mini");
+      expect(settings.planModel).toBe(copilotModels.planModel);
+      expect(settings.devModel).toBe(copilotModels.devModel);
+      expect(settings.qaModel).toBe(copilotModels.qaModel);
     });
   });
 
@@ -911,7 +968,7 @@ describe("LoopConfigSection model dropdowns", () => {
     );
     expect(
       screen.getByText(
-        /\(claude-sonnet-5-thinking-high\) Claude Sonnet 5 -- recommended for planning/,
+        /\(claude-sonnet-5-5-high\) Claude Sonnet 5.5\s+High -- recommended for planning/,
       ),
     ).toBeInTheDocument();
   });
@@ -933,10 +990,10 @@ describe("LoopConfigSection model dropdowns", () => {
       />,
     );
     expect(
-      screen.getByText(/\(claude-opus-4-5\) Claude Opus 4.5 -- recommended for planning/),
+      screen.getByText(/\(claude-opus-5-5\) Claude Opus 5.5 -- recommended for planning/),
     ).toBeInTheDocument();
     expect(
-      screen.getAllByText(/\(claude-sonnet-5\) Claude Sonnet 5 -- recommended for (dev|qa)/).length,
+      screen.getAllByText(/\(claude-sonnet-5-5\) Claude Sonnet 5.5 -- recommended for (dev|qa)/).length,
     ).toBeGreaterThan(0);
   });
 
