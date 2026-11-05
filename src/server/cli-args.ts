@@ -1,5 +1,6 @@
 import { normalizeAgentBackend } from "./llm-caller.js";
 import type { Settings } from "./settings-manager.js";
+import { normalizeReasoningEffort, resolveModelsForBackend, withSavedModelsForBackend } from "../shared/agent-models.js";
 
 const args = process.argv.slice(2);
 
@@ -56,14 +57,27 @@ export async function applyCliSettingsOverrides(loop: {
 
   const agentBackendArg = getArg("--agent-backend");
   const agentBackendOverride = agentBackendArg ? normalizeAgentBackend(agentBackendArg) : undefined;
+  let backendModels: Partial<Settings> = {};
+  if (agentBackendOverride && agentBackendOverride !== current.agentBackend) {
+    const savedModelsByBackend = withSavedModelsForBackend(current.savedModelsByBackend, current.agentBackend, {
+      planModel: current.planModel,
+      devModel: current.devModel,
+      qaModel: current.qaModel,
+    });
+    backendModels = {
+      ...resolveModelsForBackend(agentBackendOverride, savedModelsByBackend),
+      savedModelsByBackend,
+    };
+  }
 
   const next: Settings = {
     ...current,
+    ...backendModels,
     ...(getArg("--plan-model") ? { planModel: getArg("--plan-model")! } : {}),
     ...(getArg("--dev-model") ? { devModel: getArg("--dev-model")! } : {}),
     ...(getArg("--qa-model") ? { qaModel: getArg("--qa-model")! } : {}),
-    ...(getArg("--dev-reasoning-effort") ? { devReasoningEffort: getArg("--dev-reasoning-effort")! } : {}),
-    ...(getArg("--qa-reasoning-effort") ? { qaReasoningEffort: getArg("--qa-reasoning-effort")! } : {}),
+    ...(getArg("--dev-reasoning-effort") ? { devReasoningEffort: normalizeReasoningEffort(getArg("--dev-reasoning-effort")) } : {}),
+    ...(getArg("--qa-reasoning-effort") ? { qaReasoningEffort: normalizeReasoningEffort(getArg("--qa-reasoning-effort")) } : {}),
     ...(getNumberArg("--max-llm-calls") !== undefined ? { maxLLMCalls: getNumberArg("--max-llm-calls")! } : {}),
     ...(getNumberArg("--plan-frequency") !== undefined ? { planFrequency: getNumberArg("--plan-frequency")! } : {}),
     ...(getNumberArg("--min-backlog-size") !== undefined ? { minBacklogSize: getNumberArg("--min-backlog-size")! } : {}),

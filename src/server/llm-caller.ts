@@ -11,9 +11,10 @@ import {
 } from "./docker-runner.js";
 import type { Settings } from "./settings-manager.js";
 import { runCopilotCall } from "./copilot-cli.js";
+import { AGENT_BACKENDS, getReasoningEfforts, resolveReasoningEffort, type AgentBackendId, type ReasoningEffort } from "../shared/agent-models.js";
 
-export const AGENT_BACKENDS = ["copilot", "cursor-agent", "claude", "gemini", "opencode"] as const;
-export type AgentBackendId = (typeof AGENT_BACKENDS)[number];
+export { AGENT_BACKENDS };
+export type { AgentBackendId };
 
 export const FLEET_CAPABLE_BACKENDS = ["copilot"] as const satisfies readonly AgentBackendId[];
 
@@ -33,7 +34,7 @@ export function applyCopilotFleetPrefix(prompt: string, enabled: boolean): strin
 
 export interface LLMCallOpts {
   agentBackend?: AgentBackendId;
-  reasoningEffort?: string;
+  reasoningEffort?: ReasoningEffort | "";
   fleetMode?: boolean;
   useDocker?: boolean;
   dockerComposeFile?: string;
@@ -67,7 +68,7 @@ export function normalizeAgentBackend(value: string | undefined): AgentBackendId
 }
 
 export function backendSupportsReasoningEffort(backend: AgentBackendId): boolean {
-  return backend === "copilot" || backend === "claude";
+  return getReasoningEfforts(backend).length > 0;
 }
 
 function getAgentBackendOverrideFromEnv(): AgentBackendId | null {
@@ -296,10 +297,72 @@ function backendCliLabel(backend: AgentBackendId): string {
 }
 
 const ARG_PROMPT_MAX_CHARS = 16_000;
-const CURSOR_AGENT_NON_INTERACTIVE_FLAGS = ["--yolo"] as const;
+const CURSOR_AGENT_NON_INTERACTIVE_FLAGS = ["--yolo", "--trust", "--sandbox", "disabled"] as const;
 const CLAUDE_NON_INTERACTIVE_FLAGS = ["--permission-mode", "bypassPermissions"] as const;
 const GEMINI_NON_INTERACTIVE_FLAGS = ["--yolo"] as const;
-const OPENCODE_NON_INTERACTIVE_FLAGS = ["--dangerously-skip-permissions"] as const;
+const OPENCODE_NON_INTERACTIVE_FLAGS = ["--auto"] as const;
+/**
+ * Nested Cursor IDE / Agent sessions inject env that breaks headless
+ * `cursor-agent` tools (`Tool failed; this may be temporary`). Strip those
+ * keys and drop inherited `CURSOR_API_KEY` (IDE often injects an invalid one).
+ *
+ * Do not pin `CURSOR_API_ENDPOINT`. Forcing `https://api3.cursor.sh` makes
+ * Shell/Read fail with "Command failed to spawn" on this network, while the
+ * CLI default endpoint can spawn tools. Set `RALPH_CURSOR_API_ENDPOINT` only
+ * when an override is required.
+ *
+ * Override auth with `RALPH_CURSOR_API_KEY` when needed.
+ */
+export function buildCursorAgentSpawnEnv(
+  source: NodeJS.ProcessEnv = process.env,
+): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { ...source };
+  for (const key of Object.keys(env)) {
+    if (
+      key === "CURSOR_AGENT" ||
+      key.startsWith("CURSOR_AGENT_") ||
+      key === "CURSOR_CONVERSATION_ID" ||
+      key === "CURSOR_REQUEST_ID" ||
+      key === "CURSOR_LAYOUT" ||
+      key === "CURSOR_RIPGREP_PATH" ||
+      key === "AGENT_TRANSCRIPTS" ||
+      key.startsWith("__CURSOR_") ||
+      key.startsWith("VSCODE_")
+    ) {
+      delete env[key];
+    }
+  }
+
+  const ralphKey = source.RALPH_CURSOR_API_KEY?.trim();
+  if (ralphKey) {
+    env.CURSOR_API_KEY = ralphKey;
+  } else {
+    delete env.CURSOR_API_KEY;
+  }
+
+  const endpointOverride = source.RALPH_CURSOR_API_ENDPOINT?.trim();
+  if (endpointOverride) {
+    env.CURSOR_API_ENDPOINT = endpointOverride;
+  } else {
+    delete env.CURSOR_API_ENDPOINT;
+  }
+
+  return env;
+}
+
+function spawnEnvForBackend(
+  backend: AgentBackendId,
+  useDocker: boolean,
+  repoRoot: string,
+): NodeJS.ProcessEnv {
+  if (useDocker) {
+    return dockerComposeEnv(repoRoot);
+  }
+  if (backend === "cursor-agent") {
+    return buildCursorAgentSpawnEnv();
+  }
+  return process.env;
+}
 
 function assertPromptFitsArgv(prompt: string, backend: AgentBackendId): void {
   if (prompt.length <= ARG_PROMPT_MAX_CHARS) {
@@ -394,7 +457,7 @@ export class LLMCaller {
         }
 
         const cli = backendCliLabel(backend);
-        const reasoningEffort = backendSupportsReasoningEffort(backend) ? opts.reasoningEffort : undefined;
+        const reasoningEffort = resolveReasoningEffort(backend, model, opts.reasoningEffort);
 
         if (backend === "copilot" && !useDocker) {
           const output = await runCopilotCall(
@@ -444,6 +507,8 @@ export class LLMCaller {
             break;
           }
           case "cursor-agent": {
+            // --workspace pins the repo root so tools do not inherit a nested
+            // IDE workspace / worker socket and fail with generic tool errors.
             if (prompt.length <= ARG_PROMPT_MAX_CHARS) {
               args = [
                 "-p",
@@ -451,6 +516,8 @@ export class LLMCaller {
                 "--model",
                 model,
                 ...CURSOR_AGENT_NON_INTERACTIVE_FLAGS,
+                "--workspace",
+                repoRoot,
                 "--output-format",
                 "text",
               ];
@@ -462,6 +529,8 @@ export class LLMCaller {
                 "--model",
                 model,
                 ...CURSOR_AGENT_NON_INTERACTIVE_FLAGS,
+                "--workspace",
+                repoRoot,
                 "--output-format",
                 "text",
               ];
@@ -554,7 +623,7 @@ export class LLMCaller {
           cwd: spawnCwd,
           shell: opts.useDocker ? false : shouldUseShellForCommand(command),
           stdio: ["pipe", "pipe", "pipe"],
-          env: opts.useDocker ? dockerComposeEnv(repoRoot) : process.env,
+          env: spawnEnvForBackend(backend, useDocker, repoRoot),
         });
 
         // Track by slot key so parallel Docker calls coexist without clobbering each other.

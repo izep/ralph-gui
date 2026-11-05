@@ -68,8 +68,9 @@ Settings overrides (persisted to ralph/settings.json):
   --dev-model <name>
   --qa-model <name>
   --agent-backend copilot|cursor-agent|claude|gemini|opencode
-  --dev-reasoning-effort <level> (low|medium|high|xhigh)
-  --qa-reasoning-effort <level>  (low|medium|high|xhigh)
+  --dev-reasoning-effort <level> (none|minimal|low|medium|high|xhigh|max)
+  --qa-reasoning-effort <level>  (none|minimal|low|medium|high|xhigh|max)
+                                (availability depends on backend and model)
   --max-llm-calls <n>
   --plan-frequency <n>
   --min-backlog-size <n>

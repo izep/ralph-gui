@@ -1,3 +1,6 @@
+import type { AgentBackendId, ReasoningEffort, SavedModelsByBackend } from "../shared/agent-models";
+export type { AgentBackendId } from "../shared/agent-models";
+
 export type TaskStatusValue =
   | "backlog"
   | "inProgress"
@@ -57,8 +60,6 @@ export interface LoopStatus {
   error: string | null;
 }
 
-export type AgentBackendId = "copilot" | "cursor-agent" | "claude" | "gemini" | "opencode";
-
 export type DockerMergeStrategy = "work-branch" | "epic-base-per-task";
 
 export type CopilotOutputFormat = "text" | "json" | "streaming";
@@ -74,8 +75,8 @@ export interface Settings {
   planModel: string;
   devModel: string;
   qaModel: string;
-  devReasoningEffort: string;
-  qaReasoningEffort: string;
+  devReasoningEffort: ReasoningEffort | "";
+  qaReasoningEffort: ReasoningEffort | "";
   autoCommit: boolean;
   planFrequency: number;
   minBacklogSize: number;
@@ -102,9 +103,7 @@ export interface Settings {
   requirementsFile: string;
   pauseAfterPlan: boolean;
   taskColumnSort: TaskColumnSort;
-  savedModelsByBackend: Partial<
-    Record<AgentBackendId, { planModel: string; devModel: string; qaModel: string }>
-  >;
+  savedModelsByBackend: SavedModelsByBackend;
   agentIdleTimeoutMinutes: number;
   agentTimeoutMinutes: number;
   agentMaxConsecutiveRepeats: number;

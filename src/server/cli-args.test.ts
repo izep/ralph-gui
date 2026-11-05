@@ -1,5 +1,53 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_LISTEN_PORT, resolveListenPort } from "./cli-args.js";
+import { DEFAULT_SETTINGS } from "./settings-manager.js";
+import { getPreferredModels } from "../shared/agent-models.js";
+
+describe("CLI model settings", () => {
+  it("restores backend-specific models and lets explicit model overrides win", async () => {
+    const originalArgv = process.argv;
+    try {
+      process.argv = ["node", "index.ts", "--agent-backend", "claude", "--dev-model", "custom/model", "--qa-reasoning-effort", "max"];
+      vi.resetModules();
+      const { applyCliSettingsOverrides } = await import("./cli-args.js");
+      const writeSettings = vi.fn();
+      await applyCliSettingsOverrides({
+        readSettings: async () => ({ ...DEFAULT_SETTINGS, savedModelsByBackend: {} }),
+        writeSettings,
+      });
+      expect(writeSettings).toHaveBeenCalledWith(expect.objectContaining({
+        agentBackend: "claude",
+        planModel: getPreferredModels("claude").planModel,
+        devModel: "custom/model",
+        qaModel: getPreferredModels("claude").qaModel,
+        qaReasoningEffort: "max",
+        savedModelsByBackend: { copilot: getPreferredModels("copilot") },
+      }));
+    } finally {
+      process.argv = originalArgv;
+      vi.resetModules();
+    }
+  });
+
+  it("restores saved model choices when selecting a different backend", async () => {
+    const originalArgv = process.argv;
+    const saved = { planModel: "custom/plan", devModel: "custom/dev", qaModel: "custom/qa" };
+    try {
+      process.argv = ["node", "index.ts", "--agent-backend", "opencode"];
+      vi.resetModules();
+      const { applyCliSettingsOverrides } = await import("./cli-args.js");
+      const writeSettings = vi.fn();
+      await applyCliSettingsOverrides({
+        readSettings: async () => ({ ...DEFAULT_SETTINGS, savedModelsByBackend: { opencode: saved } }),
+        writeSettings,
+      });
+      expect(writeSettings).toHaveBeenCalledWith(expect.objectContaining({ agentBackend: "opencode", ...saved }));
+    } finally {
+      process.argv = originalArgv;
+      vi.resetModules();
+    }
+  });
+});
 
 describe("resolveListenPort", () => {
   it("defaults to 3001 when neither CLI nor env is set", () => {

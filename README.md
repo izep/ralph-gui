@@ -10,10 +10,10 @@ Remove `ralph/task-status.json` to start a clean loop, otherwise it will try to 
 
 ## Core Concepts
 
-RUN THIS IN A SANDBOX. With the **GitHub Copilot** backend (default), the loop calls `copilot` in "yolo" mode. Other backends are also launched with backend-specific non-interactive/permissive flags so the loop can proceed unattended: Cursor Agent is run with `--output-format text`, Claude is run with `--permission-mode bypassPermissions --output-format text`, Gemini is run with `--yolo --output-format text`, and OpenCode is run with `--dangerously-skip-permissions`. These modes can reduce or bypass interactive safety prompts, so backend selection has real safety implications and should only be used in isolated environments.
+RUN THIS IN A SANDBOX. With the **GitHub Copilot** backend (default), the loop calls `copilot` in "yolo" mode. Other backends are also launched with backend-specific non-interactive/permissive flags so the loop can proceed unattended: Cursor Agent is run with `--output-format text`, Claude is run with `--permission-mode bypassPermissions --output-format text`, Gemini is run with `--yolo --output-format text`, and OpenCode is run with `--auto`. These modes can reduce or bypass interactive safety prompts, so backend selection has real safety implications and should only be used in isolated environments.
 
 - `requirements.md`:
-  The authoritative product requirements document for the overall project. If this is defined elsewhere, just reference those documents in requirements.md. 
+  The authoritative product requirements document for the overall project. If this is defined elsewhere, just reference those documents in requirements.md.
   Ralph treats this as the source of truth for the project and must fit its work within those bounds.
 - `ralph/epic.md`:
   The current epic Ralph should execute right now.
@@ -86,6 +86,8 @@ Reasoning effort support is backend-specific:
 | Google Gemini CLI | Not supported (setting is ignored)      |
 | OpenCode          | Not supported (setting is ignored)      |
 
+The verified model catalog is in [Coding Agents & CLIs Available Models](docs/coding-agents-available-models.md). Copilot effort choices are filtered by the selected model's advertised capabilities. Claude accepts `low`, `medium`, `high`, `xhigh`, and `max`, subject to model support. Choose **Default** to omit the effort flag; unsupported saved effort levels are also omitted. Backend switching restores saved models for that backend or uses its recommended defaults.
+
 If a CLI is not on `PATH`, set the matching `*_BIN` variable to the full executable path (especially on Windows when the command is `copilot.cmd`, `cursor-agent.cmd`, etc.).
 
 ## Quick start
@@ -119,7 +121,7 @@ flowchart TB
 
 ## "Headless Loop" (No UI Required)
 
-Use `start.sh` with a repo and optional settings overrides. The UI is still there, but with this you don't *need* to use it. 
+Use `start.sh` with a repo and optional settings overrides. The UI is still there, but with this you don't *need* to use it.
 
 ```bash
 ./start.sh \
@@ -127,9 +129,9 @@ Use `start.sh` with a repo and optional settings overrides. The UI is still ther
   --port 3001 \
   --start \
   --agent-backend copilot \
-  --plan-model claude-opus-5 \
-  --dev-model claude-sonnet-5 \
-  --qa-model claude-sonnet-5 \
+  --plan-model claude-opus-5.5 \
+  --dev-model claude-sonnet-5.5 \
+  --qa-model claude-sonnet-5.5 \
   --dev-reasoning-effort xhigh \
   --qa-reasoning-effort high \
   --max-llm-calls 300 \
@@ -357,9 +359,9 @@ Default loop settings are:
 - `agentIdleTimeoutMinutes: 10` — kill a silent host Copilot process after this many minutes with no stdout/stderr (`0` disables). Heartbeats do not count as activity.
 - `agentTimeoutMinutes: 0` — optional wall-clock cap on a single Copilot call (`0` disables)
 - `agentMaxConsecutiveRepeats: 10` — kill Copilot if the same tool start repeats this many times (`0` disables)
-- `planModel: claude-opus-5`
-- `devModel: claude-sonnet-5`
-- `qaModel: claude-sonnet-5`
+- `planModel: claude-opus-5.5`
+- `devModel: claude-sonnet-5.5`
+- `qaModel: claude-sonnet-5.5`
 - `devReasoningEffort: xhigh`
 - `qaReasoningEffort: high`
 - `autoCommit: true`

@@ -1,9 +1,10 @@
 import type { ChildProcess } from "child_process";
+import type { ReasoningEffort } from "../shared/agent-models.js";
 
 export interface CopilotCallOpts {
   phase: "plan" | "dev" | "qa";
   model: string;
-  reasoningEffort?: string;
+  reasoningEffort?: ReasoningEffort | "";
   outputFormat?: "text" | "json" | "streaming";
   mcpConfig?: string;
 }

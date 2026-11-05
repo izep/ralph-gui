@@ -1,6 +1,6 @@
 // Route handlers for /models-reference and /api/agent-models
 // Source of truth: src/shared/agent-models.ts (which mirrors docs/coding-agents-available-models.md)
-import { AGENT_MODEL_CATALOG, PREFERRED_MODELS_BY_BACKEND, type AgentBackendId } from "../shared/agent-models.js";
+import { AGENT_MODEL_CATALOG, MODEL_CATALOG_VERIFIED_AT, PREFERRED_MODELS_BY_BACKEND, getReasoningEfforts, type AgentBackendId } from "../shared/agent-models.js";
 
 export const BACKEND_DISPLAY_NAMES: Record<AgentBackendId, string> = {
   copilot: "GitHub Copilot CLI",
@@ -18,6 +18,8 @@ export function buildModelsReferenceHtml(backend: AgentBackendId): string {
   const rows = catalog
     .map((m) => {
       const prefTags = m.preferredFor.map((p) => `<span class="pref-tag">${p}</span>`).join(" ");
+      const efforts = getReasoningEfforts(backend, m.id);
+      const reasoning = backend === "cursor-agent" ? "Encoded in ID" : efforts.join(", ") || "CLI default";
       const isStar =
         preferred.planModel === m.id ||
         preferred.devModel === m.id ||
@@ -31,6 +33,7 @@ export function buildModelsReferenceHtml(backend: AgentBackendId): string {
         <td>${m.yoloMode}</td>
         <td>${m.fleetMode}</td>
         <td>${prefTags}</td>
+        <td>${reasoning}</td>
       </tr>`;
     })
     .join("\n");
@@ -76,6 +79,7 @@ export function buildModelsReferenceHtml(backend: AgentBackendId): string {
         <th>YOLO Mode</th>
         <th>Fleet Mode</th>
         <th>Preferred For</th>
+        <th>Reasoning Effort</th>
       </tr>
     </thead>
     <tbody>
@@ -83,6 +87,7 @@ ${rows}
     </tbody>
   </table>
   <p style="margin-top:1.5rem;font-size:0.8rem;color:#8b949e;">
+    Verified: ${MODEL_CATALOG_VERIFIED_AT}. Availability and pricing depend on account and provider.<br/>
     Source: <a href="/docs/coding-agents-available-models.md" style="color:#58a6ff;">docs/coding-agents-available-models.md</a>
     &#x2014; Preferred plan: <strong>${preferred.planModel}</strong> | dev: <strong>${preferred.devModel}</strong> | qa: <strong>${preferred.qaModel}</strong>
   </p>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import type { TaskStatusData, LoopStatus, Settings, Readiness, ServerMessage } from "../types";
+import { getPreferredModels } from "../../shared/agent-models";
 
 const EMPTY_TASKS: TaskStatusData = {
   tasks: [],
@@ -25,9 +26,7 @@ const EMPTY_TASKS: TaskStatusData = {
 // Keep in sync with settings-manager.ts DEFAULT_SETTINGS.
 const DEFAULT_SETTINGS: Settings = {
   maxLLMCalls: 500,
-  planModel: "claude-opus-5",
-  devModel: "claude-sonnet-5",
-  qaModel: "claude-sonnet-5",
+  ...getPreferredModels("copilot"),
   devReasoningEffort: "xhigh",
   qaReasoningEffort: "high",
   autoCommit: true,
